@@ -19,12 +19,18 @@ wolverine_test:
   forcing: raw
   stream: {length: 2000, slope: 0.03, width: 5, elevation: 390, latitude: 60.374, longitude: -148.912}
 
-# summa's minimal multi-objective calibration test: both glaciers as one domain of 2 GRUs, Oct 2008 - Dec 2011
+# summa's calibration test domain: both glaciers as one domain of 2 GRUs, each with a stream HRU and a reach,
+# Oct 2015 - Dec 2018, so the Wolverine gauge's water temperature (from 2016) is inside it. The Gulkana reach,
+# from the glacier to USGS 15478040, is an estimate.
 gulkana_wolverine:
-  merge: [gulkana, wolverine]
+  merge:
+    - domain: gulkana
+      stream: {length: 5000, slope: 0.03, width: 5, elevation: 1200, latitude: 63.247, longitude: -145.455}
+    - domain: wolverine
+      stream: {length: 2000, slope: 0.03, width: 5, elevation: 390, latitude: 60.374, longitude: -148.912}
   dest: ../summa/utils/test/test_calibration/gulkana_wolverine
-  first_month: 2008-10
-  last_month: 2011-12
+  first_month: 2015-10
+  last_month: 2018-12
   forcing: raw
   forcing_name: "GulkanaWolverine_{Y}-{M}-01-00-00-00_double_precision.nc"
 

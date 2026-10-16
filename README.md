@@ -1,4 +1,4 @@
-# summa_glacier
+# summa_glacier_workflow
 
 The glacier setup and runs of SUMMA on Gulkana and Wolverine glaciers, Alaska: from global glacier
 products and on-site observations to the domains, the tests and the full 2008–2022 calibrations of the

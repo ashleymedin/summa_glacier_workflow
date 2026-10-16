@@ -68,18 +68,21 @@ def forcing_dir_of(c, forcing):
     return base if forcing == "raw" else os.path.join(base, "station_corrected")
 
 
-def merge_netcdf(paths, out, hru_offsets):
-    """One file of several domains' files, concatenated along hru and gru, other dimensions padded to the
-    largest, padding at each variable's fill value; hruId and hru2gruId renumbered by hru_offsets."""
+def merge_netcdf(paths, out, concat, shift, keep=None):
+    """One file of several domains' files, concatenated along the dimensions in concat, the others padded to
+    the largest, padding at each variable's fill value; shift(name, values, k) renumbers part k's ids.
+    keep, if given, lists the variables written."""
     srcs = [nc4.Dataset(p) for p in paths]
     for s in srcs:
         s.set_auto_mask(False)
     with nc4.Dataset(out, "w", format="NETCDF4") as d:
         for name in srcs[0].dimensions:
-            size = sum(len(s.dimensions[name]) for s in srcs) if name in ("hru", "gru") else \
+            size = sum(len(s.dimensions[name]) for s in srcs) if name in concat else \
                 max(len(s.dimensions[name]) for s in srcs if name in s.dimensions)
             d.createDimension(name, size)
         for name, v in srcs[0].variables.items():
+            if keep is not None and name not in keep:
+                continue
             fill = getattr(v, "_FillValue", None)
             var = d.createVariable(name, v.dtype, v.dimensions, fill_value=fill)
             var.setncatts({k: v.getncattr(k) for k in v.ncattrs() if k != "_FillValue"})
@@ -87,20 +90,15 @@ def merge_netcdf(paths, out, hru_offsets):
             if not shape:
                 var.assignValue(v.getValue())
                 continue
-            if "hru" not in v.dimensions and "gru" not in v.dimensions:
+            axes = [v.dimensions.index(c) for c in concat if c in v.dimensions]
+            if not axes:
                 var[:] = v[:]
                 continue
-            axis = v.dimensions.index("hru" if "hru" in v.dimensions else "gru")
+            axis = axes[0]
             data = np.full(shape, fill if fill is not None else 0, dtype=v.dtype)
             start = 0
             for k, s in enumerate(srcs):
-                part = np.array(s[name][:])
-                if name in ("hruId", "gruId"):
-                    part = part + (hru_offsets[k] if name == "hruId" else k)
-                if name == "hru2gruId":
-                    part = part + k
-                if name == "cell2hruId":
-                    part = np.where(part > 0, part + hru_offsets[k], part)
+                part = shift(name, np.array(s[name][:]), k)
                 idx = [slice(0, n) for n in part.shape]
                 idx[axis] = slice(start, start + part.shape[axis])
                 data[tuple(idx)] = part
@@ -108,6 +106,67 @@ def merge_netcdf(paths, out, hru_offsets):
             var[:] = data
     for s in srcs:
         s.close()
+
+
+def summa_shift(hru_offsets):
+    """Renumbering of a SUMMA file's ids when domains are merged: HRUs by hru_offsets, GRUs and reaches by part."""
+    def shift(name, part, k):
+        if name == "hruId":
+            return part + hru_offsets[k]
+        if name in ("gruId", "hru2gruId"):
+            return part + k
+        if name == "cell2hruId":
+            return np.where(part > 0, part + hru_offsets[k], part)
+        if name == "streamSegId":
+            return np.where(part > 0, part + k, part)
+        return part
+    return shift
+
+
+def topology_shift(name, part, k):
+    """Renumbering of a one-reach topology when domains are merged: the GRU, its reach and the reach below."""
+    if name in ("hruId", "hruToSegId", "segId"):
+        return part + k
+    if name == "downSegId":
+        return np.where(part > 0, part + k, part)
+    return part
+
+
+def write_trial_params(trial, attributes):
+    """trialParams.nc of a merged domain: its HRU and GRU ids, and the per-GRU values the case's own
+    trialParams.nc already holds (by GRU), the rest at their defaults."""
+    keep = {}
+    if os.path.exists(trial):
+        with nc4.Dataset(trial) as t:
+            keep = {v: np.array(t[v][:]) for v in t.variables if t[v].dimensions == ("gru",) and v != "gruId"}
+    with nc4.Dataset(attributes) as a:
+        hru_ids, gru_ids = np.array(a["hruId"][:]), np.array(a["gruId"][:])
+    with nc4.Dataset(trial, "w", format="NETCDF4") as d:
+        d.createDimension("hru", len(hru_ids))
+        d.createDimension("gru", len(gru_ids))
+        d.createVariable("hruId", "i4", ("hru",))[:] = hru_ids
+        d.createVariable("gruId", "i4", ("gru",))[:] = gru_ids
+        for name, values in keep.items():
+            if len(values) != len(gru_ids):
+                raise SystemExit(f"{trial}: {name} has {len(values)} GRUs, the domain {len(gru_ids)}")
+            d.createVariable(name, "f8", ("gru",))[:] = values
+
+
+def stream_domain(c, spec, stream, first, last, tmp, files, source):
+    """The domain with a stream HRU and a one-reach topology, built by summa's add_stream_hru.py in tmp/built."""
+    settings = os.path.join(tmp, "settings")
+    shutil.copytree(os.path.join(c["project_dir"], "settings", "SUMMA"), settings)
+    shutil.copy(os.path.join(tmp, "attributes_glac.nc"), os.path.join(settings, "attributes_glac.nc"))
+    shutil.copy(os.path.join(tmp, "coldstate_glac.nc"), os.path.join(settings, "coldstate_glac.nc"))
+    write_file_list(os.path.join(settings, "forcingFileList.txt"), [os.path.basename(f) for f in files])
+    built = os.path.join(tmp, "built")
+    subprocess.run([sys.executable, os.path.join(SUMMA_DIR, "utils", "pre-processing", "add_stream_hru.py"),
+                    settings, source, built, "--attributes", "attributes_glac.nc", "--cold-state", "coldstate_glac.nc",
+                    "--first-month", first, "--last-month", last,
+                    "--length", str(stream["length"]), "--slope", str(stream["slope"]), "--width", str(stream["width"]),
+                    "--elevation", str(stream["elevation"]), "--latitude", str(stream["latitude"]),
+                    "--longitude", str(stream["longitude"])], check=True)
+    return built
 
 
 def build(name, spec, cases_dir):
@@ -120,25 +179,40 @@ def build(name, spec, cases_dir):
     copy_forcing = spec.get("copy_forcing", True)
     with tempfile.TemporaryDirectory() as tmp:
         if "merge" in spec:
-            parts = []
-            for k, dom in enumerate(spec["merge"]):
-                out = os.path.join(tmp, dom)
-                c = domain_cold_state(dom, spec["first_month"], out)
-                parts.append((c, out))
+            parts = []  # (config, folder with attributes.nc, coldState.nc, trialParams.nc and forcing/, topology or None)
+            for k, part in enumerate(spec["merge"]):
+                out = os.path.join(tmp, part["domain"])
+                c = domain_cold_state(part["domain"], spec["first_month"], out)
+                files = forcing_files(forcing_dir_of(c, spec["forcing"]), months)
+                if "stream" in part:
+                    built = stream_domain(c, spec, part["stream"], spec["first_month"], spec["last_month"], out, files,
+                                          forcing_dir_of(c, spec["forcing"]))
+                    parts.append((c, os.path.join(built, "summa_inputs"), sorted(glob.glob(os.path.join(built, "forcing", "*.nc"))),
+                                  os.path.join(built, "topology.nc")))
+                else:
+                    shutil.copy(os.path.join(out, "attributes_glac.nc"), os.path.join(out, "attributes.nc"))
+                    shutil.copy(os.path.join(out, "coldstate_glac.nc"), os.path.join(out, "coldState.nc"))
+                    shutil.copy(os.path.join(c["project_dir"], "settings", "SUMMA", "trialParams.nc"), os.path.join(out, "trialParams.nc"))
+                    parts.append((c, out, files, None))
             offsets, n = [], 0
-            for c, out in parts:
+            for _, folder, _, _ in parts:
                 offsets.append(n)
-                with nc4.Dataset(os.path.join(out, "attributes_glac.nc")) as a:
+                with nc4.Dataset(os.path.join(folder, "attributes.nc")) as a:
                     n += len(a.dimensions["hru"])
-            merge_netcdf([os.path.join(o, "attributes_glac.nc") for _, o in parts], os.path.join(inputs, "attributes.nc"), offsets)
-            merge_netcdf([os.path.join(o, "coldstate_glac.nc") for _, o in parts], os.path.join(inputs, "coldState.nc"), offsets)
+            shift = summa_shift(offsets)
+            for f in ("attributes.nc", "coldState.nc"):
+                merge_netcdf([os.path.join(folder, f) for _, folder, _, _ in parts], os.path.join(inputs, f), ("hru", "gru"), shift)
+            write_trial_params(os.path.join(inputs, "trialParams.nc"), os.path.join(inputs, "attributes.nc"))
+            if all(top for _, _, _, top in parts):
+                merge_netcdf([top for _, _, _, top in parts], os.path.join(dest, "topology.nc"), ("hru", "seg"), topology_shift)
             forcing = os.path.join(dest, "forcing")
-            os.makedirs(forcing, exist_ok=True)
+            if os.path.isdir(forcing):
+                shutil.rmtree(forcing)
+            os.makedirs(forcing)
             names = []
-            per_domain = [forcing_files(forcing_dir_of(c, spec["forcing"]), months) for c, _ in parts]
-            for m, files in zip(months, zip(*per_domain)):
+            for m, month_files in zip(months, zip(*[files for _, _, files, _ in parts])):
                 fname = spec["forcing_name"].format(Y=m[:4], M=m[4:])
-                merge_netcdf(files, os.path.join(forcing, fname), offsets)
+                merge_netcdf(month_files, os.path.join(forcing, fname), ("hru",), shift)
                 names.append(fname)
             write_file_list(os.path.join(inputs, "forcingFileList.txt"), names)
             print(f"{name}: {len(parts)} domains merged, {len(names)} forcing files in {forcing}")
@@ -148,19 +222,7 @@ def build(name, spec, cases_dir):
         source = forcing_dir_of(c, spec["forcing"])
         files = forcing_files(source, months)
         if "stream" in spec:
-            settings = os.path.join(tmp, "settings")
-            shutil.copytree(os.path.join(c["project_dir"], "settings", "SUMMA"), settings)
-            shutil.copy(os.path.join(tmp, "attributes_glac.nc"), os.path.join(settings, "attributes_glac.nc"))
-            shutil.copy(os.path.join(tmp, "coldstate_glac.nc"), os.path.join(settings, "coldstate_glac.nc"))
-            write_file_list(os.path.join(settings, "forcingFileList.txt"), [os.path.basename(f) for f in files])
-            built = os.path.join(tmp, "built")
-            s = spec["stream"]
-            subprocess.run([sys.executable, os.path.join(SUMMA_DIR, "utils", "pre-processing", "add_stream_hru.py"),
-                            settings, source, built, "--attributes", "attributes_glac.nc", "--cold-state", "coldstate_glac.nc",
-                            "--first-month", spec["first_month"], "--last-month", spec["last_month"],
-                            "--length", str(s["length"]), "--slope", str(s["slope"]), "--width", str(s["width"]),
-                            "--elevation", str(s["elevation"]), "--latitude", str(s["latitude"]),
-                            "--longitude", str(s["longitude"])], check=True)
+            built = stream_domain(c, spec, spec["stream"], spec["first_month"], spec["last_month"], tmp, files, source)
             for f in ("attributes.nc", "coldState.nc", "forcingFileList.txt"):
                 shutil.copy(os.path.join(built, "summa_inputs", f), os.path.join(inputs, f))
             shutil.copy(os.path.join(built, "topology.nc"), os.path.join(dest, "topology.nc"))

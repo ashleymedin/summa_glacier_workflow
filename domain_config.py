@@ -9,7 +9,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 def load_config(path):
     """The domain settings, with project_dir and the data directories resolved; relative paths are
-    relative to this folder (summa_glacier)."""
+    relative to this folder (summa_glacier_workflow)."""
     with open(path) as f:
         c = yaml.safe_load(f)
     resolve = lambda p: os.path.abspath(os.path.join(HERE, os.path.expanduser(p)))

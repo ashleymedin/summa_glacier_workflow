@@ -20,10 +20,10 @@ the one-reach topology with summa's `utils/pre-processing/add_stream_hru.py`. Th
 
 ```bash
 cd ../summa/utils/pre-processing
-T=../../../summa_glacier/tests/wolverine/observations
+T=../../../summa_glacier_workflow/tests/wolverine/observations
 ./acquire_streamflow.py usgs 15236900 2016-01-01 2019-12-31 $T/USGS_15236900_daily_flow.nc --model-utc-offset 0
 ./acquire_stream_temperature.py 15236900 2016-01-01 2019-12-31 $T/USGS_15236900_daily_temperature.nc --model-utc-offset 0
-../../../summa_glacier/acquire_glacier_mass_balance.py $S/observations/storage/mass_balance/Output_Wolverine_Glacier_Wide_solutions_calibrated.csv \
+../../../summa_glacier_workflow/acquire_glacier_mass_balance.py $S/observations/storage/mass_balance/Output_Wolverine_Glacier_Wide_solutions_calibrated.csv \
     seasonal $T/wolverine_mass_balance_seasonal.nc
 ```
 

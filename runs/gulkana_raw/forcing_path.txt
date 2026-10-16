@@ -1,1 +1,1 @@
-/Users/amedin/Research/SummaSundials/summa_glacier/data/domain_Gulkana/forcing/SUMMA_input/
+/Users/amedin/Research/SummaSundials/summa_glacier_workflow/data/domain_Gulkana/forcing/SUMMA_input/

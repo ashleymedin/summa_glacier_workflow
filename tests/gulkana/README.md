@@ -17,9 +17,9 @@ The domain is written by `../../build_cases.py ../../cases.yaml gulkana_test` fr
 
 ```bash
 cd ../summa/utils/pre-processing
-T=../../../summa_glacier/tests/gulkana/observations
+T=../../../summa_glacier_workflow/tests/gulkana/observations
 ./acquire_streamflow.py usgs 15478040 2008-01-01 2012-12-31 $T/USGS_15478040_daily_flow.nc --model-utc-offset 0
-../../../summa_glacier/acquire_glacier_mass_balance.py Output_Gulkana_Glacier_Wide_solutions_calibrated.csv seasonal \
+../../../summa_glacier_workflow/acquire_glacier_mass_balance.py Output_Gulkana_Glacier_Wide_solutions_calibrated.csv seasonal \
     $T/gulkana_mass_balance_seasonal.nc
 ```
 
