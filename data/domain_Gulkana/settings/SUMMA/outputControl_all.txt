@@ -1,0 +1,16 @@
+dCanairTemp_dEnthalpy             | 1
+iyyy                              | 1
+iyyy                              | 24
+temperature                       | 1
+hru2gruId                         | 1
+
+scalarCanopyTemp   | 1       | minimum
+mLayerTemp         | 1       | minimum
+scalarCanopyTemp   | 24      | minimum
+mLayerTemp         | 24      | minimum
+surface_elev       | 1
+bed_elev       | 1
+scalarCanopyTemp   | annual  | 0   | 1    | 0    | 0   | 0   | 0 | 0
+mLayerTemp         | annual  | 0   | 1    | 0    | 0   | 0   | 0 | 0
+
+

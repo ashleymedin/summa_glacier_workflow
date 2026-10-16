@@ -1,0 +1,30 @@
+# Gulkana Glacier, Alaska: USGS 15478040 Phelan Creek near Paxson, 1 GRU of 3 elevation-band HRUs
+project_dir: data/domain_Gulkana            # copied from SYMFLUENCE_data, then rebuilt here
+bounding_box: 63.31/-145.54/63.23/-145.32       # lat_max/lon_min/lat_min/lon_max
+pour_point: 63.24027778/-145.4680556            # lat/lon of the gauge
+utm_crs: EPSG:32606                             # UTM 6N, for metric glacier grids
+utm_epsg: 32606
+rgi6_region: 01Alaska
+min_glacier_size_km2: 1                         # Herreid and Pellicciotti debris map version
+min_debris_thickness: 0.04                      # m, thinner mapped debris is raised to this
+
+# global glacier products, downloaded by hand (README.md)
+data:
+  rgi: ~/Research/USask/RGI_data
+  debris_extent: ~/Research/USask/Debris_data
+  debris_thickness: ~/Research/USask/Debris_thick
+  ice_thickness: ~/Research/USask/Thickness_data
+
+# cold state of the domain itself (cases write their own, from their own first month)
+cold_start: 2008-01                             # first forcing month; its 12 months of raw ERA5 set the start
+soil_offset: 1.5                                # deg C, soil and debris above the mean annual air temperature
+ice_temp: -5.0                                  # deg C
+
+# station correction of the forcing (correct_forcing_to_station.py)
+stations: USGSweatherData                       # in project_dir
+stakes: observations/storage/mass_balance/Input_Gulkana_Glaciological_Data.csv
+spechum_campaign:                               # Wilson et al. 2024 Site B, for the April-August humidity
+  station: Wilson_gulkana_2024_data/1_meteo/gulkanaB_AWS_2024.csv
+  latitude: 63.285514
+  longitude: -145.410336
+  ratios: forcing/spechum_ratios_wilson2024.csv

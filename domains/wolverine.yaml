@@ -1,0 +1,34 @@
+# Wolverine Glacier, Alaska: USGS 15236900 Wolverine Creek near Lawing, 1 GRU of 3 elevation-band HRUs
+project_dir: data/domain_Wolverine            # copied from SYMFLUENCE_data, then rebuilt here
+bounding_box: 60.44/-148.97/60.36/-148.85       # lat_max/lon_min/lat_min/lon_max
+pour_point: 60.36999097/-148.8988085            # lat/lon of the gauge
+utm_crs: EPSG:32606
+utm_epsg: 32606
+rgi6_region: 01Alaska
+min_glacier_size_km2: 1
+min_debris_thickness: 0.04
+
+data:
+  rgi: ~/Research/USask/RGI_data
+  debris_extent: ~/Research/USask/Debris_data
+  debris_thickness: ~/Research/USask/Debris_thick
+  ice_thickness: ~/Research/USask/Thickness_data
+
+cold_start: 2008-01
+soil_offset: 1.5
+ice_temp: -5.0
+
+stations: USGSweatherData
+stakes: observations/storage/mass_balance/Input_Wolverine_Glaciological_Data.csv
+gauge_shield: SA                                # single-Alter shield on the 990 m weighing gauge
+
+# the bundled stream-temperature test: one reach from the terminus to the gauge (add_stream_hru.py)
+stream_hru:
+  first_month: 2016-01
+  last_month: 2019-12
+  length: 2000
+  slope: 0.03
+  width: 5
+  elevation: 390
+  latitude: 60.374
+  longitude: -148.912

@@ -1,0 +1,9 @@
+Glacier,USGS Benchmark Glacier,Type,site_name,Easting,Northing,UTM_EPSG,latitude,longitude
+Gulkana,Yes,Glaciological,T,577224,7017591,32606,63.2789,-145.4606
+Gulkana,Yes,Glaciological,Z,576089,7018648,32606,63.28863,-145.48272
+Wolverine,Yes,Glaciological,EC,394619,6700393,32606,60.42606,-148.91415
+Kahiltna,No,Glaciological,KQU,597797,6984454,32605,62.97664,-151.07059
+Kahiltna,No,Glaciological,KPL,592090,6995112,32605,63.07375,-151.17715
+Kahiltna,No,Glaciological,KPS,592227,6995438,32605,63.07663,-151.17425
+Kennicott,No,Glaciological,KCO,380987,6845261,32607,61.72191,-143.25205
+Kennicott,No,Glaciological,KCX,398834,6841866,32607,61.69658,-142.91269

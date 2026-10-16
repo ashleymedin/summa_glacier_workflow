@@ -1,0 +1,66 @@
+# SUMMA cases built from the glacier domains by build_cases.py. Paths are relative to this file.
+# first_month is the cold start: the calibration spins up over the year before its start_time, from it.
+
+# a short Gulkana calibration, discharge and mass balance: spin-up 2008, scored 2009-2012
+gulkana_test:
+  domain: gulkana
+  dest: tests/gulkana
+  first_month: 2008-01
+  last_month: 2012-12
+  forcing: raw
+
+# a short Wolverine calibration with its routed reach, discharge, stream temperature and mass balance:
+# spin-up 2016, scored 2017-2019
+wolverine_test:
+  domain: wolverine
+  dest: tests/wolverine
+  first_month: 2016-01
+  last_month: 2019-12
+  forcing: raw
+  stream: {length: 2000, slope: 0.03, width: 5, elevation: 390, latitude: 60.374, longitude: -148.912}
+
+# summa's minimal multi-objective calibration test: both glaciers as one domain of 2 GRUs, Oct 2008 - Dec 2011
+gulkana_wolverine:
+  merge: [gulkana, wolverine]
+  dest: ../summa/utils/test/test_calibration/gulkana_wolverine
+  first_month: 2008-10
+  last_month: 2011-12
+  forcing: raw
+  forcing_name: "GulkanaWolverine_{Y}-{M}-01-00-00-00_double_precision.nc"
+
+# the full runs of glacier.tex: spin-up 2008, calibrated 2009-2015, evaluated 2016-2022
+gulkana_raw:
+  domain: gulkana
+  dest: runs/gulkana_raw
+  template: tests/gulkana/summa_inputs
+  first_month: 2008-01
+  last_month: 2022-12
+  forcing: raw
+  copy_forcing: false
+
+gulkana_corrected:
+  domain: gulkana
+  dest: runs/gulkana_corrected
+  template: tests/gulkana/summa_inputs
+  first_month: 2008-01
+  last_month: 2022-12
+  forcing: station_corrected
+  copy_forcing: false
+
+wolverine_raw:
+  domain: wolverine
+  dest: runs/wolverine_raw
+  template: tests/wolverine/summa_inputs
+  first_month: 2008-01
+  last_month: 2022-12
+  forcing: raw
+  stream: {length: 2000, slope: 0.03, width: 5, elevation: 390, latitude: 60.374, longitude: -148.912}
+
+wolverine_corrected:
+  domain: wolverine
+  dest: runs/wolverine_corrected
+  template: tests/wolverine/summa_inputs
+  first_month: 2008-01
+  last_month: 2022-12
+  forcing: station_corrected
+  stream: {length: 2000, slope: 0.03, width: 5, elevation: 390, latitude: 60.374, longitude: -148.912}

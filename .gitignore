@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+# bulky inputs, kept outside git
+data/*/forcing/SUMMA_input/
+data/*/USGSweatherData/
+runs/*/forcing/
+tests/*/forcing/
+# run outputs
+tests/*_run/
+runs/*/calibration/
+runs/*/evaluation/
