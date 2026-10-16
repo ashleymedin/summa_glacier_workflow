@@ -202,11 +202,12 @@ metric     = "rmse"
     return "".join(lines)
 
 
-def run_driver(work, config, ranks):
+def run_driver(work, config, settings, ranks):
     if os.path.isdir(work):
         shutil.rmtree(work)
     os.makedirs(os.path.join(work, "output"))
     os.makedirs(os.path.join(work, "state"))
+    shutil.copy(os.path.join(settings, "coldState.nc"), os.path.join(work, "state"))
     with open(os.path.join(work, "config.toml"), "w") as f:
         f.write(config)
     exe = os.path.join(SUMMA_DIR, "bin", "summa_sundials_mizuroute_opt.exe")
@@ -215,6 +216,15 @@ def run_driver(work, config, ranks):
                                 stdout=log, stderr=subprocess.STDOUT).returncode
     if status != 0:
         raise SystemExit(f"calibration driver exited {status}; see {work}/run.log")
+
+
+def fit12(value):
+    """The value at the most significant digits that fit SUMMA's f12.4 parameter columns."""
+    for digits in range(10, 0, -1):
+        text = f"{value:.{digits}g}"
+        if len(text) <= 12:
+            return f"{text:>12}"
+    raise ValueError(f"{value} does not fit in 12 characters")
 
 
 def pin_settings(src, dst, values):
@@ -229,7 +239,7 @@ def pin_settings(src, dst, values):
             key = line.split("|")[0].strip() if "|" in line and not line.lstrip().startswith("!") else ""
             if key in values:
                 default = line.split("|")[1].strip()
-                line = f"{key:<26}| {default:>12} | {values[key]:>14.8g} | {values[key]:>14.8g}\n"
+                line = f"{key:<26}| {default:>12} | {fit12(values[key])} | {fit12(values[key])}\n"
             out.append(line)
         open(path, "w").writelines(out)
 
@@ -250,7 +260,7 @@ def main():
         work = os.path.join(run_dir, "calibration")
         config = config_text(a.case, run_dir, settings, work, "2009-01-01", "2015-12-31", "2009-01-01", "2015-12-31",
                              "nsga2", a.population * a.generations, a.population, temperature=False)
-        run_driver(work, config, a.ranks)
+        run_driver(work, config, settings, a.ranks)
         print(f"calibration written to {work}/output/{a.case}_calibration.nc")
         return
 
@@ -267,13 +277,13 @@ def main():
         pin_settings(settings, pinned, values[i])
         config = config_text(a.case, run_dir, pinned, work, "2009-01-01", "2022-12-31", "2016-01-01", "2022-12-31",
                              "dds", 1, 1, temperature=True)
-        run_driver(work, config, a.ranks)
+        run_driver(work, config, pinned, a.ranks)
         with nc4.Dataset(os.path.join(work, "output", f"{a.case}_calibration.nc")) as d:
             ev = np.asarray(d["objective"][0])
             ev_names = [t.strip() for t in d["objective"].target.split(",")]
-        row = {"sample": i + 1}
-        row.update({f"cal_{n}": cal[i, k] for k, n in enumerate(cal_names)})
-        row.update({f"eval_{n}": ev[k] for k, n in enumerate(ev_names)})
+        row = {"sample": int(i) + 1}
+        row.update({f"cal_{n}": float(cal[i, k]) for k, n in enumerate(cal_names)})
+        row.update({f"eval_{n}": float(ev[k]) for k, n in enumerate(ev_names)})
         rows.append(row)
         print(row)
     out = os.path.join(run_dir, "evaluation", "evaluation.csv")
