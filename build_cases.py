@@ -7,7 +7,7 @@ over. Its text settings and trialParams.nc are the case's own, kept in <dest>/su
 the domain's raw ERA5 (forcing/SUMMA_input) or the station correction (forcing/SUMMA_input/station_corrected)
 over the case's months: copied into <dest>/forcing for a test, read in place for a run.
 
-  stream  the domain gets a stream HRU and a one-reach topology (summa's add_stream_hru.py), whose forcing
+  stream  the domain gets a stream HRU and a one-reach topology (add_stream_hru.py), whose forcing
           and topology are written into <dest>
   merge   two domains become one, one GRU each, with their HRUs, glacier grids and forcing side by side
 
@@ -29,7 +29,6 @@ import yaml
 from domain_config import load_config
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SUMMA_DIR = os.path.abspath(os.environ.get("SUMMA_DIR", os.path.join(HERE, "..", "summa")))
 
 
 def months_between(first, last):
@@ -153,14 +152,14 @@ def write_trial_params(trial, attributes):
 
 
 def stream_domain(c, spec, stream, first, last, tmp, files, source):
-    """The domain with a stream HRU and a one-reach topology, built by summa's add_stream_hru.py in tmp/built."""
+    """The domain with a stream HRU and a one-reach topology, built by add_stream_hru.py in tmp/built."""
     settings = os.path.join(tmp, "settings")
     shutil.copytree(os.path.join(c["project_dir"], "settings", "SUMMA"), settings)
     shutil.copy(os.path.join(tmp, "attributes_glac.nc"), os.path.join(settings, "attributes_glac.nc"))
     shutil.copy(os.path.join(tmp, "coldstate_glac.nc"), os.path.join(settings, "coldstate_glac.nc"))
     write_file_list(os.path.join(settings, "forcingFileList.txt"), [os.path.basename(f) for f in files])
     built = os.path.join(tmp, "built")
-    subprocess.run([sys.executable, os.path.join(SUMMA_DIR, "utils", "pre-processing", "add_stream_hru.py"),
+    subprocess.run([sys.executable, os.path.join(HERE, "add_stream_hru.py"),
                     settings, source, built, "--attributes", "attributes_glac.nc", "--cold-state", "coldstate_glac.nc",
                     "--first-month", first, "--last-month", last,
                     "--length", str(stream["length"]), "--slope", str(stream["slope"]), "--width", str(stream["width"]),

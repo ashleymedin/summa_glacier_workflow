@@ -2,8 +2,7 @@
 
 The glacier setup and runs of SUMMA on Gulkana and Wolverine glaciers, Alaska: from global glacier
 products and on-site observations to the domains, the tests and the full 2008–2022 calibrations of the
-glacier paper. It sits beside the `summa` checkout, uses its executables and two of its scripts
-(`utils/pre-processing/observation_netcdf.py` and `add_stream_hru.py`); set `SUMMA_DIR` if summa is
+glacier paper. It sits beside the `summa` checkout and uses its executables; set `SUMMA_DIR` if summa is
 elsewhere.
 
 ## Layout
@@ -21,8 +20,13 @@ elsewhere.
 
 The pipeline's scripts: `glacier_rasters.py`, `glacier_extend.py`, `glacier_zonal_stats.py`,
 `correct_forcing_to_station.py`, `spechum_ratio_from_campaign.py` and `glacier_cold_state.py`; and
-`acquire_glacier_mass_balance.py` for the mass-balance observations. `wolverine_network.json` is
-Wolverine Creek's tributary network for summa's `add_stream_network.py`.
+`acquire_glacier_mass_balance.py` for the mass-balance observations.
+
+The observation scripts `acquire_streamflow.py`, `acquire_stream_temperature.py`, `acquire_grace_tws.py` and
+`acquire_groundwater_level.py` fetch records from the web and write them with `observation_netcdf.py`, in the
+form a SUMMA calibration target reads. `add_stream_hru.py` gives a one-GRU domain a stream HRU and a one-reach
+mizuRoute topology; `add_stream_network.py` splits tributary GRUs off it, each with its own reach, from a JSON
+spec such as `wolverine_network.json`, Wolverine Creek's tributary network.
 
 ## Building
 
@@ -96,7 +100,7 @@ Downloaded by hand to the paths in the domain YAMLs:
 | Gulkana 2024 Site B station (Wilson et al.) | `data/domain_Gulkana/Wilson_gulkana_2024_data` |
 
 The forcing, station records and built forcing are git-ignored (about 1 GB). Discharge and water
-temperature come from summa's `acquire_streamflow.py` and `acquire_stream_temperature.py`.
+temperature come from `acquire_streamflow.py` and `acquire_stream_temperature.py`.
 
 ## Environment
 

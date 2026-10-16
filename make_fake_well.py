@@ -12,13 +12,10 @@ reference run's parameters reproduces it, so the target tests the machinery, not
 import argparse
 import datetime as dt
 import os
-import sys
 
 import netCDF4 as nc4
 import numpy as np
 
-SUMMA_DIR = os.environ.get("SUMMA_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "summa"))
-sys.path.insert(0, os.path.join(SUMMA_DIR, "utils", "pre-processing"))
 from observation_netcdf import write_observations
 
 

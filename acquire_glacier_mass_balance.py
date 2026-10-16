@@ -26,12 +26,7 @@ import argparse
 import csv
 import datetime as dt
 import math
-import os
-import sys
 
-# the observation writer every SUMMA calibration target reads, from the summa checkout beside this folder
-SUMMA_DIR = os.environ.get("SUMMA_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "summa"))
-sys.path.insert(0, os.path.join(SUMMA_DIR, "utils", "pre-processing"))
 from observation_netcdf import write_observations
 
 
