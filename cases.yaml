@@ -20,8 +20,9 @@ wolverine_test:
   stream: {length: 2000, slope: 0.03, width: 5, elevation: 390, latitude: 60.374, longitude: -148.912}
 
 # summa's calibration test domain: both glaciers as one domain of 2 GRUs, each with a stream HRU and a reach,
-# Oct 2015 - Jun 2018: a spin-up year, then the shortest span that holds two seasonal balances (Oct 2017 and
-# May 2018), each a year after the span starts. The Gulkana reach, from the glacier to USGS 15478040, is an estimate.
+# Oct 2015 - Jul 2018: a spin-up year, then the shortest span that holds two seasonal balances (Oct 2017 and
+# May 2018), each with a year before it and 60 days after. The Gulkana reach, from the glacier to USGS 15478040, is
+# an estimate.
 gulkana_wolverine:
   merge:
     - domain: gulkana
@@ -30,7 +31,7 @@ gulkana_wolverine:
       stream: {length: 2000, slope: 0.03, width: 5, elevation: 390, latitude: 60.374, longitude: -148.912}
   dest: ../summa/utils/test/test_calibration/gulkana_wolverine
   first_month: 2015-10
-  last_month: 2018-06
+  last_month: 2018-07
   forcing: raw
   forcing_name: "GulkanaWolverine_{Y}-{M}-01-00-00-00.nc"
 
