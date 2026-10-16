@@ -32,7 +32,7 @@ gulkana_wolverine:
   first_month: 2015-10
   last_month: 2018-06
   forcing: raw
-  forcing_name: "GulkanaWolverine_{Y}-{M}-01-00-00-00_double_precision.nc"
+  forcing_name: "GulkanaWolverine_{Y}-{M}-01-00-00-00.nc"
 
 # the full runs of glacier.tex: spin-up 2008, calibrated 2009-2015, evaluated 2016-2022
 gulkana_raw:
