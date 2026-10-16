@@ -69,8 +69,8 @@ def forcing_dir_of(c, forcing):
 
 def merge_netcdf(paths, out, concat, shift, keep=None):
     """One file of several domains' files, concatenated along the dimensions in concat, the others padded to
-    the largest, padding at each variable's fill value; shift(name, values, k) renumbers part k's ids.
-    keep, if given, lists the variables written."""
+    the largest, padding at each variable's fill value, compressed; shift(name, values, k) renumbers part k's
+    ids. keep, if given, lists the variables written."""
     srcs = [nc4.Dataset(p) for p in paths]
     for s in srcs:
         s.set_auto_mask(False)
@@ -83,7 +83,7 @@ def merge_netcdf(paths, out, concat, shift, keep=None):
             if keep is not None and name not in keep:
                 continue
             fill = getattr(v, "_FillValue", None)
-            var = d.createVariable(name, v.dtype, v.dimensions, fill_value=fill)
+            var = d.createVariable(name, v.dtype, v.dimensions, fill_value=fill, zlib=v.dtype != str, complevel=4)
             var.setncatts({k: v.getncattr(k) for k in v.ncattrs() if k != "_FillValue"})
             shape = tuple(len(d.dimensions[x]) for x in v.dimensions)
             if not shape:
