@@ -2,16 +2,17 @@
 """Calibrate a full glacier run, then score its Pareto front on the held-out years.
 
   calibrate  NSGA-II over 2009-2015 after a spin-up over 2008, on discharge and the glacier-wide seasonal
-             mass balance, in <case>/calibration
+             mass balance, in <case>/<name> (default calibration)
   evaluate   each front member rerun over 2009-2022 with its parameters pinned (both bounds set to its
-             value) and scored over 2016-2022, in <case>/evaluation/sample_<n>; adds Wolverine's water
-             temperature, which is only recorded from 2016; writes <case>/evaluation/evaluation.csv
+             value) and scored over 2016-2022, in <case>/<name>_evaluation/sample_<n>; adds Wolverine's water
+             temperature, which is only recorded from 2016; writes <case>/<name>_evaluation/evaluation.csv
 
 The spin-up runs at the default parameters for every trial, in calibration and evaluation alike, as the
 calibration driver does. Needs summa's MPI calibration executable (bin/summa_sundials_mizuroute_opt.exe).
 
     ./calibrate.py calibrate gulkana_raw --population 32 --generations 15 --ranks 9
     ./calibrate.py evaluate gulkana_raw --ranks 2
+    ./calibrate.py calibrate gulkana_raw --population 20 --generations 10 --ranks 5 --name pilot
 """
 
 import argparse
@@ -252,19 +253,22 @@ def main():
     p.add_argument("--population", type=int, default=32)
     p.add_argument("--generations", type=int, default=15)
     p.add_argument("--ranks", type=int, default=9, help="MPI ranks: one dispatcher and the workers")
+    p.add_argument("--name", default="calibration",
+                   help="folder of the calibration in <case>; its evaluation is <name>_evaluation")
     a = p.parse_args()
     run_dir = os.path.join(HERE, a.case)
     settings = os.path.join(run_dir, "summa_inputs")
 
     if a.mode == "calibrate":
-        work = os.path.join(run_dir, "calibration")
+        work = os.path.join(run_dir, a.name)
         config = config_text(a.case, run_dir, settings, work, "2009-01-01", "2015-12-31", "2009-01-01", "2015-12-31",
                              "nsga2", a.population * a.generations, a.population, temperature=False)
         run_driver(work, config, settings, a.ranks)
         print(f"calibration written to {work}/output/{a.case}_calibration.nc")
         return
 
-    with nc4.Dataset(os.path.join(run_dir, "calibration", "output", f"{a.case}_calibration.nc")) as d:
+    evaluation = os.path.join(run_dir, f"{a.name}_evaluation")
+    with nc4.Dataset(os.path.join(run_dir, a.name, "output", f"{a.case}_calibration.nc")) as d:
         front = np.flatnonzero(np.asarray(d["pareto_front"][:]) == 1)
         names = [n for n in PARAMS + SOIL_CHAIN if n in d.variables]
         values = {i: {n: float(d[n][i]) for n in names} for i in front}
@@ -272,7 +276,7 @@ def main():
         cal_names = [t.strip() for t in d["objective"].target.split(",")]
     rows = []
     for i in front:
-        work = os.path.join(run_dir, "evaluation", f"sample_{i + 1}")
+        work = os.path.join(evaluation, f"sample_{i + 1}")
         pinned = os.path.join(work + "_settings")
         pin_settings(settings, pinned, values[i])
         config = config_text(a.case, run_dir, pinned, work, "2009-01-01", "2022-12-31", "2016-01-01", "2022-12-31",
@@ -286,7 +290,7 @@ def main():
         row.update({f"eval_{n}": float(ev[k]) for k, n in enumerate(ev_names)})
         rows.append(row)
         print(row)
-    out = os.path.join(run_dir, "evaluation", "evaluation.csv")
+    out = os.path.join(evaluation, "evaluation.csv")
     with open(out, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
         w.writeheader()
