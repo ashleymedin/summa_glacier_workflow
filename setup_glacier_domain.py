@@ -6,6 +6,7 @@ Steps, in order (--steps picks some; the default is all of them):
   rasters   glacier_rasters.py: domain type, RGI id, debris thickness and bed rasters
   extend    glacier_extend.py: basin on the bed, glacier-capable cells downstream (needs pysheds)
             -- then, in SYMFLUENCE: elevation-band HRUs, forcing remapping, upland attributes.nc and coldState.nc --
+  hrus      hru_attributes.py: HRU area, centre, elevation, slope and contour length from the polygons and DEM
   zonal     glacier_zonal_stats.py: per-HRU debris, domain-type, elevation, slope and aspect statistics
   forcing   spechum_ratio_from_campaign.py (if the YAML names a campaign) and correct_forcing_to_station.py:
             forcing/SUMMA_input/station_corrected
@@ -24,7 +25,7 @@ import sys
 from domain_config import load_config
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-STEPS = ("rasters", "extend", "zonal", "forcing", "coldstate")
+STEPS = ("rasters", "extend", "hrus", "zonal", "forcing", "coldstate")
 
 
 def run(*args):
@@ -46,6 +47,8 @@ def main():
         run(py, os.path.join(HERE, "glacier_rasters.py"), a.config)
     if "extend" in a.steps:
         run(py, os.path.join(HERE, "glacier_extend.py"), a.config)
+    if "hrus" in a.steps:
+        run(py, os.path.join(HERE, "hru_attributes.py"), a.config)
     if "zonal" in a.steps:
         run(py, os.path.join(HERE, "glacier_zonal_stats.py"), a.config)
     if "forcing" in a.steps:

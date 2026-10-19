@@ -31,7 +31,7 @@ spec such as `wolverine_network.json`, Wolverine Creek's tributary network.
 ## Building
 
 ```bash
-./setup_glacier_domain.py domains/gulkana.yaml       # rasters extend zonal forcing coldstate
+./setup_glacier_domain.py domains/gulkana.yaml       # rasters extend hrus zonal forcing coldstate
 ./setup_glacier_domain.py domains/wolverine.yaml
 ./build_cases.py cases.yaml                          # every test and run, or name some
 ```
@@ -42,9 +42,11 @@ spec such as `wolverine_network.json`, Wolverine Creek's tributary network.
    to 4 cm where thinner. The bed is the surface less the Millan et al. (2022) thickness.
 2. **extend.** The basin is delineated on the bed above the gauge, and each glacier at least 80% inside
    it gets room to advance by dragging its terminus downstream.
-3. **zonal.** Per-HRU debris thickness, domain-type cell counts, and elevation, slope and aspect of each
+3. **hrus.** Each HRU's area, centre, elevation, slope and contour length in `attributes.nc` and the HRU
+   shapefile, from its polygon (in `utm_crs`) and the DEM.
+4. **zonal.** Per-HRU debris thickness, domain-type cell counts, and elevation, slope and aspect of each
    domain type; and the HRU of every DEM cell.
-4. **forcing.** The station correction:
+5. **forcing.** The station correction:
    - air temperature by an offset per HRU, month and wet or dry hour;
    - humidity by a ratio on the same split;
    - shortwave and pressure by one ratio per HRU;
@@ -54,7 +56,7 @@ spec such as `wolverine_network.json`, Wolverine Creek's tributary network.
    Wolverine's HRUs without stakes take the SA-shielded gauge. Gulkana's April–August humidity comes from
    Wilson et al.'s 2024 Site B station. The output, `forcing/SUMMA_input/station_corrected`, reproduces
    the forcing of the 15–16 Oct calibrations exactly.
-5. **coldstate.** `attributes_glac.nc` and `coldstate_glac.nc`:
+6. **coldstate.** `attributes_glac.nc` and `coldstate_glac.nc`:
    - **Ice:** five layers, 0.15 to 23 m, starting at −5 °C, with ice fraction 0.90 to 0.98 down the column.
    - **Debris:** 2 to 5 soil layers over the ice, enough for the thickest debris cell in the HRU. The top
      layer is at most 5 cm and each layer below is a fixed ratio times the one above, as SUMMA re-splits

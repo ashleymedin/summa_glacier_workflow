@@ -29,6 +29,28 @@ from shapely.geometry import mapping
 from domain_config import load_config
 
 
+def dem_slope_aspect(dem_path):
+    """Surface DEM (m, NaN off the raster), its nodata value and transform, tan slope clipped to
+    1e-6..tan(80 deg) (-9999 where undefined) and aspect (deg E of N, -1 where flat)."""
+    with rasterio.open(dem_path) as src:
+        nodata = src.nodatavals[0] if src.nodatavals[0] is not None else -9999.0
+        affine = src.transform
+        dem = src.read(1, masked=True).astype(np.float64).filled(np.nan)
+        cell_x, cell_y = abs(affine[0]), abs(affine[4])
+        if src.crs is not None and src.crs.is_geographic:
+            lat = (src.bounds.bottom + src.bounds.top) / 2
+            cell_x *= 111000.0 * np.cos(np.radians(lat))
+            cell_y *= 111000.0
+    dy, dx = np.gradient(dem, cell_y, cell_x)
+    magnitude = np.sqrt(dx * dx + dy * dy)
+    max_tan = float(np.tan(np.radians(80.0)))
+    tan_slope = np.minimum(np.maximum(magnitude, 1e-6), max_tan)
+    tan_slope = np.where(np.isfinite(tan_slope), tan_slope, -9999.0)
+    aspect = (90 - np.degrees(np.arctan2(-dy, dx))) % 360
+    aspect[magnitude < 1e-6] = -1
+    return dem, nodata, affine, tan_slope, aspect
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
@@ -65,22 +87,7 @@ def main():
     catchment.join(counts).to_file(out("with_domain_type", "catchment_with_domain_type.shp"))
 
     dem_path = os.path.join(project, "attributes", "elevation", "dem", f"domain_{name}_elv.tif")
-    with rasterio.open(dem_path) as src:
-        nodata = src.nodatavals[0] if src.nodatavals[0] is not None else -9999.0
-        affine = src.transform
-        dem = src.read(1, masked=True).astype(np.float64).filled(np.nan)
-        cell_x, cell_y = abs(affine[0]), abs(affine[4])
-        if src.crs is not None and src.crs.is_geographic:
-            lat = (src.bounds.bottom + src.bounds.top) / 2
-            cell_x *= 111000.0 * np.cos(np.radians(lat))
-            cell_y *= 111000.0
-    dy, dx = np.gradient(dem, cell_y, cell_x)
-    magnitude = np.sqrt(dx * dx + dy * dy)
-    max_tan = float(np.tan(np.radians(80.0)))
-    tan_slope = np.minimum(np.maximum(magnitude, 1e-6), max_tan)
-    tan_slope = np.where(np.isfinite(tan_slope), tan_slope, -9999.0)
-    aspect = (90 - np.degrees(np.arctan2(-dy, dx))) % 360
-    aspect[magnitude < 1e-6] = -1
+    dem, nodata, affine, tan_slope, aspect = dem_slope_aspect(dem_path)
     has_aspect = np.isfinite(aspect) & (aspect >= 0)
     sin_a = np.where(has_aspect, np.sin(np.radians(aspect)), -9999.0)
     cos_a = np.where(has_aspect, np.cos(np.radians(aspect)), -9999.0)

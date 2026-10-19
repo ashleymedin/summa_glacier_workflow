@@ -185,7 +185,7 @@ def main():
     basin = gpd.GeoDataFrame({"geometry": polygons}, crs=grid.crs).dissolve()
     basin["GRU_ID"] = 1
     basin["gru_to_seg"] = 1
-    basin["GRU_area"] = basin.to_crs("epsg:3763").geometry.area  # m2, in the projection the domains were built with
+    basin["GRU_area"] = basin.to_crs(c["utm_crs"]).geometry.area  # m2
     basin.to_crs("epsg:4326").to_file(os.path.join(out_basin, f"{name}_riverBasins_lumped.shp"))
 
     with rasterio.open(os.path.join(glacier_dir, f"domain_{name}_rgi_id.tif")) as src:
