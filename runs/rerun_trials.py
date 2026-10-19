@@ -3,7 +3,7 @@
 
 Each trial is rerun as calibrate.py evaluate reruns it (parameters pinned, spin-up over 2008 at the defaults,
 2009-2022), but with write_timeseries (and mizuRoute's reach discharge and temperature) on, daily means of runoff, glacier and snow variables and yearly glacier surface and debris grids added to its outputControl, in
-<case>/<name>_rerun/sample_<n>.
+<case>/<name>_rerun/sample_<n>. --inputs reruns them on other summa_inputs than the case's, such as a rebuilt domain's.
 
     ./rerun_trials.py gulkana_corrected calibration 451 455 411 --jobs 3
     ./rerun_trials.py gulkana_corrected calibration_paper1 384 --set wallErosionRate=0 --label wall0
@@ -51,6 +51,7 @@ def main():
     p.add_argument("--set", action="append", default=[], metavar="NAME=VALUE",
                    help="override an unsearched parameter's default, e.g. wallErosionRate=0")
     p.add_argument("--label", help="appended to each folder, sample_<n>_<label>")
+    p.add_argument("--inputs", help="summa_inputs folder to rerun on, default <case>/summa_inputs")
     a = p.parse_args()
     run_dir = os.path.join(HERE, a.case)
     search = search_of(os.path.join(run_dir, a.name))
@@ -61,7 +62,7 @@ def main():
     def rerun(s):
         work = os.path.join(run_dir, f"{a.name}_rerun", f"sample_{s}" + (f"_{a.label}" if a.label else ""))
         pinned = work + "_settings"
-        pin_settings(os.path.join(run_dir, "summa_inputs"), pinned, values[s])
+        pin_settings(os.path.abspath(a.inputs) if a.inputs else os.path.join(run_dir, "summa_inputs"), pinned, values[s])
         set_defaults(pinned, dict(kv.split("=") for kv in a.set))
         with open(os.path.join(pinned, "outputControl.txt"), "a") as f:
             f.writelines(f"{v:<26}| day | mean\n" for v in OUTPUTS)
