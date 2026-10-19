@@ -117,7 +117,6 @@ param_list = [
     "glacStor_kIce",
     "glacStor_kSnow",
     "glacStor_kFirn",
-    "debrisConc",
     "k_snow",
     "mw_exp",
     "albedoDecayRate",

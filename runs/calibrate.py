@@ -32,7 +32,7 @@ SUMMA_DIR = os.path.abspath(os.environ.get("SUMMA_DIR", os.path.join(GLACIER, ".
 PARAMS = ["k_soil", "theta_sat", "aquiferBaseflowExp", "aquiferBaseflowRate", "qSurfScale", "summerLAI",
           "frozenPrecipMultip", "Fcapil", "tempCritRain", "heightCanopyTop", "heightCanopyBottom",
           "windReductionParam", "vGn_n", "routingGammaScale", "routingGammaShape", "glacierWindFactor",
-          "glacierTempReduction", "glacStor_kIce", "glacStor_kSnow", "glacStor_kFirn", "debrisConc", "k_snow",
+          "glacierTempReduction", "glacStor_kIce", "glacStor_kSnow", "glacStor_kFirn", "k_snow",
           "mw_exp", "albedoDecayRate", "albedoMax", "k_macropore", "tempRangeTimestep", "thCond_soil",
           "newSnowDenMin", "windExposure"]
 LOG_PARAMS = ["k_soil", "aquiferBaseflowRate", "k_macropore"]
