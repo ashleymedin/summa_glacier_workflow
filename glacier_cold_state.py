@@ -5,7 +5,8 @@ Starts from the domain's upland attributes.nc and coldState.nc and the glacier r
 intersections made by glacier_rasters.py, glacier_extend.py and glacier_zonal_stats.py, and writes
 attributes_glac.nc and coldstate_glac.nc beside them in settings/SUMMA:
 
-  attributes  adds nGlac, nWtld and the per-glacier grids (bed_elev, glacierMask, cell2hruId on a UTM grid)
+  attributes  adds nGlac, nWtld and the per-glacier grids (bed_elev, glacierMask, cell2hruId on a UTM grid),
+              each the glacier's bounding box widened by --wall-pad so the rock faces above its margins are in it
   cold state  adds the horizontal domains of each HRU (upland, clean glacier 1 and 2, debris glacier), their
               layering and starting states, and the glacier surface elevation and debris thickness grids
 
@@ -108,7 +109,7 @@ def reproject_to_utm(src_path, dst_path, utm_epsg):
                           dst_transform=transform, dst_crs=utm_crs, resampling=Resampling.nearest)
 
 
-def read_glacier_grids(project_dir, domain, utm_epsg, hru_ids, gru_ids, hru2gru, threshold):
+def read_glacier_grids(project_dir, domain, utm_epsg, hru_ids, gru_ids, hru2gru, threshold, pad=0.0):
     """Per-GRU glacier grids on a UTM grid: the glaciers mostly inside each GRU, their bed, surface,
     mask, HRU of each cell, debris thickness and ablation and accumulation areas."""
     glacier_dir = os.path.join(project_dir, "attributes", "glaciers")
@@ -165,7 +166,9 @@ def read_glacier_grids(project_dir, domain, utm_epsg, hru_ids, gru_ids, hru2gru,
     for i in range(n_gru):
         for j in range(n_grid[i]):
             rows, cols = np.where(gid == grid_id[0, j, i])
-            y0, y1, x0, x1 = rows.min(), rows.max() + 1, cols.min(), cols.max() + 1
+            py, px = int(np.ceil(pad / res[1])), int(np.ceil(pad / res[0]))
+            y0, y1 = max(rows.min() - py, 0), min(rows.max() + 1 + py, bed.shape[0])
+            x0, x1 = max(cols.min() - px, 0), min(cols.max() + 1 + px, bed.shape[1])
             ny[0, j, i], nx[0, j, i] = y1 - y0, x1 - x0
             box = (slice(0, y1 - y0), slice(0, x1 - x0), j, i)
             B[box] = bed[y0:y1, x0:x1]
@@ -344,6 +347,8 @@ def main():
     p.add_argument("--debris-top-max", type=float, default=0.05, help="thickest top debris layer, m (maxDebrisTop)")
     p.add_argument("--gru-threshold", type=float, default=0.8,
                    help="fraction of a glacier's cells that must lie in a GRU for it to belong there")
+    p.add_argument("--wall-pad", type=float, default=500.0,
+                   help="ground kept around each glacier grid, m, at least glacAreaChange.f90's wallSearchDist")
     p.add_argument("--hru-id-column", default="HRU_ID", help="HRU id column of the catchment intersections")
     p.add_argument("--suffix", default="_glac", help="suffix of the written attributes and cold state files")
     p.add_argument("--output-dir", help="where to write them, default settings/SUMMA")
@@ -365,7 +370,7 @@ def main():
         gru_ids = np.asarray(ds["gruId"][:]).astype(int)
         hru2gru = np.asarray(ds["hru2gruId"][:]).astype(int)
 
-    grids = read_glacier_grids(project_dir, domain, a.utm_epsg, hru_ids, gru_ids, hru2gru, a.gru_threshold)
+    grids = read_glacier_grids(project_dir, domain, a.utm_epsg, hru_ids, gru_ids, hru2gru, a.gru_threshold, a.wall_pad)
     dom, debris_thick = build_domains(project_dir, hru_ids, hru_area, grids["single_glac_hru"], a.hru_id_column)
 
     with nc4.Dataset(cold_in) as ds:
