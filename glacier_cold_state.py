@@ -33,11 +33,13 @@ import argparse
 import glob
 import os
 import shutil
+import tempfile
 
 import geopandas as gpd
 import netCDF4 as nc4
 import numpy as np
 import rasterio
+from affine import Affine
 from pyproj import CRS
 from rasterio.warp import Resampling, calculate_default_transform, reproject
 
@@ -107,6 +109,22 @@ def reproject_to_utm(src_path, dst_path, utm_epsg):
                 reproject(source=rasterio.band(src, i), destination=rasterio.band(dst, i),
                           src_transform=src.transform, src_crs=src.crs,
                           dst_transform=transform, dst_crs=utm_crs, resampling=Resampling.nearest)
+
+
+def grid_transforms(project_dir, domain, utm_epsg, pad=500.0):
+    """The UTM affine transform of each glacier's grid, by RGI id, as read_glacier_grids cuts it (same pad)."""
+    src = os.path.join(project_dir, "attributes", "glaciers", f"domain_{domain}_rgi_id_extend.tif")
+    with tempfile.TemporaryDirectory() as tmp:
+        reproject_to_utm(src, os.path.join(tmp, "id.tif"), utm_epsg)
+        with rasterio.open(os.path.join(tmp, "id.tif")) as r:
+            gid, transform, res = r.read(1), r.transform, r.res
+    py, px = int(np.ceil(pad / res[1])), int(np.ceil(pad / res[0]))
+    out = {}
+    for g in np.unique(gid[gid > 0]):
+        rows, cols = np.where(gid == g)
+        y0, x0 = max(rows.min() - py, 0), max(cols.min() - px, 0)
+        out[int(g)] = transform * Affine.translation(x0, y0)
+    return out, CRS.from_epsg(utm_epsg)
 
 
 def read_glacier_grids(project_dir, domain, utm_epsg, hru_ids, gru_ids, hru2gru, threshold, pad=0.0):

@@ -2,7 +2,7 @@
 """Rerun front members of a calibration with daily output, for plotting.
 
 Each trial is rerun as calibrate.py evaluate reruns it (parameters pinned, spin-up over 2008 at the defaults,
-2009-2022), but with write_timeseries (and mizuRoute's reach discharge and temperature) on, and daily means of runoff, glacier and snow variables added to its outputControl, in
+2009-2022), but with write_timeseries (and mizuRoute's reach discharge and temperature) on, daily means of runoff, glacier and snow variables and yearly glacier surface and debris grids added to its outputControl, in
 <case>/<name>_rerun/sample_<n>.
 
     ./rerun_trials.py gulkana_corrected calibration 451 455 411 --jobs 3
@@ -19,6 +19,7 @@ from calibrate import HERE, PARAMS, SOIL_CHAIN, config_text, pin_settings, run_d
 OUTPUTS = ["averageRoutedRunoff", "glacierRoutedRunoff", "basin__GlacierMassChange", "basin__GlacierArea",
            "basin__SurfaceRunoff", "basin__AquiferBaseflow", "scalarSWE", "scalarRainfall", "scalarSnowfall",
            "scalarGlacierMelt", "scalarAquiferStorage", "DOMarea"]
+GRIDS = ["surface_elev", "debris_thick"]  # glacier surface and debris maps at each year's end
 
 
 def main():
@@ -41,6 +42,7 @@ def main():
         pin_settings(os.path.join(run_dir, "summa_inputs"), pinned, values[s])
         with open(os.path.join(pinned, "outputControl.txt"), "a") as f:
             f.writelines(f"{v:<26}| day | mean\n" for v in OUTPUTS)
+            f.writelines(f"{v:<26}| annual\n" for v in GRIDS)
         config = config_text(a.case, run_dir, pinned, work, "2009-01-01", "2022-12-31", "2016-01-01", "2022-12-31",
                              "dds", 1, 1, temperature=True).replace("write_timeseries = false", "write_timeseries = true") \
             .replace("write_Qreach = false", "write_Qreach = true")
