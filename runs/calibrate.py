@@ -11,7 +11,7 @@ The spin-up runs at the default parameters for every trial, in calibration and e
 calibration driver does. Needs summa's MPI calibration executable (bin/summa_sundials_mizuroute_opt.exe).
 
     ./calibrate.py calibrate gulkana_raw --population 32 --generations 15 --ranks 9
-    ./calibrate.py evaluate gulkana_raw --ranks 2
+    ./calibrate.py evaluate gulkana_raw --ranks 2 --jobs 4
     ./calibrate.py calibrate gulkana_raw --population 20 --generations 10 --ranks 5 --name pilot
 """
 
@@ -20,6 +20,7 @@ import csv
 import os
 import shutil
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 
 import netCDF4 as nc4
 import numpy as np
@@ -253,6 +254,7 @@ def main():
     p.add_argument("--population", type=int, default=32)
     p.add_argument("--generations", type=int, default=15)
     p.add_argument("--ranks", type=int, default=9, help="MPI ranks: one dispatcher and the workers")
+    p.add_argument("--jobs", type=int, default=1, help="evaluate: front members rerun at once, each on --ranks ranks")
     p.add_argument("--name", default="calibration",
                    help="folder of the calibration in <case>; its evaluation is <name>_evaluation")
     a = p.parse_args()
@@ -274,8 +276,8 @@ def main():
         values = {i: {n: float(d[n][i]) for n in names} for i in front}
         cal = np.asarray(d["objective"][:])
         cal_names = [t.strip() for t in d["objective"].target.split(",")]
-    rows = []
-    for i in front:
+
+    def rerun(i):
         work = os.path.join(evaluation, f"sample_{i + 1}")
         pinned = os.path.join(work + "_settings")
         pin_settings(settings, pinned, values[i])
@@ -283,13 +285,16 @@ def main():
                              "dds", 1, 1, temperature=True)
         run_driver(work, config, pinned, a.ranks)
         with nc4.Dataset(os.path.join(work, "output", f"{a.case}_calibration.nc")) as d:
-            ev = np.asarray(d["objective"][0])
+            ev = np.ma.filled(d["objective"][0].astype(float), np.nan)
             ev_names = [t.strip() for t in d["objective"].target.split(",")]
         row = {"sample": int(i) + 1}
         row.update({f"cal_{n}": float(cal[i, k]) for k, n in enumerate(cal_names)})
         row.update({f"eval_{n}": float(ev[k]) for k, n in enumerate(ev_names)})
-        rows.append(row)
-        print(row)
+        print(row, flush=True)
+        return row
+
+    with ThreadPoolExecutor(max_workers=a.jobs) as pool:
+        rows = list(pool.map(rerun, front))
     out = os.path.join(evaluation, "evaluation.csv")
     with open(out, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
