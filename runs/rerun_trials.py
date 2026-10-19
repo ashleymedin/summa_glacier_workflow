@@ -6,6 +6,7 @@ Each trial is rerun as calibrate.py evaluate reruns it (parameters pinned, spin-
 <case>/<name>_rerun/sample_<n>.
 
     ./rerun_trials.py gulkana_corrected calibration 451 455 411 --jobs 3
+    ./rerun_trials.py gulkana_corrected calibration_paper1 384 --set wallErosionRate=0 --label wall0
 """
 
 import argparse
@@ -14,12 +15,29 @@ from concurrent.futures import ThreadPoolExecutor
 
 import netCDF4 as nc4
 
-from calibrate import HERE, PARAMS, SOIL_CHAIN, config_text, pin_settings, run_driver
+from calibrate import HERE, PARAMS, SOIL_CHAIN, config_text, fit12, pin_settings, run_driver
 
 OUTPUTS = ["averageRoutedRunoff", "glacierRoutedRunoff", "basin__GlacierMassChange", "basin__GlacierArea",
            "basin__SurfaceRunoff", "basin__AquiferBaseflow", "scalarSWE", "scalarRainfall", "scalarSnowfall",
            "scalarGlacierMelt", "scalarAquiferStorage", "DOMarea"]
 GRIDS = ["surface_elev", "debris_thick"]  # glacier surface and debris maps at each year's end
+
+
+def set_defaults(settings, overrides):
+    """Each named parameter's default set to its value, the bounds widened to hold it."""
+    for name in ("localParamInfo.txt", "basinParamInfo.txt"):
+        path = os.path.join(settings, name)
+        out = []
+        for line in open(path):
+            key = line.split("|")[0].strip() if "|" in line and not line.lstrip().startswith("!") else ""
+            if key in overrides:
+                v = float(overrides.pop(key))
+                lo, hi = (float(x) for x in line.split("|")[2:4])
+                line = f"{key:<26}| {fit12(v)} | {fit12(min(lo, v))} | {fit12(max(hi, v))}\n"
+            out.append(line)
+        open(path, "w").writelines(out)
+    if overrides:
+        raise SystemExit(f"not in the parameter files: {', '.join(overrides)}")
 
 
 def main():
@@ -30,6 +48,9 @@ def main():
     p.add_argument("samples", type=int, nargs="+", help="sample numbers, 1-based, as the trials file counts them")
     p.add_argument("--ranks", type=int, default=2)
     p.add_argument("--jobs", type=int, default=1)
+    p.add_argument("--set", action="append", default=[], metavar="NAME=VALUE",
+                   help="override an unsearched parameter's default, e.g. wallErosionRate=0")
+    p.add_argument("--label", help="appended to each folder, sample_<n>_<label>")
     a = p.parse_args()
     run_dir = os.path.join(HERE, a.case)
     with nc4.Dataset(os.path.join(run_dir, a.name, "output", f"{a.case}_calibration.nc")) as d:
@@ -37,9 +58,10 @@ def main():
         values = {s: {n: float(d[n][s - 1]) for n in names} for s in a.samples}
 
     def rerun(s):
-        work = os.path.join(run_dir, f"{a.name}_rerun", f"sample_{s}")
+        work = os.path.join(run_dir, f"{a.name}_rerun", f"sample_{s}" + (f"_{a.label}" if a.label else ""))
         pinned = work + "_settings"
         pin_settings(os.path.join(run_dir, "summa_inputs"), pinned, values[s])
+        set_defaults(pinned, dict(kv.split("=") for kv in a.set))
         with open(os.path.join(pinned, "outputControl.txt"), "a") as f:
             f.writelines(f"{v:<26}| day | mean\n" for v in OUTPUTS)
             f.writelines(f"{v:<26}| annual\n" for v in GRIDS)
