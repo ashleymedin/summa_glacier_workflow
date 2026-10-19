@@ -26,7 +26,9 @@ The observation scripts `acquire_streamflow.py`, `acquire_stream_temperature.py`
 `acquire_groundwater_level.py` fetch records from the web and write them with `observation_netcdf.py`, in the
 form a SUMMA calibration target reads. `add_stream_hru.py` gives a one-GRU domain a stream HRU and a one-reach
 mizuRoute topology; `add_stream_network.py` splits tributary GRUs off it, each with its own reach, from a JSON
-spec such as `wolverine_network.json`, Wolverine Creek's tributary network.
+spec such as `wolverine_network.json`, Wolverine Creek's tributary network. `add_wetland.py` gives an HRU a
+wetland domain (a proglacial lake or wetted forefield) copied from the stream domain's column, and
+`acquire_lake_area.py` measures open water in a box on every Sentinel-2 scene, beside the gauged flow, to size it.
 
 ## Building
 
