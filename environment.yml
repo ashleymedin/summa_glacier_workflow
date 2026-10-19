@@ -1,0 +1,27 @@
+# conda env create -f environment.yml; then conda activate glacier
+name: glacier
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - numpy>=2,<2.4          # the pysheds fork still calls np.in1d, removed in numpy 2.4
+  - scipy
+  - pandas
+  - xarray
+  - netcdf4
+  - rasterio
+  - geopandas
+  - shapely
+  - pyproj
+  - rasterstats
+  - pyyaml
+  - matplotlib
+  - gcsfs                  # spechum_ratio_from_campaign.py's ERA5 pull
+  - zarr
+  - dask
+  - pystac-client          # satellite imagery from Microsoft Planetary Computer
+  - planetary-computer
+  - odc-stac
+  - pip
+  - pip:
+      - git+https://github.com/ashleymedin/pysheds.git

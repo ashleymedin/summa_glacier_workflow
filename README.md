@@ -22,6 +22,10 @@ The pipeline's scripts: `glacier_rasters.py`, `glacier_extend.py`, `glacier_zona
 `correct_forcing_to_station.py`, `spechum_ratio_from_campaign.py` and `glacier_cold_state.py`; and
 `acquire_glacier_mass_balance.py` for the mass-balance observations.
 
+`check_glacier_imagery.py` checks a domain's starting glacier and debris extent against the late-summer
+Landsat or Sentinel-2 scene with the least cloud and snow, writing areas, classes and a figure per date to
+`observations/imagery`.
+
 The observation scripts `acquire_streamflow.py`, `acquire_stream_temperature.py`, `acquire_grace_tws.py` and
 `acquire_groundwater_level.py` fetch records from the web and write them with `observation_netcdf.py`, in the
 form a SUMMA calibration target reads. `add_stream_hru.py` gives a one-GRU domain a stream HRU and a one-reach
@@ -110,8 +114,10 @@ temperature come from `acquire_streamflow.py` and `acquire_stream_temperature.py
 
 ## Environment
 
-numpy, netCDF4, xarray, rasterio, geopandas, rasterstats, scipy, pandas, shapely, pyproj and pyyaml; the
-`modflow6` conda environment has them all. `glacier_extend.py` also needs pysheds: with numpy 2, the fork
-`pip install git+https://github.com/ashleymedin/pysheds.git`, which still calls `np.in1d` (removed in numpy
-2.4; replace it with `np.isin`). `spechum_ratio_from_campaign.py` pulls ERA5 with gcsfs and zarr, unless its
-cached pulls (`forcing/spechum_ratios_*_era5_*.npz`) are present.
+```bash
+conda env create -f environment.yml    # the glacier environment: every script here, pysheds and the imagery tools
+conda activate glacier
+```
+
+The pysheds fork still calls `np.in1d`, so numpy stays below 2.4. `spechum_ratio_from_campaign.py` pulls ERA5
+with gcsfs and zarr, unless its cached pulls (`forcing/spechum_ratios_*_era5_*.npz`) are present.
