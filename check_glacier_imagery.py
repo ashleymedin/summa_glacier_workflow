@@ -8,7 +8,8 @@ utm_crs, and maps:
   ice     snow and ice, NDSI = (green - SWIR1)/(green + SWIR1) >= --ndsi (0.4), not water
   water   NDWI = (green - NIR)/(green + NIR) >= --ndwi (0.3) and NIR < 0.12
   cloud   green and SWIR1 both above --cloud (0.25): bright in the shortwave infrared, which snow and ice
-          are not (the scenes' own flags call much of the snow and steep shade cloud)
+          are not (the scenes' own flags call much of the snow and steep shade cloud); also any cell off the
+          scene's footprint
 
 inside the basin (cells of domain_<name>_hru_id.tif), against the setup's glacier (domain types 2-4 of
 domain_<name>_domain_type.tif, the glaciers the model holds) and its debris (type 4). Inside the setup glacier,
@@ -50,7 +51,7 @@ SENSORS = {  # collection, bands (green, red, NIR, SWIR1, flags), scale, offset
     "landsat": ("landsat-c2-l2", ["green", "red", "nir08", "swir16", "qa_pixel"], 2.75e-5, -0.2),
     "sentinel": ("sentinel-2-l2a", ["B03", "B04", "B08", "B11", "SCL"], 1e-4, 0.0),
 }
-CLASSES = ["other", "ice in glacier", "debris or rock in glacier", "ice beyond glacier", "water", "cloud"]
+CLASSES = ["other", "ice in glacier", "debris or rock in glacier", "ice beyond glacier", "water", "cloud or no data"]
 COLOURS = ["#f2f2f2", "#4f9fd8", "#a0522d", "#b8e0f5", "#1f3b73", "#9e9e9e"]
 
 
@@ -63,17 +64,19 @@ def scene(sensor, year, bbox, crs, max_cloud, months, cloud_refl, inside):
     if sensor == "landsat" and any(i.properties.get("platform") != "landsat-7" for i in items):
         items = [i for i in items if i.properties.get("platform") != "landsat-7"]  # no scan-line gaps
     best = None
-    for item in sorted(items, key=lambda i: i.properties["eo:cloud_cover"])[:5]:
+    for item in sorted(items, key=lambda i: i.properties["eo:cloud_cover"])[:8]:
         ds = load([item], bands=bands, crs=crs, resolution=30, bbox=bbox, resampling={"*": "bilinear", bands[4]: "nearest"})
         off = offset
         if sensor == "sentinel" and float(item.properties.get("s2:processing_baseline", "0")) >= 4.0:
             off = -0.1  # Sentinel-2 Level-2A offset from processing baseline 04.00
-        g, r, n, s = (np.asarray(ds[b].isel(time=0), float) * scale + off for b in bands[:4])
-        cloud = (g > cloud_refl) & (s > cloud_refl)
+        raw = [np.asarray(ds[b].isel(time=0), float) for b in bands[:4]]
+        g, r, n, s = (x * scale + off for x in raw)
+        nodata = (raw[0] == 0) | (raw[3] == 0) | ~np.isfinite(raw[0])  # off the scene's footprint
+        cloud = ((g > cloud_refl) & (s > cloud_refl)) | nodata
         with np.errstate(invalid="ignore", divide="ignore"):
             snow = (g - s) / (g + s) >= 0.4
         basin = inside(ds)
-        frac = cloud[basin].mean() + snow[basin].mean()  # the least cloud and the least snow beside the ice
+        frac = cloud[basin].mean() + (snow & ~nodata)[basin].mean()  # the least cloud, gap and snow beside the ice
         if best is None or frac < best[0] - 0.005:
             best = (frac, item, g, r, n, s, cloud, ds)
     if best is None:
