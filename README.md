@@ -43,9 +43,10 @@ wetland domain (a proglacial lake or wetted forefield) copied from the stream do
 ```
 
 1. **rasters.** RGI 6.0 outlines, replaced by the Herreid and Pellicciotti (2020) outline where it has
-   one. Their ablation zones (buffered 50 m) and debris cover give the domain type: 1 upland,
-   2 accumulation, 3 clean ablation, 4 debris ablation. Debris thickness is Rounce et al. (2021), raised
-   to 4 cm where thinner. The bed is the surface less the Millan et al. (2022) thickness.
+   one, and Gulkana's by the USGS survey outline of 11 August 2007 (`usgs_outline`). Their ablation zones
+   (buffered 50 m) and debris cover give the domain type: 1 upland, 2 accumulation, 3 clean ablation,
+   4 debris ablation. Debris thickness is Rounce et al. (2021), raised to 4 cm where thinner. The bed is
+   the surface less the Millan et al. (2022) thickness inside the outlines.
 2. **extend.** The basin is delineated on the bed above the gauge, and each glacier at least 80% inside
    it gets room to advance by dragging its terminus downstream.
 3. **hrus.** Each HRU's area, centre, elevation, slope and contour length in `attributes.nc` and the HRU
@@ -109,6 +110,7 @@ Downloaded by hand to the paths in the domain YAMLs:
 | RGI 6.0 outlines, region 01 | https://daacdata.apps.nsidc.org/pub/DATASETS/nsidc0770_rgi_v6/ |
 | Debris cover, ablation zones and outlines (Herreid and Pellicciotti, 2020), S1 | https://zenodo.org/records/3866466/files/SupplementaryInformation.zip |
 | Debris thickness (Rounce et al., 2021) | https://n5eil01u.ecs.nsidc.org/HMA/HMA_DTE.001/2000.01.01/ |
+| USGS benchmark-glacier survey outlines (McNeil et al., 2019, ver. 3.0), to `GlacierDEM/` | https://doi.org/10.5066/P9R8BP3K |
 | Glacier thickness (Millan et al., 2022) | https://www.sedoo.fr/theia-publication-products/?uuid=55acbdd5-3982-4eac-89b2-46703557938c |
 | USGS benchmark-glacier stations, stakes and glacier-wide balances | https://www.sciencebase.gov/catalog/item/6441de03d34ee8d4ade7d2a5 |
 | Gulkana 2024 Site B station (Wilson et al.) | `data/domain_Gulkana/Wilson_gulkana_2024_data` |

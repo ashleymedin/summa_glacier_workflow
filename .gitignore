@@ -4,6 +4,7 @@ __pycache__/
 # bulky inputs, kept outside git
 data/*/forcing/SUMMA_input/
 data/*/USGSweatherData/
+GlacierDEM/
 runs/*/forcing/
 tests/*/forcing/
 # run outputs

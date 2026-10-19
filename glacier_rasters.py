@@ -9,12 +9,13 @@ From the global glacier products (each downloaded by hand, see README.md) writes
 
 and in attributes/elevation/dem domain_<name>_bedrock_elv.tif, the surface less the glacier thickness.
 
-Glacier outlines are RGI 6.0, replaced by the Herreid and Pellicciotti (2020) outline where it has one. Their
+Glacier outlines are RGI 6.0, replaced by the Herreid and Pellicciotti (2020) outline where it has one, and by a
+USGS survey outline (McNeil et al. 2019, doi:10.5066/P9R8BP3K) where the YAML's usgs_outline names one. Their
 ablation zones (buffered 50 m, clipped to the glacier) set the ablation area; a glacier without one uses Zmed
 as its equilibrium line. Debris is their debris cover, never in the accumulation zone, and every glacier keeps
 at least its highest cells as accumulation. Debris thickness is Rounce et al. (2021), nearest neighbour, with
 thicknesses at or below --min-debris (0.04 m) raised to it (Herreid 2021; Rounce et al. 2018). Glacier
-thickness is Millan et al. (2022). It also prints each glacier's lateral moraine width, the mean thinnest
+thickness is Millan et al. (2022), zero off the outlines. It also prints each glacier's lateral moraine width, the mean thinnest
 width of its debris polygons, for latMoraineWidth.
 
     ./glacier_rasters.py domains/wolverine.yaml
@@ -147,6 +148,13 @@ def main():
     for i, glacier in rgi.iterrows():
         if glacier["RGIId"] in glc["RGIId"].values:
             rgi.at[i, "geometry"] = glc[glc["RGIId"] == glacier["RGIId"]]["geometry"].values[0]
+    usgs = c.get("usgs_outline")
+    if usgs:
+        u = gpd.read_file(c["data"]["usgs_outlines"]).to_crs(crs)
+        u = u[(u["Glacier"] == usgs["glacier"]) & (u["Date"] == usgs["date"])].geometry.union_all()
+        i = rgi.geometry.intersection(u).area.idxmax()  # the RGI glacier it overlaps most
+        print(f"{rgi.at[i, 'RGIId']}: USGS outline of {usgs['date']}")
+        rgi.at[i, "geometry"] = u
     deb = gpd.overlay(deb, rgi, how="intersection")
     abl = gpd.overlay(abl, rgi, how="intersection")
     abl = abl.to_crs(c["utm_crs"])
@@ -189,14 +197,15 @@ def main():
     if high:
         acc = pd.concat([acc, gpd.GeoDataFrame(high, columns=rgi.columns, crs=crs)], ignore_index=True)
     burn(acc, ACCUMULATION, dtype)
-    meta.update(count=1, dtype="int16")
-    with rasterio.open(os.path.join(glacier_dir, f"domain_{name}_domain_type.tif"), "w", **meta) as dst:
-        dst.write(dtype, 1)
-
     rgi_id = np.zeros(dem.shape, dtype=np.int32)
     for _, glacier in rgi.iterrows():
         inside = geometry_mask([glacier.geometry], transform=src.transform, invert=True, out_shape=dem.shape)
         rgi_id[inside] = int(glacier["RGIId"][9:]) + int(glacier["RGIId"][6:8]) * 100000
+    dtype[rgi_id == 0] = UPLAND  # ablation zones are clipped to the Herreid and Pellicciotti outline, not the final one
+    meta.update(count=1, dtype="int16")
+    with rasterio.open(os.path.join(glacier_dir, f"domain_{name}_domain_type.tif"), "w", **meta) as dst:
+        dst.write(dtype, 1)
+
     meta.update(count=1, dtype="int32")
     with rasterio.open(os.path.join(glacier_dir, f"domain_{name}_rgi_id.tif"), "w", **meta) as dst:
         dst.write(rgi_id, 1)
@@ -223,6 +232,7 @@ def main():
                        if f.startswith(f"THICKNESS_RGI-{rn}.") and f.endswith("tif"))
     ice = mosaic_to_dem([os.path.join(c["data"]["ice_thickness"], f"RGI-{rn}", f) for f in ice_files],
                         crs, dem.shape, src.transform, os.path.join(glacier_dir, "tk_temp"))
+    ice[rgi_id == 0] = 0
     bed = np.maximum(dem - ice, 0)
     with rasterio.open(os.path.join(bed_dir, f"domain_{name}_bedrock_elv.tif"), "w", **meta) as dst:
         dst.write(bed.astype(np.float32), 1)
