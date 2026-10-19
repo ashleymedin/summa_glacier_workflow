@@ -2,12 +2,14 @@
 """Compare a run's glacier area and debris through time with the USGS glacier areas and the imagery classes.
 
 Reads a trial's yearly glacier grids (surface_elev and debris_thick, written by runs/rerun_trials.py) and its
-spin-up's, which hold the starting state, with the bed and grid of the case's attributes.nc. A cell is glacier
+spin-up's, which hold the starting state, with the bed and grid of the run's attributes.nc (<run>_settings, else
+the case's). A cell is glacier
 where the ice is thicker than thick4area (0.1 m) and debris where it also carries at least 2 cm (min_thickness),
 as SUMMA counts them. Writes, in <run>/glacier_change:
 
   area.csv     each year's glacier area (km2) of the main glacier and of all the run's glaciers, and the main
                glacier's debris
+  start.csv    the main glacier's area and debris in the run's cold state, where it starts
   surveys.csv  the USGS survey outlines' areas (USGSweatherData/<Name>/Input_<Name>_Geodetics.csv), the only
                measured areas; the yearly area-altitude record interpolates between them
   bands.csv    the main glacier's area by the USGS 100 m bands: the model's first year and the year of the last
@@ -62,8 +64,10 @@ def main():
     out_dir = os.path.join(run, "glacier_change")
     os.makedirs(out_dir, exist_ok=True)
 
-    case_dir = os.path.dirname(os.path.dirname(run))
-    with nc4.Dataset(os.path.join(case_dir, "summa_inputs", "attributes.nc")) as d:
+    inputs = run + "_settings"  # the run's own inputs, else the case's
+    if not os.path.exists(os.path.join(inputs, "attributes.nc")):
+        inputs = os.path.join(os.path.dirname(os.path.dirname(run)), "summa_inputs")
+    with nc4.Dataset(os.path.join(inputs, "attributes.nc")) as d:
         bed = np.asarray(d["bed_elev"][:, :, :, 0], float)
         ids = np.asarray(d["gridId"][:, 0]).astype(int)
         nx, ny = np.asarray(d["nx"][:, 0]).astype(int), np.asarray(d["ny"][:, 0]).astype(int)
@@ -90,6 +94,13 @@ def main():
     geo["area_km2"] = np.where(geo.date <= ref, geo.Area_max, geo.Area_min) / 1e6
     geo[["Date", "area_km2"]].round(4).to_csv(os.path.join(out_dir, "surveys.csv"), index=False)
     area.index.name = "year"
+    with nc4.Dataset(os.path.join(inputs, "coldState.nc")) as d:
+        s0 = np.asarray(d["surface_elev"][:, :, main_g, 0], float)
+        d0 = np.asarray(d["debris_thick"][:, :, main_g, 0], float)
+    i0 = (s0 - bed[:, :, main_g] > THICK4AREA)[:ny[main_g], :nx[main_g]]
+    pd.DataFrame({"main_km2": [i0.sum() * cell],
+                  "main_debris_km2": [(i0 & (d0[:ny[main_g], :nx[main_g]] >= MIN_DEBRIS)).sum() * cell]}) \
+        .round(4).to_csv(os.path.join(out_dir, "start.csv"), index=False)
     area.round(4).to_csv(os.path.join(out_dir, "area.csv"))
 
     bands = []
