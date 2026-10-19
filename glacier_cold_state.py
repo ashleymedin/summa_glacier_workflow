@@ -134,7 +134,7 @@ def read_glacier_grids(project_dir, domain, utm_epsg, hru_ids, gru_ids, hru2gru,
     dem_dir = os.path.join(project_dir, "attributes", "elevation", "dem")
     sources = {
         "bed": os.path.join(dem_dir, f"domain_{domain}_bedrock_elv.tif"),
-        "surf": os.path.join(dem_dir, f"domain_{domain}_elv.tif"),
+        "surf": os.path.join(dem_dir, f"domain_{domain}_glacier_elv.tif"),  # glacier_rasters.py's glacier surface
         "debris": os.path.join(glacier_dir, f"domain_{domain}_debris_thickness.tif"),
         "hru": os.path.join(glacier_dir, f"domain_{domain}_hru_id.tif"),
         "id": os.path.join(glacier_dir, f"domain_{domain}_rgi_id_extend.tif"),

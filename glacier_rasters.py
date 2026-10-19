@@ -7,7 +7,9 @@ From the global glacier products (each downloaded by hand, see README.md) writes
   domain_<name>_rgi_id.tif            RGI 6.0 id as region*100000 + number, 0 off glacier
   domain_<name>_debris_thickness.tif  debris thickness (m), non-zero only where the type is 4
 
-and in attributes/elevation/dem domain_<name>_bedrock_elv.tif, the surface less the glacier thickness.
+and in attributes/elevation/dem domain_<name>_glacier_elv.tif, the glacier surface: the DEM, with the survey DEM
+of the USGS outline on that glacier where usgs_outline names one (levelled to the DEM on the ground around it);
+and domain_<name>_bedrock_elv.tif, that surface less the glacier thickness.
 
 Glacier outlines are RGI 6.0, replaced by the Herreid and Pellicciotti (2020) outline where it has one, and by a
 USGS survey outline (McNeil et al. 2019, doi:10.5066/P9R8BP3K) where the YAML's usgs_outline names one. Their
@@ -15,8 +17,9 @@ ablation zones (buffered 50 m, clipped to the glacier) set the ablation area; a 
 as its equilibrium line. Debris is their debris cover, never in the accumulation zone, and every glacier keeps
 at least its highest cells as accumulation. Debris thickness is Rounce et al. (2021), nearest neighbour, with
 thicknesses at or below --min-debris (0.04 m) raised to it (Herreid 2021; Rounce et al. 2018). Glacier
-thickness is Millan et al. (2022), zero off the outlines. It also prints each glacier's lateral moraine width, the mean thinnest
-width of its debris polygons, for latMoraineWidth.
+thickness is Millan et al. (2022), zero off the outlines, filled from the nearest Millan cell where an outline
+reaches past it, and tapered linearly to the outline over margin_taper (150 m), at least 1 m. It also prints each glacier's lateral moraine width, the mean thinnest width of its debris polygons,
+for latMoraineWidth.
 
     ./glacier_rasters.py domains/wolverine.yaml
 """
@@ -35,6 +38,7 @@ from rasterio.merge import merge
 from rasterio.transform import from_bounds
 from rasterio.warp import Resampling, calculate_default_transform, reproject
 from scipy.interpolate import griddata
+from scipy.ndimage import distance_transform_edt
 from shapely.affinity import rotate
 from shapely.geometry import Point, box, shape
 from shapely.ops import unary_union
@@ -42,6 +46,7 @@ from shapely.ops import unary_union
 from domain_config import load_config
 
 UPLAND, ACCUMULATION, CLEAN_ABLATION, DEBRIS_ABLATION = 1, 2, 3, 4
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def elevation_polygon(src, geometry, z, side):
@@ -110,6 +115,27 @@ def mosaic_to_dem(files, target_crs, dem_shape, dem_transform, tmp_dir):
     sx, sy = rasterio.transform.xy(subset_transform, src_rows, src_cols)
     points = np.vstack([np.array(sx).ravel(), np.array(sy).ravel()]).T
     return griddata(points, subset.ravel(), (np.array(x).ravel(), np.array(y).ravel()), method="nearest").reshape(dem_shape)
+
+
+def survey_surface(dem, glacier, src, outlines, path, buffer=1000.0):
+    """The DEM with a survey DEM's mean on the glacier cells, levelled to the DEM by their median difference on
+    the ground within buffer (m) of the outlines."""
+    with rasterio.open(path) as s:
+        z = s.read(1, masked=True).astype(np.float64).filled(np.nan)
+        on_ice = geometry_mask(list(outlines.to_crs(s.crs).geometry), transform=s.transform, invert=True, out_shape=z.shape)
+        near = geometry_mask(list(outlines.to_crs(s.crs).buffer(buffer)), transform=s.transform, invert=True, out_shape=z.shape)
+        means = {}
+        for key, keep in (("ice", on_ice), ("ground", near & ~on_ice)):
+            out = np.full(dem.shape, np.nan)
+            reproject(np.where(keep, z, np.nan), out, src_transform=s.transform, src_crs=s.crs, src_nodata=np.nan,
+                      dst_transform=src.transform, dst_crs=src.crs, dst_nodata=np.nan, resampling=Resampling.average)
+            means[key] = out
+    offset = np.nanmedian(dem - means["ground"])
+    print(f"{os.path.basename(path)}: {offset:+.1f} m to the DEM on {np.isfinite(means['ground']).sum()} ground cells")
+    surface = dem.copy()
+    fill = glacier & np.isfinite(means["ice"])
+    surface[fill] = means["ice"][fill] + offset
+    return surface
 
 
 def main():
@@ -232,10 +258,26 @@ def main():
                        if f.startswith(f"THICKNESS_RGI-{rn}.") and f.endswith("tif"))
     ice = mosaic_to_dem([os.path.join(c["data"]["ice_thickness"], f"RGI-{rn}", f) for f in ice_files],
                         crs, dem.shape, src.transform, os.path.join(glacier_dir, "tk_temp"))
-    ice[rgi_id == 0] = 0
-    bed = np.maximum(dem - ice, 0)
+    ice = np.where(np.isfinite(ice) & (ice > 0) & (rgi_id > 0), ice, 0)
+    glacier, thick = rgi_id > 0, ice > 0
+    if np.any(glacier & ~thick):  # outline cells Millan leaves bare take the nearest Millan thickness
+        _, (r, k) = distance_transform_edt(~thick, return_indices=True)
+        ice[glacier & ~thick] = ice[r, k][glacier & ~thick]
+    rows, cols = np.nonzero(glacier)
+    xs, ys = rasterio.transform.xy(src.transform, rows, cols)
+    centres = gpd.GeoSeries(gpd.points_from_xy(xs, ys), crs=crs).to_crs(c["utm_crs"])
+    dist = centres.distance(rgi.to_crs(c["utm_crs"]).boundary.union_all()).values  # m to the nearest outline
+    taper = np.clip(dist / c.get("margin_taper", 150.0), 0, 1)
+    ice[rows, cols] = np.maximum(ice[rows, cols] * taper, 1.0)  # every outline cell keeps a metre
+
+    surface = dem.astype(np.float64)
+    if usgs and usgs.get("dem"):
+        surface = survey_surface(surface, glacier, src, rgi.to_crs(c["utm_crs"]), os.path.join(HERE, usgs["dem"]))
+    bed = np.maximum(surface - ice, 0)
     with rasterio.open(os.path.join(bed_dir, f"domain_{name}_bedrock_elv.tif"), "w", **meta) as dst:
         dst.write(bed.astype(np.float32), 1)
+    with rasterio.open(os.path.join(bed_dir, f"domain_{name}_glacier_elv.tif"), "w", **meta) as dst:
+        dst.write(surface.astype(np.float32), 1)
     src.close()
     print(f"wrote the domain type, RGI id and debris rasters to {glacier_dir} and the bed to {bed_dir}")
 
