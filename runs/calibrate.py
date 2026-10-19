@@ -227,6 +227,9 @@ def fit12(value):
     """The value at the most significant digits that fit SUMMA's f12.4 parameter columns."""
     for digits in range(10, 0, -1):
         text = f"{value:.{digits}g}"
+        if "." not in text:  # f12.4 reads a number without a decimal point as ten-thousandths
+            mant, _, exp = text.partition("e")
+            text = mant + "." + ("e" + exp if exp else "")
         if len(text) <= 12:
             return f"{text:>12}"
     raise ValueError(f"{value} does not fit in 12 characters")
