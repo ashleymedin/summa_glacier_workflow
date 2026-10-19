@@ -85,7 +85,7 @@ cd runs
 ```
 
 The calibration scores discharge and the glacier-wide seasonal mass balance over 2009–2015, after a
-spin-up over 2008, on 29 parameters: the 16 Oct calibrations' 30 less debrisConc, pinned at 1 kg m-3 with no wall erosion. The evaluation reruns each front member
+spin-up over 2008, on 29 parameters: the 16 Oct calibrations' 30 less debrisConc, pinned at 1 kg m-3, with wall erosion fixed at 0.5 mm yr-1. The evaluation reruns each front member
 over 2009–2022 with its parameters pinned and scores 2016–2022, adding Wolverine's water temperature,
 which the gauge records only from 2016. It writes `evaluation/evaluation.csv`. The observations for
 2008–2022 are in each domain's `observations/calibration`.
