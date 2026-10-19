@@ -60,6 +60,8 @@ def main():
             args += ["--stakes", os.path.join(project, c["stakes"])]
         if c.get("gauge_shield"):
             args += ["--gauge-shield", c["gauge_shield"]]
+        if c.get("gauge_rain"):
+            args += ["--gauge-rain"]
         campaign = c.get("spechum_campaign")
         if campaign:
             ratios = os.path.join(project, campaign["ratios"])

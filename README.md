@@ -51,11 +51,13 @@ spec such as `wolverine_network.json`, Wolverine Creek's tributary network.
    - humidity by a ratio on the same split;
    - shortwave and pressure by one ratio per HRU;
    - wind by the monthly station ratio;
-   - snowfall in the stake intervals scaled to the stakes' winter balances.
+   - snowfall in the stake intervals scaled to the stakes' winter balances;
+   - on Gulkana (`gauge_rain`), the rest of the precipitation by the undercatch-corrected 1480 and 1725 m
+     gauges' monthly ratio to the forcing, interpolated in elevation: about 1.15 in June and 1.5–3 in
+     July–September, where ERA5 has half the gauged rain.
 
    Wolverine's HRUs without stakes take the SA-shielded gauge. Gulkana's April–August humidity comes from
-   Wilson et al.'s 2024 Site B station. The output, `forcing/SUMMA_input/station_corrected`, reproduces
-   the forcing of the 15–16 Oct calibrations exactly.
+   Wilson et al.'s 2024 Site B station. The output is `forcing/SUMMA_input/station_corrected`.
 6. **coldstate.** `attributes_glac.nc` and `coldstate_glac.nc`:
    - **Ice:** five layers, 0.15 to 23 m, starting at −5 °C, with ice fraction 0.90 to 0.98 down the column.
    - **Debris:** 2 to 5 soil layers over the ice, enough for the thickest debris cell in the HRU. The top

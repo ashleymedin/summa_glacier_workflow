@@ -29,6 +29,10 @@ copies of the forcing.  Longwave is copied unchanged.
             temperature all record.  The catch efficiency is Eq. 3 of Kochendorfer et al. (2017, HESS 21,
             3525) for gauge-height wind (capped at 7.2 m s-1) and air temperature; without --gauge-shield
             those HRUs keep their precipitation.  The gauge ratio scales rain and snow alike, in every month.
+            With --gauge-rain as well, the precipitation the stakes leave (rain, and snowfall outside the
+            stake intervals) and all of an HRU without stakes are instead multiplied per calendar month by
+            each gauge's corrected catch over the forcing's precipitation at its elevation, interpolated in
+            elevation between the gauges and held at the end gauges beyond them.
 
 A correction is applied only where the data exist; the others stay at 0 or 1.  Station values are hourly
 means of the 15-minute samples in the hour ending at each forcing time, precipitation the sum of all four.  The corrections are written to
@@ -201,6 +205,8 @@ def main():
     p.add_argument("--gauge-shield", choices=sorted(CATCH),
                    help="wind shield of the station's weighing gauge (SA single-Alter, UN none); scales the "
                         "precipitation of HRUs without stakes to the undercatch-corrected gauge")
+    p.add_argument("--gauge-rain", action="store_true",
+                   help="scale the precipitation the stakes leave by every gauge's monthly catch (needs --gauge-shield)")
     p.add_argument("--spechum-ratios", help="CSV of hruId, month, ratio for the months the station has no humidity for")
     a = p.parse_args()
 
@@ -332,6 +338,34 @@ def main():
                 if not used[j]:
                     ratio["pptrate"][j] = caught.sum() / forced.sum()
 
+    # precipitation the stakes leave: each gauge's monthly corrected catch, interpolated in elevation
+    gauge_month = np.ones((13, nh))
+    gauge_sites = []
+    if a.gauge_rain:
+        if not a.gauge_shield:
+            raise SystemExit("--gauge-rain needs --gauge-shield for the undercatch correction")
+        forced_all = np.maximum(frc["pptrate"], 0.0) * 3600.0
+        zs, rs = [], []
+        for gz in sorted(stations):
+            pr, u, tg = (on_hours(stations[gz].get(v, {})) for v in ("PR", "U", "T"))
+            ok = np.isfinite(pr) & np.isfinite(u) & np.isfinite(tg)
+            if ok.sum() <= 24 * 365:
+                continue
+            caught = np.where(ok, pr / catch_efficiency(np.where(ok, u, 0.0), np.where(ok, tg, 0.0), a.gauge_shield), 0.0)
+            forced = along_elevation(z, forced_all, gz)
+            r = np.ones(13)
+            for m in range(1, 13):
+                sel = ok & (month == m)
+                if sel.sum() > 24 * 30:
+                    r[m] = caught[sel].sum() / forced[sel].sum()
+            zs.append(gz)
+            rs.append(r)
+            gauge_sites.append((gz, ok.sum(), r))
+        if not zs:
+            raise SystemExit("--gauge-rain: no gauge has a year of precipitation, wind and temperature")
+        for m in range(1, 13):
+            gauge_month[m] = np.interp(z, zs, [r[m] for r in rs])
+
     # write the corrected files
     os.makedirs(a.output, exist_ok=True)
     for f in files:
@@ -345,12 +379,15 @@ def main():
             cols = np.arange(nh)[None, :]
             # precipitation multiplier: the stake ratio on the snowfall inside the stake intervals, else the gauge's
             p_mult = np.broadcast_to(ratio["pptrate"][None, :], wet_file.shape)
+            g_mult = gauge_month[m_file, cols]
+            if a.gauge_rain:
+                p_mult = np.where(staked[None, :], p_mult, g_mult)
             if staked.any():
                 frac = snow_fraction(np.array(s["airtemp"][:], float) + offset[wet_file, m_file, cols],
                                      np.array(s["spechum"][:], float) * q_ratio[wet_file, m_file, cols],
                                      np.array(s["airpres"][:], float) * ratio["airpres"][None, :],
                                      a.temp_crit_rain, a.temp_range)
-                p_mult = np.where(staked[None, :], 1.0 + (ratio["pptrate"][None, :] - 1.0) * frac * cover[m_file], p_mult)
+                p_mult = np.where(staked[None, :], g_mult + (ratio["pptrate"][None, :] - g_mult) * frac * cover[m_file], p_mult)
             for name, v in s.variables.items():
                 fill = v.getncattr("_FillValue") if "_FillValue" in v.ncattrs() else None
                 o = d.createVariable(name, v.dtype, v.dimensions, zlib=True, complevel=4, fill_value=fill)
@@ -386,6 +423,11 @@ def main():
             w.writerow(["pptrate_stake_snowfall_weight"] + [f"{cover[m]:.3f}" for m in range(1, 13)])
         if gauge:
             w.writerow(["pptrate_gauge", f"{a.gauge_shield} shield, {gauge}"])
+        for gz, n, r in gauge_sites:
+            w.writerow([f"pptrate_gauge_{gz}m_by_month", f"{n} h"] + [f"{r[m]:.3f}" for m in range(1, 13)])
+        if a.gauge_rain:
+            for j, h in enumerate(hru_ids):
+                w.writerow([f"pptrate_unstaked_hru{h}_by_month"] + [f"{gauge_month[m, j]:.3f}" for m in range(1, 13)])
         w.writerow(["windspd_ratio"] + [f"{wind[m]:.3f}" for m in range(1, 13)])
         w.writerow(["wind_exposure", f"{a.wind_exposure}", f"station {wz} m"])
 
@@ -395,6 +437,8 @@ def main():
         print("stake multiplier weight on snowfall, by month:", " ".join(f"{cover[m]:.2f}" for m in range(1, 13)))
     if gauge:
         print(f"precipitation without stakes from the {a.gauge_shield}-shielded {gauge}")
+    for gz, n, r in gauge_sites:
+        print(f"{gz} m gauge over forcing, {n} h, by month:", " ".join(f"{r[m]:.2f}" for m in range(1, 13)))
     for j, h in enumerate(hru_ids):
         stk = (f", precip x{ratio['pptrate'][j]:.3f} from {len(used[j])} stake-years at "
                f"{min(s[0] for s in used[j]):.0f}-{max(s[0] for s in used[j]):.0f} m") if used[j] else (
