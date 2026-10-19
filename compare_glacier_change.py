@@ -6,9 +6,13 @@ spin-up's, which hold the starting state, with the bed and grid of the case's at
 where the ice is thicker than thick4area (0.1 m) and debris where it also carries at least 2 cm (min_thickness),
 as SUMMA counts them. Writes, in <run>/glacier_change:
 
-  area.csv     each year's glacier area (km2) of the main glacier, of all the run's glaciers and of the USGS
-               area-altitude record (USGSweatherData/<Name>/Input_<Name>_Area_Altitude_Distribution.csv)
-  bands.csv    the main glacier's area by the USGS 100 m bands, model and USGS, in the first and last year
+  area.csv     each year's glacier area (km2) of the main glacier and of all the run's glaciers, and the main
+               glacier's debris
+  surveys.csv  the USGS survey outlines' areas (USGSweatherData/<Name>/Input_<Name>_Geodetics.csv), the only
+               measured areas; the yearly area-altitude record interpolates between them
+  bands.csv    the main glacier's area by the USGS 100 m bands: the model's first year and the year of the last
+               survey it reaches, and USGS at the survey years in or just before the run
+               (Input_<Name>_Area_Altitude_Distribution.csv, exact at a survey year)
   debris.csv   for each imagery date (check_glacier_imagery.py's class rasters, put on the model grid), the
                model's glacier and debris area at that year's end and the image's ice and debris or rock in
                the model glacier, the debris cells both agree on, and the image's debris or rock off it
@@ -80,18 +84,24 @@ def main():
     area = pd.DataFrame({"model_main_km2": ice[:, :, :, main_g].sum((1, 2)) * cell,
                          "model_all_km2": ice.sum((1, 2, 3)) * cell,
                          "model_main_debris_km2": debris[:, :, :, main_g].sum((1, 2)) * cell}, index=years)
-    area["usgs_km2"] = usgs.sum(axis=1).reindex(years).values
+    geo = pd.read_csv(os.path.join(project, "USGSweatherData", name, f"Input_{name}_Geodetics.csv"))
+    geo["date"] = pd.to_datetime(geo.Date)
+    ref = geo.loc[geo.Area_max == geo.Area_min, "date"].iloc[0]  # the reference survey, whose area both columns hold
+    geo["area_km2"] = np.where(geo.date <= ref, geo.Area_max, geo.Area_min) / 1e6
+    geo[["Date", "area_km2"]].round(4).to_csv(os.path.join(out_dir, "surveys.csv"), index=False)
     area.index.name = "year"
     area.round(4).to_csv(os.path.join(out_dir, "area.csv"))
 
     bands = []
     centres = np.array([float(b) for b in usgs.columns])
-    for k in (0, len(years) - 1):
+    survey_years = sorted(geo.date.dt.year)
+    in_run = [y for y in survey_years if years.min() <= y <= years.max()]
+    for y in [y for y in survey_years if y < years.min()][-1:] + in_run:
+        bands.append(pd.Series(usgs.loc[y].values, index=centres, name=f"usgs_{y}"))
+    for k in (0, int(np.where(years == in_run[-1])[0][0]) if in_run else len(years) - 1):
         s = S[k, :, :, main_g][ice[k, :, :, main_g]]
         counts = [((s >= b - 50) & (s < b + 50)).sum() * cell for b in centres]
         bands.append(pd.Series(counts, index=centres, name=f"model_{years[k]}"))
-        if years[k] in usgs.index:
-            bands.append(pd.Series(usgs.loc[years[k]].values, index=centres, name=f"usgs_{years[k]}"))
     pd.concat(bands, axis=1).rename_axis("band_centre_m").round(4).to_csv(os.path.join(out_dir, "bands.csv"))
 
     transforms, crs = grid_transforms(project, name, c["utm_epsg"])
