@@ -23,6 +23,7 @@ import csv
 import os
 import shutil
 import subprocess
+import tomllib
 from concurrent.futures import ThreadPoolExecutor
 
 import netCDF4 as nc4
@@ -32,14 +33,33 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 GLACIER = os.path.dirname(HERE)
 SUMMA_DIR = os.path.abspath(os.environ.get("SUMMA_DIR", os.path.join(GLACIER, "..", "summa")))
 
-PARAMS = ["k_soil", "theta_sat", "aquiferBaseflowExp", "aquiferBaseflowRate", "qSurfScale", "summerLAI",
+# paper1: one value of each soil parameter for every domain, as the paper-1 calibrations ran
+PAPER1 = ["k_soil", "theta_sat", "aquiferBaseflowExp", "aquiferBaseflowRate", "qSurfScale", "summerLAI",
           "frozenPrecipMultip", "Fcapil", "tempCritRain", "heightCanopyTop", "heightCanopyBottom",
           "windReductionParam", "vGn_n", "routingGammaScale", "routingGammaShape", "glacierWindFactor",
           "glacierTempReduction", "glacStor_kIce", "glacStor_kSnow", "glacStor_kFirn", "k_snow",
           "mw_exp", "albedoDecayRate", "albedoMax", "k_macropore", "tempRangeTimestep", "thCond_soil",
           "newSnowDenMin", "windExposure"]
-LOG_PARAMS = ["k_soil", "aquiferBaseflowRate", "k_macropore"]
-SOIL_CHAIN = ["theta_res", "critSoilWilting", "critSoilTranspire", "fieldCapacity", "theta_sat"]
+PAPER1_CHAIN = ["theta_res", "critSoilWilting", "critSoilTranspire", "fieldCapacity", "theta_sat"]
+CANOPY_CHAIN = (["heightCanopyBottom", "heightCanopyTop"], 0.25, False)
+
+# domain: the upland soil and the debris searched apart, and the englacial debris concentration, the debris's other soil values fixed in trialParams.nc;
+# frac_sand (with frac_clay fixed) sets the conductivity of the solids, which thCondSoil = funcSoilWet uses
+DOMAIN = [p for p in PAPER1 if p not in ("k_soil", "theta_sat", "vGn_n", "k_macropore", "thCond_soil")] + \
+         ["k_soil@upland", "k_macropore@upland", "theta_sat@upland", "vGn_n@upland", "frac_sand@upland",
+          "theta_sat@glacDbr", "frac_sand@glacDbr", "debrisConc"]
+DOMAIN_CHAIN = ["theta_res@upland", "critSoilWilting@upland", "critSoilTranspire@upland", "fieldCapacity@upland",
+                "theta_sat@upland"]
+
+SEARCHES = {
+    "paper1": {"params": PAPER1, "logs": ["k_soil", "aquiferBaseflowRate", "k_macropore"],
+               "chains": [CANOPY_CHAIN, (PAPER1_CHAIN, 0.025, True)], "bounds": {}},
+    "domain": {"params": DOMAIN, "logs": ["k_soil@upland", "aquiferBaseflowRate", "k_macropore@upland"],
+               "chains": [CANOPY_CHAIN, (DOMAIN_CHAIN, 0.025, True)],
+               "bounds": {"theta_sat@upland": (0.35, 0.65),     # mineral soil
+                          "theta_sat@glacDbr": (0.2, 0.45),     # supraglacial debris, Fontrodona-Bach et al. (2025)
+                          "debrisConc": (0.1, 6.4)}},           # kg m-3, Anderson and Anderson (2018)
+}
 
 CASES = {  # domain, observation files and gauge of each run
     "gulkana": {"obs": "data/domain_Gulkana/observations/calibration", "flow": "USGS_15478040_daily_flow.nc",
@@ -49,9 +69,23 @@ CASES = {  # domain, observation files and gauge of each run
 }
 
 
+def search_of(calibration):
+    """The search a calibration ran (parameters, log transforms, ordered chains, bounds), from its config.toml."""
+    with open(os.path.join(calibration, "config.toml"), "rb") as f:
+        t = tomllib.load(f)
+    cal = t["calibration"]
+    chains = [(o["parameters"], o["gap_fraction"], o.get("sample_gaps", False))
+              for o in t.get("parameter_dependencies", {}).get("ordered", [])]
+    return {"params": cal["param_list"], "logs": list(cal.get("parameter_transformations", {})), "chains": chains,
+            "bounds": {k: tuple(v) for k, v in cal.get("parameter_bounds", {}).items()}}
+
+
 def config_text(case, run_dir, settings, work, start, end, score_start, score_end, algorithm, n_samples,
-                population, temperature):
-    """The calibration driver's TOML for one search or one pinned trial."""
+                population, temperature, search=SEARCHES["paper1"], pinned=None):
+    """The calibration driver's TOML for one search or one pinned trial; pinned name@domainType values are
+    held by their bounds, the parameter files holding the rest (pin_settings)."""
+    bounds = dict(search["bounds"])
+    bounds.update({k: (v, v) for k, v in (pinned or {}).items() if "@" in k})
     c = CASES[case.split("_")[0]]
     routed = os.path.exists(os.path.join(run_dir, "topology.nc"))
     forcing_file = os.path.join(run_dir, "forcing_path.txt")
@@ -128,8 +162,8 @@ varname_area   = "area"
 varname_slope  = "slope"
 varname_length = "length"
 ''')
-    params = ",\n".join(f'    "{p}"' for p in PARAMS)
-    logs = "\n".join(f'{p:<19} = "log"' for p in LOG_PARAMS)
+    params = ",\n".join(f'    "{p}"' for p in search["params"])
+    logs = "\n".join(f'"{p}" = "log"' for p in search["logs"])
     lines.append(f'''
 [calibration]
 
@@ -150,19 +184,14 @@ write_aligned = false
 [calibration.parameter_transformations]
 
 {logs}
-
-
-[[parameter_dependencies.ordered]]
-
-parameters   = ["heightCanopyBottom", "heightCanopyTop"]
-gap_fraction = 0.25
-
-[[parameter_dependencies.ordered]]
-
-parameters   = {SOIL_CHAIN!r}
-gap_fraction = 0.025
-sample_gaps  = true
-'''.replace("'", '"'))
+''')
+    if bounds:
+        rows = "\n".join(f'"{k}" = [{float(lo)!r}, {float(hi)!r}]' for k, (lo, hi) in bounds.items())
+        lines.append(f"\n\n[calibration.parameter_bounds]\n\n{rows}\n")
+    for members, gap, sample in search["chains"]:
+        names = ", ".join(f'"{m}"' for m in members)
+        lines.append(f"\n\n[[parameter_dependencies.ordered]]\n\nparameters   = [{names}]\ngap_fraction = {gap}\n"
+                     + ("sample_gaps  = true\n" if sample else ""))
     if algorithm == "nsga2":
         lines.append(f"\n[calibration.nsga2]\n\npopulation_size = {population}\n")
     lines.append(f'''
@@ -235,6 +264,13 @@ def fit12(value):
     raise ValueError(f"{value} does not fit in 12 characters")
 
 
+def searched_names(search):
+    """Every parameter a search sets: its list and the members of its ordered chains."""
+    names = list(search["params"])
+    names += [m for members, _, _ in search["chains"] for m in members if m not in names]
+    return names
+
+
 def pin_settings(src, dst, values):
     """A copy of the settings with every searched parameter's bounds set to its value."""
     if os.path.isdir(dst):
@@ -261,6 +297,8 @@ def main():
     p.add_argument("--generations", type=int, default=15)
     p.add_argument("--ranks", type=int, default=9, help="MPI ranks: one dispatcher and the workers")
     p.add_argument("--jobs", type=int, default=1, help="evaluate: front members rerun at once, each on --ranks ranks")
+    p.add_argument("--search", choices=sorted(SEARCHES), default="paper1",
+                   help="calibrate: paper1 (one soil for every domain) or domain (upland soil and debris apart)")
     p.add_argument("--name", default="calibration",
                    help="folder of the calibration in <case>; its evaluation is <name>_evaluation")
     a = p.parse_args()
@@ -270,15 +308,17 @@ def main():
     if a.mode == "calibrate":
         work = os.path.join(run_dir, a.name)
         config = config_text(a.case, run_dir, settings, work, "2009-01-01", "2015-12-31", "2009-01-01", "2015-12-31",
-                             "nsga2", a.population * a.generations, a.population, temperature=False)
+                             "nsga2", a.population * a.generations, a.population, temperature=False,
+                             search=SEARCHES[a.search])
         run_driver(work, config, settings, a.ranks)
         print(f"calibration written to {work}/output/{a.case}_calibration.nc")
         return
 
     evaluation = os.path.join(run_dir, f"{a.name}_evaluation")
+    search = search_of(os.path.join(run_dir, a.name))
     with nc4.Dataset(os.path.join(run_dir, a.name, "output", f"{a.case}_calibration.nc")) as d:
         front = np.flatnonzero(np.asarray(d["pareto_front"][:]) == 1)
-        names = [n for n in PARAMS + SOIL_CHAIN if n in d.variables]
+        names = [n for n in searched_names(search) if n in d.variables]
         values = {i: {n: float(d[n][i]) for n in names} for i in front}
         cal = np.asarray(d["objective"][:])
         cal_names = [t.strip() for t in d["objective"].target.split(",")]
@@ -288,7 +328,7 @@ def main():
         pinned = os.path.join(work + "_settings")
         pin_settings(settings, pinned, values[i])
         config = config_text(a.case, run_dir, pinned, work, "2009-01-01", "2022-12-31", "2016-01-01", "2022-12-31",
-                             "dds", 1, 1, temperature=True)
+                             "dds", 1, 1, temperature=True, search=search, pinned=values[i])
         run_driver(work, config, pinned, a.ranks)
         with nc4.Dataset(os.path.join(work, "output", f"{a.case}_calibration.nc")) as d:
             ev = np.ma.filled(d["objective"][0].astype(float), np.nan)

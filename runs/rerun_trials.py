@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import netCDF4 as nc4
 
-from calibrate import HERE, PARAMS, SOIL_CHAIN, config_text, fit12, pin_settings, run_driver
+from calibrate import HERE, config_text, fit12, pin_settings, run_driver, search_of, searched_names
 
 OUTPUTS = ["averageRoutedRunoff", "glacierRoutedRunoff", "basin__GlacierMassChange", "basin__GlacierArea",
            "basin__SurfaceRunoff", "basin__AquiferBaseflow", "scalarSWE", "scalarRainfall", "scalarSnowfall",
@@ -53,8 +53,9 @@ def main():
     p.add_argument("--label", help="appended to each folder, sample_<n>_<label>")
     a = p.parse_args()
     run_dir = os.path.join(HERE, a.case)
+    search = search_of(os.path.join(run_dir, a.name))
     with nc4.Dataset(os.path.join(run_dir, a.name, "output", f"{a.case}_calibration.nc")) as d:
-        names = [n for n in PARAMS + SOIL_CHAIN if n in d.variables]
+        names = [n for n in searched_names(search) if n in d.variables]
         values = {s: {n: float(d[n][s - 1]) for n in names} for s in a.samples}
 
     def rerun(s):
@@ -66,7 +67,7 @@ def main():
             f.writelines(f"{v:<26}| day | mean\n" for v in OUTPUTS)
             f.writelines(f"{v:<26}| annual\n" for v in GRIDS)
         config = config_text(a.case, run_dir, pinned, work, "2009-01-01", "2022-12-31", "2016-01-01", "2022-12-31",
-                             "dds", 1, 1, temperature=True).replace("write_timeseries = false", "write_timeseries = true") \
+                             "dds", 1, 1, temperature=True, search=search, pinned=values[s]).replace("write_timeseries = false", "write_timeseries = true") \
             .replace("write_Qreach = false", "write_Qreach = true")
         run_driver(work, config, pinned, a.ranks)
         print(f"sample {s}: {work}/output", flush=True)

@@ -91,7 +91,11 @@ cd runs
 ```
 
 The calibration scores discharge and the glacier-wide seasonal mass balance over 2009–2015, after a
-spin-up over 2008, on 29 parameters: the 16 Oct calibrations' 30 less debrisConc, pinned at 1 kg m-3, with wall erosion fixed at 1 mm yr-1. The evaluation reruns each front member
+spin-up over 2008. `--search paper1` (the default) searches the paper-1 calibrations' 29 parameters, one soil for
+every domain and debrisConc pinned at 1 kg m-3. `--search domain` searches 32: the upland soil and the debris
+apart (`name@upland`, `name@glacDbr`), their sand fractions setting the conductivity of the solids, and debrisConc;
+it needs a SUMMA with `[calibration.parameter_bounds]` and the debris values that `domain_soil_params.py` writes
+into trialParams.nc. Wall erosion is fixed at 1 mm yr-1. The evaluation reruns each front member
 over 2009–2022 with its parameters pinned and scores 2016–2022, adding Wolverine's water temperature,
 which the gauge records only from 2016. It writes `evaluation/evaluation.csv`. The observations for
 2008–2022 are in each domain's `observations/calibration`.

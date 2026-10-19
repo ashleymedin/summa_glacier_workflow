@@ -5,7 +5,8 @@ Each case takes its domain's attributes_glac.nc and a cold state written for its
 (glacier_cold_state.py --start), so the soil starts from the air temperature of the year the run spins up
 over. Its text settings and trialParams.nc are the case's own, kept in <dest>/summa_inputs. Its forcing is
 the domain's raw ERA5 (forcing/SUMMA_input) or the station correction (forcing/SUMMA_input/station_corrected)
-over the case's months: copied into <dest>/forcing for a test, read in place for a run.
+over the case's months: copied into <dest>/forcing for a test, read in place for a run. The soil parameters
+that differ between the upland soil and the debris are then written into its trialParams.nc (domain_soil_params.py).
 
   stream  the domain gets a stream HRU and a one-reach topology (add_stream_hru.py), whose forcing
           and topology are written into <dest>
@@ -169,6 +170,13 @@ def stream_domain(c, spec, stream, first, last, tmp, files, source):
 
 
 def build(name, spec, cases_dir):
+    """A case's inputs, then the soil parameters that differ by domain type (domain_soil_params.py)."""
+    build_inputs(name, spec, cases_dir)
+    inputs = os.path.join(os.path.abspath(os.path.join(cases_dir, spec["dest"])), "summa_inputs")
+    subprocess.run([sys.executable, os.path.join(HERE, "domain_soil_params.py"), inputs], check=True)
+
+
+def build_inputs(name, spec, cases_dir):
     dest = os.path.abspath(os.path.join(cases_dir, spec["dest"]))
     inputs = os.path.join(dest, "summa_inputs")
     if not os.path.isdir(inputs):
