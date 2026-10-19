@@ -61,7 +61,7 @@ wolverine_raw:
   first_month: 2008-01
   last_month: 2022-12
   forcing: raw
-  stream: {length: 2000, slope: 0.03, width: 5, elevation: 390, latitude: 60.374, longitude: -148.912}
+  copy_forcing: false
 
 wolverine_corrected:
   domain: wolverine
@@ -70,4 +70,4 @@ wolverine_corrected:
   first_month: 2008-01
   last_month: 2022-12
   forcing: station_corrected
-  stream: {length: 2000, slope: 0.03, width: 5, elevation: 390, latitude: 60.374, longitude: -148.912}
+  copy_forcing: false
