@@ -61,6 +61,19 @@ SEARCHES = {
                           "debrisConc": (0.1, 6.4)}},           # kg m-3, Anderson and Anderson (2018)
 }
 
+# fixed at their defaults on the station-corrected cases: the stakes set the snowfall with SUMMA's default phase split
+# (273.16 K, 2 K), and Site B sets the on-ice wind (glacierWindFactor 1) and cooling (1.3 K); raw ERA5 searches them
+STATION_FIXED = ["frozenPrecipMultip", "tempCritRain", "tempRangeTimestep", "glacierWindFactor", "glacierTempReduction"]
+
+
+def search_for(case, name):
+    """The named search, without the STATION_FIXED parameters on a station-corrected case."""
+    search = dict(SEARCHES[name])
+    if "corrected" in case:
+        search["params"] = [q for q in search["params"] if q.split("@")[0] not in STATION_FIXED]
+    return search
+
+
 CASES = {  # domain, observation files and gauge of each run
     "gulkana": {"obs": "data/domain_Gulkana/observations/calibration", "flow": "USGS_15478040_daily_flow.nc",
                 "mb": "gulkana_mass_balance_seasonal.nc"},
@@ -309,7 +322,7 @@ def main():
         work = os.path.join(run_dir, a.name)
         config = config_text(a.case, run_dir, settings, work, "2009-01-01", "2015-12-31", "2009-01-01", "2015-12-31",
                              "nsga2", a.population * a.generations, a.population, temperature=False,
-                             search=SEARCHES[a.search])
+                             search=search_for(a.case, a.search))
         run_driver(work, config, settings, a.ranks)
         print(f"calibration written to {work}/output/{a.case}_calibration.nc")
         return
