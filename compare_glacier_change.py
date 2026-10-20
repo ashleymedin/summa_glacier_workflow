@@ -12,9 +12,10 @@ as SUMMA counts them. Writes, in <run>/glacier_change:
   start.csv    the main glacier's area and debris in the run's cold state, where it starts
   surveys.csv  the USGS survey outlines' areas (USGSweatherData/<Name>/Input_<Name>_Geodetics.csv), the only
                measured areas; the yearly area-altitude record interpolates between them
-  bands.csv    the main glacier's area by the USGS 100 m bands: the model's first year and the year of the last
-               survey it reaches, and USGS at the survey years in or just before the run
-               (Input_<Name>_Area_Altitude_Distribution.csv, exact at a survey year)
+  bands.csv    the main glacier's area by the USGS 100 m bands: the model's cold state (model_start), its first
+               year and the year of the last survey it reaches, and USGS at the survey years in or just before the run
+               (Input_<Name>_Area_Altitude_Distribution.csv, exact at a survey year); the model surface is binned
+               in USGS heights, less the domain's usgs_datum
   debris.csv   for each imagery date (check_glacier_imagery.py's class rasters, put on the model grid), the
                model's glacier and debris area at that year's end and the image's ice and debris or rock in
                the model glacier, the debris cells both agree on, and the image's debris or rock off it
@@ -111,10 +112,14 @@ def main():
     in_run = [y for y in survey_years if years.min() <= y <= years.max()]
     for y in [y for y in survey_years if y < years.min()][-1:] + in_run:
         bands.append(pd.Series(usgs.loc[y].values, index=centres, name=f"usgs_{y}"))
+
+    def binned(s, label):
+        s = s - c.get("usgs_datum", 0.0)
+        bands.append(pd.Series([((s >= b - 50) & (s < b + 50)).sum() * cell for b in centres], index=centres, name=label))
+
+    binned(s0[:ny[main_g], :nx[main_g]][i0], "model_start")
     for k in (0, int(np.where(years == in_run[-1])[0][0]) if in_run else len(years) - 1):
-        s = S[k, :, :, main_g][ice[k, :, :, main_g]]
-        counts = [((s >= b - 50) & (s < b + 50)).sum() * cell for b in centres]
-        bands.append(pd.Series(counts, index=centres, name=f"model_{years[k]}"))
+        binned(S[k, :, :, main_g][ice[k, :, :, main_g]], f"model_{years[k]}")
     pd.concat(bands, axis=1).rename_axis("band_centre_m").round(4).to_csv(os.path.join(out_dir, "bands.csv"))
 
     transforms, crs = grid_transforms(project, name, c["utm_epsg"])
