@@ -19,7 +19,8 @@ from calibrate import HERE, config_text, fit12, pin_settings, run_driver, search
 
 OUTPUTS = ["averageRoutedRunoff", "glacierRoutedRunoff", "basin__GlacierMassChange", "basin__GlacierArea",
            "basin__SurfaceRunoff", "basin__AquiferBaseflow", "scalarSWE", "scalarRainfall", "scalarSnowfall",
-           "scalarGlacierMelt", "scalarAquiferStorage", "DOMarea"]
+           "scalarGlacierMelt", "scalarAquiferStorage", "DOMarea", "DOMelev",
+           "glacMass4AreaChange"]  # each domain's mass change since the last area update, which the flow model fits
 GRIDS = ["surface_elev", "debris_thick"]  # glacier surface and debris maps at each year's end
 
 
