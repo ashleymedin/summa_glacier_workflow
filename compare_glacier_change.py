@@ -19,7 +19,7 @@ as SUMMA counts them. Writes, in <run>/glacier_change:
                model's glacier and debris area at that year's end and the image's ice and debris or rock in
                the model glacier, the debris cells both agree on, and the image's debris or rock off it
   maps.npz     the main glacier's model debris and glacier masks, the other glaciers' put on its grid, and
-               the image classes on that grid, by date; setup, every glacier's cold state on that grid
+               the image classes on that grid, by date; setup, the RGI id of every glacier's cold-state cells on that grid
 
     ./compare_glacier_change.py domains/gulkana.yaml runs/gulkana_corrected/calibration_paper1_rerun/sample_384
 """
@@ -70,6 +70,7 @@ def main():
         inputs = os.path.join(os.path.dirname(os.path.dirname(run)), "summa_inputs")
     with nc4.Dataset(os.path.join(inputs, "attributes.nc")) as d:
         bed = np.asarray(d["bed_elev"][:, :, :, 0], float)
+        gmask = np.asarray(d["glacierMask"][:, :, :, 0]) > 0
         ids = np.asarray(d["gridId"][:, 0]).astype(int)
         nx, ny = np.asarray(d["nx"][:, 0]).astype(int), np.asarray(d["ny"][:, 0]).astype(int)
         dx = float(np.asarray(d["dx"][:]).flat[0])
@@ -119,15 +120,31 @@ def main():
     transforms, crs = grid_transforms(project, name, c["utm_epsg"])
     t0 = transforms[int(ids[main_g])]
 
-    def on_main(m):
-        """A (y, x, grid) mask of every glacier but the main one, put on the main glacier's grid."""
+    def window(g, r0, c0):
+        """The main grid's and grid g's slices where g sits at row r0, column c0 of the main grid."""
+        r = slice(max(r0, 0), min(r0 + ny[g], ny[main_g]))
+        cc = slice(max(c0, 0), min(c0 + nx[g], nx[main_g]))
+        return (r, cc), (slice(r.start - r0, r.stop - r0), slice(cc.start - c0, cc.stop - c0))
+
+    offsets = {main_g: (0, 0)}
+    for g in (g for g in range(len(ids)) if g != main_g):  # where the ground off both glaciers agrees
+        t = transforms[int(ids[g])]
+        guess = int(round((t.f - t0.f) / t0.e)), int(round((t.c - t0.c) / t0.a))
+        fits = []
+        for r0 in range(guess[0] - 10, guess[0] + 11):
+            for c0 in range(guess[1] - 10, guess[1] + 11):
+                w0, w = window(g, r0, c0)
+                off = ~gmask[w0 + (main_g,)] & ~gmask[w + (g,)]
+                if off.sum():
+                    fits.append((np.abs(bed[w0 + (main_g,)] - bed[w + (g,)])[off].mean(), r0, c0))
+        offsets[g] = min(fits)[1:]
+
+    def on_main(m, gs=None):
+        """A (y, x, grid) mask of glaciers gs (all but the main one), put on the main glacier's grid."""
         out = np.zeros((ny[main_g], nx[main_g]), bool)
-        for g in (g for g in range(len(ids)) if g != main_g):
-            t = transforms[int(ids[g])]
-            c0, r0 = int(round((t.c - t0.c) / t0.a)), int(round((t.f - t0.f) / t0.e))
-            r = slice(max(r0, 0), min(r0 + ny[g], ny[main_g]))
-            cc = slice(max(c0, 0), min(c0 + nx[g], nx[main_g]))
-            out[r, cc] |= m[r.start - r0:r.stop - r0, cc.start - c0:cc.stop - c0, g]
+        for g in gs if gs is not None else (g for g in range(len(ids)) if g != main_g):
+            w0, w = window(g, *offsets[g])
+            out[w0] |= m[w + (g,)]
         return out
 
     with nc4.Dataset(os.path.join(inputs, "coldState.nc")) as d:
@@ -135,7 +152,10 @@ def main():
     for g in range(len(ids)):
         ice0[ny[g]:, :, g] = False
         ice0[:, nx[g]:, g] = False
-    rows, maps = [], {"model_years": years, "dx": dx, "setup": i0 | on_main(ice0)}
+    setup = np.zeros((ny[main_g], nx[main_g]), np.int64)  # the RGI id of each cold-state glacier cell
+    for g in range(len(ids)):
+        setup[on_main(ice0, [g]) if g != main_g else i0] = ids[g]
+    rows, maps = [], {"model_years": years, "dx": dx, "setup": setup}
     for tif in sorted(glob.glob(os.path.join(project, "observations", "imagery", "imagery_*.tif"))):
         date = os.path.basename(tif)[:-4].split("_")[-1]
         k = int(np.where(years == min(max(int(date[:4]), years.min()), years.max()))[0][0])
