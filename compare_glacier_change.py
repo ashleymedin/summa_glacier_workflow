@@ -19,7 +19,7 @@ as SUMMA counts them. Writes, in <run>/glacier_change:
                model's glacier and debris area at that year's end and the image's ice and debris or rock in
                the model glacier, the debris cells both agree on, and the image's debris or rock off it
   maps.npz     the main glacier's model debris and glacier masks, the other glaciers' put on its grid, and
-               the image classes on that grid, by date
+               the image classes on that grid, by date; setup, every glacier's cold state on that grid
 
     ./compare_glacier_change.py domains/gulkana.yaml runs/gulkana_corrected/calibration_paper1_rerun/sample_384
 """
@@ -117,7 +117,25 @@ def main():
     pd.concat(bands, axis=1).rename_axis("band_centre_m").round(4).to_csv(os.path.join(out_dir, "bands.csv"))
 
     transforms, crs = grid_transforms(project, name, c["utm_epsg"])
-    rows, maps = [], {"model_years": years, "dx": dx}
+    t0 = transforms[int(ids[main_g])]
+
+    def on_main(m):
+        """A (y, x, grid) mask of every glacier but the main one, put on the main glacier's grid."""
+        out = np.zeros((ny[main_g], nx[main_g]), bool)
+        for g in (g for g in range(len(ids)) if g != main_g):
+            t = transforms[int(ids[g])]
+            c0, r0 = int(round((t.c - t0.c) / t0.a)), int(round((t.f - t0.f) / t0.e))
+            r = slice(max(r0, 0), min(r0 + ny[g], ny[main_g]))
+            cc = slice(max(c0, 0), min(c0 + nx[g], nx[main_g]))
+            out[r, cc] |= m[r.start - r0:r.stop - r0, cc.start - c0:cc.stop - c0, g]
+        return out
+
+    with nc4.Dataset(os.path.join(inputs, "coldState.nc")) as d:
+        ice0 = np.asarray(d["surface_elev"][:, :, :, 0], float) - bed > THICK4AREA
+    for g in range(len(ids)):
+        ice0[ny[g]:, :, g] = False
+        ice0[:, nx[g]:, g] = False
+    rows, maps = [], {"model_years": years, "dx": dx, "setup": i0 | on_main(ice0)}
     for tif in sorted(glob.glob(os.path.join(project, "observations", "imagery", "imagery_*.tif"))):
         date = os.path.basename(tif)[:-4].split("_")[-1]
         k = int(np.where(years == min(max(int(date[:4]), years.min()), years.max()))[0][0])
@@ -135,17 +153,8 @@ def main():
         maps[f"classes_{date}"] = cls
         maps[f"model_ice_{date}"] = g_ice
         maps[f"model_debris_{date}"] = g_deb
-        o_ice, o_deb = np.zeros_like(g_ice), np.zeros_like(g_deb)
-        t0 = transforms[int(ids[main_g])]
-        for g in (g for g in range(len(ids)) if g != main_g):  # the other glaciers, pasted onto the main grid
-            t = transforms[int(ids[g])]
-            c0, r0 = int(round((t.c - t0.c) / t0.a)), int(round((t.f - t0.f) / t0.e))
-            r = slice(max(r0, 0), min(r0 + ny[g], ny[main_g]))
-            cc = slice(max(c0, 0), min(c0 + nx[g], nx[main_g]))
-            for src, dst in ((ice, o_ice), (debris, o_deb)):
-                dst[r, cc] |= src[k, r.start - r0:r.stop - r0, cc.start - c0:cc.stop - c0, g]
-        maps[f"model_other_ice_{date}"] = o_ice & ~g_ice
-        maps[f"model_other_debris_{date}"] = o_deb & ~g_ice
+        maps[f"model_other_ice_{date}"] = on_main(ice[k]) & ~g_ice
+        maps[f"model_other_debris_{date}"] = on_main(debris[k]) & ~g_ice
     pd.DataFrame(rows).round(4).to_csv(os.path.join(out_dir, "debris.csv"), index=False)
     np.savez_compressed(os.path.join(out_dir, "maps.npz"), **maps)
     print(area.round(3).to_string())
