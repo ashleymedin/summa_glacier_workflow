@@ -33,15 +33,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 GLACIER = os.path.dirname(HERE)
 SUMMA_DIR = os.path.abspath(os.environ.get("SUMMA_DIR", os.path.join(GLACIER, "..", "summa")))
 
-# paper1: one value of each soil parameter for every domain; windExposure is fixed per case, 0.77 on station wind, 1 on ERA5
-PAPER1 = ["k_soil", "theta_sat", "aquiferBaseflowExp", "aquiferBaseflowRate", "qSurfScale", "summerLAI",
-          "frozenPrecipMultip", "Fcapil", "tempCritRain", "heightCanopyTop", "heightCanopyBottom",
-          "windReductionParam", "vGn_n", "routingGammaScale", "routingGammaShape", "glacierWindFactor",
-          "glacierTempReduction", "glacStor_kIce", "glacStor_kSnow", "glacStor_kFirn", "k_snow",
+# paper1: one value of each soil parameter for every domain; windExposure is fixed per case, 0.77 on station wind, 1 on ERA5;
+# the upland canopy is fixed at Noah-MP's mixed tundra (2.0 and 0.2 m, LAI 1.8)
+PAPER1 = ["k_soil", "theta_sat", "aquiferBaseflowExp", "aquiferBaseflowRate", "qSurfScale", "frozenPrecipMultip",
+          "Fcapil", "tempCritRain", "windReductionParam", "vGn_n", "routingGammaScale", "routingGammaShape",
+          "glacierWindFactor", "glacierTempReduction", "glacStor_kIce", "glacStor_kSnow", "glacStor_kFirn", "k_snow",
           "mw_exp", "albedoDecayRate", "albedoMax", "k_macropore", "tempRangeTimestep", "thCond_soil",
           "newSnowDenMin"]
 PAPER1_CHAIN = ["theta_res", "critSoilWilting", "critSoilTranspire", "fieldCapacity", "theta_sat"]
-CANOPY_CHAIN = (["heightCanopyBottom", "heightCanopyTop"], 0.25, False)
 
 # domain: the upland soil and the debris searched apart, and the englacial debris concentration, the debris's other soil values fixed in trialParams.nc;
 # frac_sand (with frac_clay fixed) sets the conductivity of the solids, which thCondSoil = funcSoilWet uses
@@ -53,9 +52,9 @@ DOMAIN_CHAIN = ["theta_res@upland", "critSoilWilting@upland", "critSoilTranspire
 
 SEARCHES = {
     "paper1": {"params": PAPER1, "logs": ["k_soil", "aquiferBaseflowRate", "k_macropore"],
-               "chains": [CANOPY_CHAIN, (PAPER1_CHAIN, 0.025, True)], "bounds": {}},
+               "chains": [(PAPER1_CHAIN, 0.025, True)], "bounds": {}},
     "domain": {"params": DOMAIN, "logs": ["k_soil@upland", "aquiferBaseflowRate", "k_macropore@upland"],
-               "chains": [CANOPY_CHAIN, (DOMAIN_CHAIN, 0.025, True)],
+               "chains": [(DOMAIN_CHAIN, 0.025, True)],
                "bounds": {"theta_sat@upland": (0.35, 0.65),     # mineral soil
                           "theta_sat@glacDbr": (0.2, 0.45),     # supraglacial debris, Fontrodona-Bach et al. (2025)
                           "debrisConc": (0.1, 6.4)}},           # kg m-3, Anderson and Anderson (2018)

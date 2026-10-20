@@ -129,7 +129,7 @@ minStomatalConductance    |    2000.0000 |    2000.0000 |    2000.0000
 ! vegetation properties
 ! ====================================================================
 winterSAI                 |       1.0000 |       0.0100 |       3.0000
-summerLAI                 |       3.0000 |       0.0100 |      10.0000
+summerLAI                 |       1.8000 |       0.0100 |      10.0000
 rootScaleFactor1          |       2.0000 |       1.0000 |      10.0000
 rootScaleFactor2          |       5.0000 |       1.0000 |      10.0000
 rootingDepth              |       2.0000 |       0.1000 |       6.0000
@@ -141,8 +141,8 @@ critSoilTranspire         |       0.1750 |       0.0000 |       1.0000
 critAquiferTranspire      |       0.2000 |       0.1000 |      10.0000
 minStomatalResistance     |      50.0000 |      10.0000 |     200.0000
 leafDimension             |       0.0400 |       0.0100 |       0.1000
-heightCanopyTop           |      20.0000 |       0.0500 |     100.0000
-heightCanopyBottom        |       2.0000 |       0.0000 |       5.0000
+heightCanopyTop           |       2.0000 |       0.0500 |     100.0000
+heightCanopyBottom        |       0.2000 |       0.0000 |       5.0000
 specificHeatVeg           |     874.0000 |     500.0000 |    1500.0000
 maxMassVegetation         |      25.0000 |       1.0000 |      50.0000
 throughfallScaleSnow      |       0.5000 |       0.1000 |       0.9000
