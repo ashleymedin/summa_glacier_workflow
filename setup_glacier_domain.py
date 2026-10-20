@@ -72,7 +72,7 @@ def main():
     if "coldstate" in a.steps:
         run(py, os.path.join(HERE, "glacier_cold_state.py"), project, "--utm-epsg", c["utm_epsg"],
             "--start", c.get("cold_start", "2008-01"), "--soil-offset", c.get("soil_offset", 1.5),
-            "--ice-temp", c.get("ice_temp", -5.0))
+            "--ice-temp", c.get("ice_temp", -5.0), *(["--soil-depth", c["soil_depth"]] if "soil_depth" in c else []))
 
 
 if __name__ == "__main__":

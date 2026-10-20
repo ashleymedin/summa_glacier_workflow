@@ -313,6 +313,18 @@ def build_domains(project_dir, hru_ids, hru_area, single_glac_hru, hru_id_column
     return dom, debris_thick
 
 
+def cut_soil(heights, nsoil, nsnow, depth):
+    """Upland interface heights (hru, interface) ending at depth (m), the layers below it dropped."""
+    heights, nsoil = heights.copy(), nsoil.copy()
+    for i in range(len(nsoil)):
+        soil = heights[i, nsnow[i]:nsnow[i] + nsoil[i] + 1]
+        keep = soil[soil < depth - 1e-6]
+        nsoil[i] = len(keep)
+        heights[i, nsnow[i] + len(keep)] = depth
+        heights[i, nsnow[i] + len(keep) + 1:] = 0.0
+    return heights, nsoil
+
+
 def build_layers(dom_type, debris_thick, debris_max, upland_heights, upland_nsoil, upland_nsnow, a):
     """Layer counts and interface heights of every domain (heights indexed [dom, hru, interface])."""
     n_hru, n_dom = dom_type.shape[1], dom_type.shape[2]
@@ -360,6 +372,7 @@ def main():
     p.add_argument("--forcing", help="forcing directory for the mean annual air temperature, default forcing/SUMMA_input")
     p.add_argument("--start", required=True, help="first forcing month of the run, YYYY-MM; its 12 months set the start")
     p.add_argument("--soil-offset", type=float, default=1.5, help="soil and debris start this much above the air, deg C")
+    p.add_argument("--soil-depth", type=float, help="upland soil cut to this depth, m, default the template's")
     p.add_argument("--ice-temp", type=float, default=-5.0, help="glacier ice starting temperature, deg C")
     p.add_argument("--debris-min", type=float, default=0.02, help="thinnest debris, m (glacAreaChange.f90 min_thickness)")
     p.add_argument("--debris-top-max", type=float, default=0.05, help="thickest top debris layer, m (maxDebrisTop)")
@@ -395,6 +408,8 @@ def main():
         upland_heights = np.asarray(ds["iLayerHeight"][:], dtype=float).T
         upland_nsoil = np.asarray(ds["nSoil"][:]).reshape(-1)
         upland_nsnow = np.asarray(ds["nSnow"][:]).reshape(-1)
+        if a.soil_depth:
+            upland_heights, upland_nsoil = cut_soil(upland_heights, upland_nsoil, upland_nsnow, a.soil_depth)
         states = {}
         for name, default in (("scalarCanopyIce", 0), ("scalarCanopyLiq", 0), ("scalarSnowDepth", 0), ("scalarSWE", 0),
                               ("scalarSfcMeltPond", 0), ("scalarAquiferStorage", 1.0), ("scalarSnowAlbedo", 0),
