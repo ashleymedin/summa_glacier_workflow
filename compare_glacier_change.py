@@ -18,7 +18,8 @@ as SUMMA counts them. Writes, in <run>/glacier_change:
   debris.csv   for each imagery date (check_glacier_imagery.py's class rasters, put on the model grid), the
                model's glacier and debris area at that year's end and the image's ice and debris or rock in
                the model glacier, the debris cells both agree on, and the image's debris or rock off it
-  maps.npz     the main glacier's model debris and glacier masks and the image classes on its grid, by date
+  maps.npz     the main glacier's model debris and glacier masks, the other glaciers' put on its grid, and
+               the image classes on that grid, by date
 
     ./compare_glacier_change.py domains/gulkana.yaml runs/gulkana_corrected/calibration_paper1_rerun/sample_384
 """
@@ -134,6 +135,17 @@ def main():
         maps[f"classes_{date}"] = cls
         maps[f"model_ice_{date}"] = g_ice
         maps[f"model_debris_{date}"] = g_deb
+        o_ice, o_deb = np.zeros_like(g_ice), np.zeros_like(g_deb)
+        t0 = transforms[int(ids[main_g])]
+        for g in (g for g in range(len(ids)) if g != main_g):  # the other glaciers, pasted onto the main grid
+            t = transforms[int(ids[g])]
+            c0, r0 = int(round((t.c - t0.c) / t0.a)), int(round((t.f - t0.f) / t0.e))
+            r = slice(max(r0, 0), min(r0 + ny[g], ny[main_g]))
+            cc = slice(max(c0, 0), min(c0 + nx[g], nx[main_g]))
+            for src, dst in ((ice, o_ice), (debris, o_deb)):
+                dst[r, cc] |= src[k, r.start - r0:r.stop - r0, cc.start - c0:cc.stop - c0, g]
+        maps[f"model_other_ice_{date}"] = o_ice & ~g_ice
+        maps[f"model_other_debris_{date}"] = o_deb & ~g_ice
     pd.DataFrame(rows).round(4).to_csv(os.path.join(out_dir, "debris.csv"), index=False)
     np.savez_compressed(os.path.join(out_dir, "maps.npz"), **maps)
     print(area.round(3).to_string())
