@@ -237,3 +237,4 @@ glacierWindFactor         |       1.0000 |       1.0000 |       2.0000
 glacierTempReduction      |       1.3000 |       1.0000 |       1.6000
 windExposure              |       1.0000 |       0.4000 |       1.0000
 gwTempWindow              |       7.0000 |       2.0000 |      14.0000
+precipElevGrad            |      0.00000 |       0.0000 |       0.0050
