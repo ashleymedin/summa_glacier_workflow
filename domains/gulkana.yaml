@@ -20,7 +20,6 @@ usgs_outline: {glacier: Gulkana Glacier, date: 2007/08/11, dem: GlacierDEM/Delta
 # cold state of the domain itself (cases write their own, from their own first month)
 cold_start: 2008-01                             # first forcing month; its 12 months of raw ERA5 set the start
 soil_offset: 1.5                                # deg C, soil and debris above the mean annual air temperature
-soil_depth: 2.0                                 # m, the tundra soil (Sass); the template has 4 m
 ice_temp: -5.0                                  # deg C
 
 # station correction of the forcing (correct_forcing_to_station.py)

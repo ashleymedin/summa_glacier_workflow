@@ -18,7 +18,6 @@ usgs_outline: {glacier: Wolverine Glacier, date: 2006/08/08, dem: GlacierDEM/Eas
 
 cold_start: 2008-01
 soil_offset: 1.5
-soil_depth: 2.0                                 # m, the tundra soil (Sass); the template has 4 m
 ice_temp: -5.0
 
 stations: USGSweatherData
