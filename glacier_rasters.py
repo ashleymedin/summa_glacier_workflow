@@ -8,7 +8,8 @@ From the global glacier products (each downloaded by hand, see README.md) writes
   domain_<name>_debris_thickness.tif  debris thickness (m), non-zero only where the type is 4
 
 and in attributes/elevation/dem domain_<name>_glacier_elv.tif, the glacier surface: the DEM, with the survey DEM
-of the USGS outline on that glacier where usgs_outline names one (levelled to the DEM on the ground around it);
+of the USGS outline on that glacier where usgs_outline names one (levelled to the DEM on the ground around it, its
+change from the DEM carried smoothly over the glacier cells it does not cover);
 and domain_<name>_bedrock_elv.tif, that surface less the glacier thickness.
 
 Glacier outlines are RGI 6.0, replaced by the Herreid and Pellicciotti (2020) outline where it has one, and by a
@@ -39,6 +40,8 @@ from rasterio.transform import from_bounds
 from rasterio.warp import Resampling, calculate_default_transform, reproject
 from scipy.interpolate import griddata
 from scipy.ndimage import distance_transform_edt
+from scipy.sparse import csr_matrix
+from scipy.sparse.linalg import spsolve
 from shapely.affinity import rotate
 from shapely.geometry import Point, box, shape
 from shapely.ops import unary_union
@@ -117,25 +120,51 @@ def mosaic_to_dem(files, target_crs, dem_shape, dem_transform, tmp_dir):
     return griddata(points, subset.ravel(), (np.array(x).ravel(), np.array(y).ravel()), method="nearest").reshape(dem_shape)
 
 
-def survey_surface(dem, glacier, src, outlines, path, buffer=1000.0):
-    """The DEM with a survey DEM's mean on the glacier cells, levelled to the DEM by their median difference on
-    the ground within buffer (m) of the outlines."""
+def harmonic_fill(values, known, region):
+    """values with the region cells not known replaced by the harmonic surface through the known cells and 0
+    outside the region (4-neighbour Laplace)."""
+    solve = region & ~known
+    n = int(solve.sum())
+    out = np.where(known, values, 0.0)
+    if n == 0:
+        return out
+    index = np.full(values.shape, -1)
+    index[solve] = np.arange(n)
+    rows, cols, vals, rhs = [], [], [], np.zeros(n)
+    for (r, c), i in zip(np.argwhere(solve), index[solve]):
+        rows.append(i); cols.append(i); vals.append(4.0)
+        for rr, cc in ((r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)):
+            if not (0 <= rr < values.shape[0] and 0 <= cc < values.shape[1]):
+                continue
+            if solve[rr, cc]:
+                rows.append(i); cols.append(index[rr, cc]); vals.append(-1.0)
+            else:
+                rhs[i] += out[rr, cc]
+    out[solve] = spsolve(csr_matrix((vals, (rows, cols)), shape=(n, n)), rhs)
+    return out
+
+
+def survey_surface(dem, glacier, src, outlines, path, buffer=1000.0, min_cover=0.5):
+    """The DEM with a survey DEM's mean on the glacier cells it covers by at least min_cover, levelled to the DEM
+    by their median difference on the ground within buffer (m) of the outlines. The survey's change from the DEM
+    is carried harmonically onto the glacier cells it leaves out, to nothing at the ice-free ground."""
     with rasterio.open(path) as s:
         z = s.read(1, masked=True).astype(np.float64).filled(np.nan)
         on_ice = geometry_mask(list(outlines.to_crs(s.crs).geometry), transform=s.transform, invert=True, out_shape=z.shape)
         near = geometry_mask(list(outlines.to_crs(s.crs).buffer(buffer)), transform=s.transform, invert=True, out_shape=z.shape)
         means = {}
-        for key, keep in (("ice", on_ice), ("ground", near & ~on_ice)):
+        for key, keep in (("ice", on_ice), ("ground", near & ~on_ice), ("cover", None)):
             out = np.full(dem.shape, np.nan)
-            reproject(np.where(keep, z, np.nan), out, src_transform=s.transform, src_crs=s.crs, src_nodata=np.nan,
+            values = np.isfinite(z).astype(np.float64) if keep is None else np.where(keep, z, np.nan)
+            reproject(values, out, src_transform=s.transform, src_crs=s.crs, src_nodata=np.nan,
                       dst_transform=src.transform, dst_crs=src.crs, dst_nodata=np.nan, resampling=Resampling.average)
             means[key] = out
     offset = np.nanmedian(dem - means["ground"])
-    print(f"{os.path.basename(path)}: {offset:+.1f} m to the DEM on {np.isfinite(means['ground']).sum()} ground cells")
-    surface = dem.copy()
-    fill = glacier & np.isfinite(means["ice"])
-    surface[fill] = means["ice"][fill] + offset
-    return surface
+    known = glacier & np.isfinite(means["ice"]) & (np.nan_to_num(means["cover"]) >= min_cover)
+    print(f"{os.path.basename(path)}: {offset:+.1f} m to the DEM on {np.isfinite(means['ground']).sum()} ground cells, "
+          f"covers {known.sum()} of {glacier.sum()} glacier cells")
+    change = harmonic_fill(np.where(known, means["ice"] + offset - dem, 0.0), known, glacier)
+    return np.where(glacier, dem + change, dem)
 
 
 def main():

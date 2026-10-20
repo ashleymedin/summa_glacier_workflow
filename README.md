@@ -50,7 +50,8 @@ wetland domain (a proglacial lake or wetted forefield) copied from the stream do
    domain type: 1 upland, 2 accumulation, 3 clean ablation, 4 debris ablation. Debris thickness is Rounce
    et al. (2021), raised to 4 cm where thinner. The bed is the glacier surface less the Millan et al. (2022)
    thickness, filled from the nearest Millan cell where an outline reaches past it. The glacier surface is the DEM, or that survey's own DEM on the
-   glacier where `usgs_outline` names one (`dem`), levelled to the DEM on the ground around it.
+   glacier where `usgs_outline` names one (`dem`), levelled to the DEM on the ground around it. Where the survey
+   covers less than half a cell, its change from the DEM is carried harmonically to zero at the ice-free ground.
 2. **extend.** The basin is delineated on the bed above the gauge, and each glacier at least 80% inside
    it gets room to advance by dragging its terminus downstream.
 3. **hrus.** Each HRU's area, centre, elevation, slope and contour length in `attributes.nc` and the HRU
