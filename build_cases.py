@@ -16,6 +16,7 @@ that differ between the upland soil and the debris are then written into its tri
 """
 
 import argparse
+import csv
 import glob
 import os
 import shutil
@@ -66,6 +67,22 @@ def domain_cold_state(config, start, out_dir):
 def forcing_dir_of(c, forcing):
     base = os.path.join(c["project_dir"], "forcing", "SUMMA_input")
     return base if forcing == "raw" else os.path.join(base, "station_corrected")
+
+
+def set_precip_grad(inputs, source):
+    """precipElevGrad in the case's localParamInfo.txt, from the station correction's corrections.csv (0 without one)."""
+    grad = 0.0
+    path = os.path.join(source, "corrections.csv")
+    if os.path.exists(path):
+        for row in csv.reader(open(path)):
+            if row and row[0] == "precipElevGrad_per_m":
+                grad = float(row[1])
+    params = os.path.join(inputs, "localParamInfo.txt")
+    lines = [l for l in open(params) if l.split("|")[0].strip() != "precipElevGrad"]
+    if lines and not lines[-1].endswith("\n"):
+        lines[-1] += "\n"
+    lines.append(f"{'precipElevGrad':<26}| {grad:12.5f} | {0.0:12.4f} | {0.005:12.4f}\n")
+    open(params, "w").writelines(lines)
 
 
 def merge_netcdf(paths, out, concat, shift, keep=None):
@@ -239,6 +256,7 @@ def build_inputs(name, spec, cases_dir):
             print(f"{name}: stream HRU added, {len(files)} forcing files in {dest}/forcing")
             return
 
+        set_precip_grad(inputs, source)
         shutil.copy(os.path.join(tmp, "attributes_glac.nc"), os.path.join(inputs, "attributes.nc"))
         shutil.copy(os.path.join(tmp, "coldstate_glac.nc"), os.path.join(inputs, "coldState.nc"))
         write_file_list(os.path.join(inputs, "forcingFileList.txt"), [os.path.basename(f) for f in files])

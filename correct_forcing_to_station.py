@@ -21,7 +21,9 @@ copies of the forcing.  Longwave is copied unchanged.
             corrected forcing's snowfall at the stakes within --stake-window of the HRU (or the nearest such
             group), over each stake's fall-to-spring interval; rain is unchanged, and so is snowfall outside
             those intervals, the multiplier weighted by the share of stake intervals covering the month's
-            15th.  Snowfall is split on wet-bulb temperature as SUMMA does, with --temp-crit-rain and
+            15th.  With --precip-grad, the ratios are fitted jointly with SUMMA's precipElevGrad (precipitation
+            x (1 + grad (z - z_hru)) within an HRU), each stake on the HRU of its nearest glacier domain
+            (--glacier-state) and its snowfall the HRU's own, lapsed as SUMMA does.  Snowfall is split on wet-bulb temperature as SUMMA does, with --temp-crit-rain and
             --temp-range.  Only stakes above --stake-min-elev count, where winter ablation is small.
             With --gauge-shield, every HRU the stakes leave out instead takes the ratio
             of the station's weighing-gauge catch, corrected for wind undercatch, to the forcing's
@@ -57,6 +59,7 @@ EPOCH = datetime(1900, 1, 1, tzinfo=timezone.utc)   # forcing time is hours sinc
 LOCAL = ZoneInfo("America/Anchorage")
 G, R_DRY = 9.80665, 287.05                           # m s-2, J kg-1 K-1
 DEFAULT_LAPSE = -0.0065                              # K m-1
+SUMMA_LAPSE = 0.006871                               # K m-1, derivforce's lapse from the HRU to a domain
 COLUMNS = {"site_temp": "T", "RelHum": "RH", "Barom": "P", "ShortwaveIn": "SW", "WindSpeed": "U",
            "Precip_Weighing_Incremental": "PR"}
 CATCH = {"SA": (0.0348, 1.366, 0.779), "UN": (0.0785, 0.729, 0.407)}   # Kochendorfer et al. (2017) Table 2, gauge height
@@ -187,6 +190,55 @@ def stake_ratios(path, hours, z, snow, min_elev, window):
     return ratio, used, cover
 
 
+def stake_ratios_graded(path, hours, z, snow_at, min_elev, dom_elev=None):
+    """Per HRU, summed stake winter balance over the HRU's own forcing snowfall at each stake's elevation, scaled by
+    (1 + gamma (z_stake - z_hru)) as SUMMA's precipElevGrad does, with gamma (m-1) the least-squares fit over every
+    stake-year; each stake belongs to the HRU of the glacier domain nearest its elevation (dom_elev, a list of
+    (hru index, elevation)), or to the HRU nearest its elevation without them.  snow_at(sel, j, z) is the HRU's snowfall (mm)
+    on the selected hours at elevation z.  Returns the ratios, the stake-years used, the monthly cover and gamma."""
+    rows = list(csv.DictReader(open(path)))
+    fall = {(int(r["Year"]), r["site_name"]): r["fall_date"] for r in rows}
+    stakes, spans = [], []
+    for r in rows:
+        if r["bw"] in ("nan", "") or float(r["elevation"]) < min_elev:
+            continue
+        y = int(r["Year"])
+        f0 = fall.get((y - 1, r["site_name"]), "nan")
+        start = datetime.strptime(f0, "%Y/%m/%d") if f0 != "nan" else datetime(y - 1, 9, 30)
+        end = datetime.strptime(r["spring_date"], "%Y/%m/%d")
+        h0 = (start.replace(tzinfo=timezone.utc) - EPOCH).total_seconds() / 3600.0
+        h1 = (end.replace(tzinfo=timezone.utc) - EPOCH).total_seconds() / 3600.0
+        sel = (hours > h0) & (hours <= h1)
+        if sel.sum() < 0.9 * (h1 - h0):
+            continue
+        ze = float(r["elevation"])
+        j = min(dom_elev, key=lambda d: abs(d[1] - ze))[0] if dom_elev else int(np.argmin(np.abs(z - ze)))
+        stakes.append((ze, 1000.0 * float(r["bw"]), snow_at(sel, j, ze), j))
+        spans.append((start, end))
+    ratio, used, cover = np.ones(len(z)), [[] for _ in z], np.zeros(13)
+    if not stakes:
+        return ratio, used, cover, 0.0
+    for m in range(1, 13):
+        cover[m] = np.mean([any(s <= datetime(y, m, 15) <= e for y in (s.year, e.year)) for s, e in spans])
+    bw = np.array([s[1] for s in stakes]); f = np.array([s[2] for s in stakes]); hj = np.array([s[3] for s in stakes])
+    dz = np.array([s[0] for s in stakes]) - z[hj]
+
+    def fit(g):
+        r = np.ones(len(z))
+        for j in set(hj):
+            k = hj == j
+            r[j] = bw[k].sum() / ((1.0 + g * dz[k]) * f[k]).sum()
+        return r, np.sum((bw - r[hj] * (1.0 + g * dz) * f) ** 2)
+
+    grid = np.arange(0.0, 0.00501, 0.00005)
+    gamma = grid[int(np.argmin([fit(g)[1] for g in grid]))]
+    r, _ = fit(gamma)
+    for j in set(hj):
+        ratio[j] = r[j]
+        used[j] = [s for s in stakes if s[3] == j]
+    return ratio, used, cover, gamma
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("forcing", help="directory of the monthly SUMMA forcing files")
@@ -196,6 +248,9 @@ def main():
     p.add_argument("--stakes", help="Input_<glacier>_Glaciological_Data.csv; scale precipitation to the winter balances")
     p.add_argument("--stake-min-elev", type=float, default=1000.0, help="lowest stake used, m")
     p.add_argument("--stake-window", type=float, default=200.0, help="stakes within this of an HRU's elevation, m")
+    p.add_argument("--glacier-state", help="cold state with DOMelev; stakes then belong to the nearest glacier domain's HRU")
+    p.add_argument("--precip-grad", action="store_true",
+                   help="fit SUMMA's precipElevGrad to the stakes with the stake ratios, each stake on its nearest HRU")
     p.add_argument("--temp-crit-rain", type=float, default=273.16, help="wet-bulb rain/snow threshold, K")
     p.add_argument("--temp-range", type=float, default=2.0, help="wet-bulb range over which the phase changes, K")
     p.add_argument("--wet-threshold", type=float, default=0.1,
@@ -314,14 +369,29 @@ def main():
             ratio["airpres"][j] = p_hru.mean() / frc["airpres"][ok, j].mean()
 
     # precipitation: stake winter balance against the corrected forcing's snowfall
-    used, cover = [[] for _ in z], np.zeros(13)
+    used, cover, gamma = [[] for _ in z], np.zeros(13), 0.0
     if a.stakes:
         cols = np.arange(nh)[None, :]
         snow_frac = snow_fraction(frc["airtemp"] + offset[wet, month[:, None], cols],
                                   frc["spechum"] * q_ratio[wet, month[:, None], cols],
                                   frc["airpres"] * ratio["airpres"][None, :], a.temp_crit_rain, a.temp_range)
         snow = np.maximum(frc["pptrate"], 0.0) * 3600.0 * snow_frac
-        ratio["pptrate"], used, cover = stake_ratios(a.stakes, hours, z, snow, a.stake_min_elev, a.stake_window)
+        if a.precip_grad:
+            def snow_at(sel, j, ze):
+                t = frc["airtemp"][sel, j] + offset[wet[sel, j], month[sel], j] - SUMMA_LAPSE * (ze - z[j])
+                fr = snow_fraction(t, frc["spechum"][sel, j] * q_ratio[wet[sel, j], month[sel], j],
+                                   frc["airpres"][sel, j] * ratio["airpres"][j], a.temp_crit_rain, a.temp_range)
+                return (np.maximum(frc["pptrate"][sel, j], 0.0) * 3600.0 * fr).sum()
+            dom_elev = None
+            if a.glacier_state:
+                with Dataset(a.glacier_state) as d:
+                    ze, typ = np.array(d["DOMelev"][0], float), np.array(d["domType"][0])
+                    ids = np.array(d["hruId"][:]).astype(int)
+                dom_elev = [(list(hru_ids).index(ids[h]), ze[h, k]) for h, k in zip(*np.nonzero(np.isin(typ, (2, 3))))]
+                print("glacier domains (HRU index, elevation):", [(j, round(e)) for j, e in dom_elev])
+            ratio["pptrate"], used, cover, gamma = stake_ratios_graded(a.stakes, hours, z, snow_at, a.stake_min_elev, dom_elev)
+        else:
+            ratio["pptrate"], used, cover = stake_ratios(a.stakes, hours, z, snow, a.stake_min_elev, a.stake_window)
     staked = np.array([bool(u) for u in used])
 
     # precipitation: undercatch-corrected gauge for the HRUs the stakes leave out
@@ -419,6 +489,8 @@ def main():
         w.writerow([])
         w.writerow(["lapse_rate_K_per_km"] + [f"{1000 * lapse[m]:.2f}" for m in range(1, 13)])
         w.writerow(["wet_threshold_mm_per_h", f"{a.wet_threshold}"])
+        if a.precip_grad:
+            w.writerow(["precipElevGrad_per_m", f"{gamma:.5f}"])
         if staked.any():
             w.writerow(["pptrate_stake_snowfall_weight"] + [f"{cover[m]:.3f}" for m in range(1, 13)])
         if gauge:
@@ -433,6 +505,8 @@ def main():
 
     print("lapse rate (K/km) by month:", " ".join(f"{1000 * lapse[m]:.1f}" for m in range(1, 13)))
     print(f"wind x{a.wind_exposure} of the {wz} m station, by month:", " ".join(f"{wind[m]:.2f}" for m in range(1, 13)))
+    if a.precip_grad:
+        print(f"precipElevGrad {gamma:.5f} m-1 ({10000 * gamma:.0f}% per 100 m), fitted with the stake ratios")
     if staked.any():
         print("stake multiplier weight on snowfall, by month:", " ".join(f"{cover[m]:.2f}" for m in range(1, 13)))
     if gauge:

@@ -7,10 +7,12 @@ Each trial is rerun as calibrate.py evaluate reruns it (parameters pinned, spin-
 
     ./rerun_trials.py gulkana_corrected calibration 451 455 411 --jobs 3
     ./rerun_trials.py gulkana_corrected calibration_paper1 384 --set wallErosionRate=0 --label wall0
+    ./rerun_trials.py gulkana_corrected calibration_paper1 384 --pin windExposure=0.77 --forcing <dir> --label f1
 """
 
 import argparse
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor
 
 import netCDF4 as nc4
@@ -51,6 +53,10 @@ def main():
     p.add_argument("--jobs", type=int, default=1)
     p.add_argument("--set", action="append", default=[], metavar="NAME=VALUE",
                    help="override an unsearched parameter's default, e.g. wallErosionRate=0")
+    p.add_argument("--pin", action="append", default=[], metavar="NAME=VALUE",
+                   help="replace a searched parameter's calibrated value, e.g. windExposure=0.77")
+    p.add_argument("--forcing", help="forcing folder to rerun on, default the case's forcing_path.txt")
+    p.add_argument("--extra", action="append", default=[], metavar="VAR", help="another daily-mean output variable")
     p.add_argument("--label", help="appended to each folder, sample_<n>_<label>")
     p.add_argument("--inputs", help="summa_inputs folder to rerun on, default <case>/summa_inputs")
     a = p.parse_args()
@@ -59,6 +65,12 @@ def main():
     with nc4.Dataset(os.path.join(run_dir, a.name, "output", f"{a.case}_calibration.nc")) as d:
         names = [n for n in searched_names(search) if n in d.variables]
         values = {s: {n: float(d[n][s - 1]) for n in names} for s in a.samples}
+    for kv in a.pin:
+        k, v = kv.split("=")
+        if k not in names:
+            raise SystemExit(f"--pin {k}: not searched in {a.name}")
+        for s in a.samples:
+            values[s][k] = float(v)
 
     def rerun(s):
         work = os.path.join(run_dir, f"{a.name}_rerun", f"sample_{s}" + (f"_{a.label}" if a.label else ""))
@@ -66,11 +78,14 @@ def main():
         pin_settings(os.path.abspath(a.inputs) if a.inputs else os.path.join(run_dir, "summa_inputs"), pinned, values[s])
         set_defaults(pinned, dict(kv.split("=") for kv in a.set))
         with open(os.path.join(pinned, "outputControl.txt"), "a") as f:
-            f.writelines(f"{v:<26}| day | mean\n" for v in OUTPUTS)
+            f.writelines(f"{v:<26}| day | mean\n" for v in OUTPUTS + a.extra)
             f.writelines(f"{v:<26}| annual\n" for v in GRIDS)
         config = config_text(a.case, run_dir, pinned, work, "2009-01-01", "2022-12-31", "2016-01-01", "2022-12-31",
                              "dds", 1, 1, temperature=True, search=search, pinned=values[s]).replace("write_timeseries = false", "write_timeseries = true") \
             .replace("write_Qreach = false", "write_Qreach = true")
+        if a.forcing:
+            config = re.sub(r'^forcing_path *= *".*"$', f'forcing_path  = "{os.path.join(os.path.abspath(a.forcing), "")}"',
+                            config, flags=re.M)
         run_driver(work, config, pinned, a.ranks)
         print(f"sample {s}: {work}/output", flush=True)
 

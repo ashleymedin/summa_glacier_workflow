@@ -23,6 +23,7 @@ ice_temp: -5.0
 stations: USGSweatherData
 stakes: observations/storage/mass_balance/Input_Wolverine_Glaciological_Data.csv
 gauge_shield: SA                                # single-Alter shield on the 990 m weighing gauge
+precip_grad: true                               # SUMMA precipElevGrad fitted with the stake ratios
 
 # the bundled stream-temperature test: one reach from the terminus to the gauge (add_stream_hru.py)
 stream_hru:
