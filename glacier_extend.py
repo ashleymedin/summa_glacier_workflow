@@ -10,7 +10,8 @@ attributes/glaciers, the glacier-capable versions of the type and RGI id rasters
 
 Extension, largest glacier first, by --method:
   drag  the terminus (the glacier's highest-accumulation cells) is shifted cell by cell down the flow
-        direction until it has added (glacier cells)^(2/3) cells or meets the basin edge or another glacier
+        direction until it has added (glacier cells)^(2/3) cells or meets the basin edge or another glacier,
+        taking no cell above the terminus surface
   fill  from the terminus, cells downstream and around it are flooded while their height above nearest
         drainage is below the terminus ice thickness (at least 50 m), to the same cell count
 
@@ -71,8 +72,8 @@ def terminus_shapes(grid, fdir, acc, gid, glacier_id):
     return acc_glacier, gridyx, shape0, shape1
 
 
-def drag(grid, fdir, acc, gid, glacier_id, possible):
-    """Cells the glacier may advance into by dragging its terminus downstream."""
+def drag(grid, fdir, acc, gid, glacier_id, possible, surface):
+    """Cells the glacier may advance into by dragging its terminus downstream, none above the terminus surface."""
     acc_glacier, gridyx, shape0, shape1 = terminus_shapes(grid, fdir, acc, gid, glacier_id)
     ext_shape = shape0 - shape1
     y, x = np.where(ext_shape == 1)
@@ -89,6 +90,7 @@ def drag(grid, fdir, acc, gid, glacier_id, possible):
     cellxy = (gridyx[1], gridyx[0])
     possible0 = possible.copy()
     possible0[gid == glacier_id] = 1  # it may also spread beside itself
+    below = surface <= surface[gridyx]  # the terminus piece can reach up the margins
     while added < ncell:
         step = NEXT_CELL[fdir[cellxy[1], cellxy[0]]]
         new_x, new_y = cellxy[0] + step[0], cellxy[1] + step[1]
@@ -100,8 +102,9 @@ def drag(grid, fdir, acc, gid, glacier_id, possible):
             x0, y0 = x[i] + step[0], y[i] + step[1]
             if 0 <= y0 < possible.shape[0] and 0 <= x0 < possible.shape[1]:
                 new_shape[y0, x0] = 1
-        extend[(new_shape == 1) & (possible0 == 1)] = 1  # never onto another glacier or out of the basin
-        added += new_shape[possible == 1].sum()  # only cells not already glacier
+        claim = (new_shape == 1) & (possible0 == 1) & below  # never onto another glacier or out of the basin
+        extend[claim] = 1
+        added += (claim & (possible == 1)).sum()  # only cells not already glacier
         possible[extend == 1] = 0
         ext_shape = new_shape
         cellxy = (new_x, new_y)
@@ -206,7 +209,7 @@ def main():
     glaciers = np.array(glaciers)[np.argsort(np.bincount(gid.ravel())[glaciers])[::-1]] if glaciers else np.array([])
     for g in glaciers:
         if a.method == "drag":
-            extend = drag(grid, fdir, acc, gid, g, possible)
+            extend = drag(grid, fdir, acc, gid, g, possible, dem_surf)
         else:
             extend = fill(grid, dem, dem_surf, fdir, acc, hand, gid, g, possible)
         gid[extend == 1] = g
