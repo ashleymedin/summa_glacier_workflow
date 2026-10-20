@@ -20,7 +20,9 @@ elsewhere.
 
 The pipeline's scripts: `glacier_rasters.py`, `glacier_extend.py`, `glacier_zonal_stats.py`,
 `correct_forcing_to_station.py`, `spechum_ratio_from_campaign.py` and `glacier_cold_state.py`; and
-`acquire_glacier_mass_balance.py` for the mass-balance observations.
+`acquire_glacier_mass_balance.py` for the mass-balance observations. `acquire_balance_profile.py` writes the USGS
+yearly balance profiles as a `glacierMassBalFile`, which `runs/rerun_trials.py --massbal` gives the flow model in
+place of the simulated balance (USGS heights are ellipsoidal, 16.1 m above the model's at Gulkana, 14.0 at Wolverine).
 
 `check_glacier_imagery.py` checks a domain's starting glacier and debris extent against the late-summer
 Landsat or Sentinel-2 scene with the least cloud and snow, writing areas, classes and a figure per date to

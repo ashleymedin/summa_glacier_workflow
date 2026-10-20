@@ -8,11 +8,13 @@ Each trial is rerun as calibrate.py evaluate reruns it (parameters pinned, spin-
     ./rerun_trials.py gulkana_corrected calibration 451 455 411 --jobs 3
     ./rerun_trials.py gulkana_corrected calibration_paper1 384 --set wallErosionRate=0 --label wall0
     ./rerun_trials.py gulkana_corrected calibration_paper1 384 --pin windExposure=0.77 --forcing <dir> --label f1
+    ./rerun_trials.py gulkana_corrected calibration_paper1 384 --massbal gulkana_balance_profile.txt --label usgsmb
 """
 
 import argparse
 import os
 import re
+import shutil
 from concurrent.futures import ThreadPoolExecutor
 
 import netCDF4 as nc4
@@ -59,6 +61,8 @@ def main():
     p.add_argument("--extra", action="append", default=[], metavar="VAR", help="another daily-mean output variable")
     p.add_argument("--label", help="appended to each folder, sample_<n>_<label>")
     p.add_argument("--inputs", help="summa_inputs folder to rerun on, default <case>/summa_inputs")
+    p.add_argument("--massbal", help="glacierMassBalFile of balance profiles the flow model is given instead of the simulated "
+                   "(acquire_balance_profile.py)")
     a = p.parse_args()
     run_dir = os.path.join(HERE, a.case)
     search = search_of(os.path.join(run_dir, a.name))
@@ -83,6 +87,9 @@ def main():
         config = config_text(a.case, run_dir, pinned, work, "2009-01-01", "2022-12-31", "2016-01-01", "2022-12-31",
                              "dds", 1, 1, temperature=True, search=search, pinned=values[s]).replace("write_timeseries = false", "write_timeseries = true") \
             .replace("write_Qreach = false", "write_Qreach = true")
+        if a.massbal:
+            shutil.copy(a.massbal, os.path.join(pinned, "glacierMassBal.txt"))
+            config = re.sub(r'^(noahmp_table *= *".*")$', r'\1\nglacier_massbal  = "glacierMassBal.txt"', config, flags=re.M)
         if a.forcing:
             config = re.sub(r'^forcing_path *= *".*"$', f'forcing_path  = "{os.path.join(os.path.abspath(a.forcing), "")}"',
                             config, flags=re.M)
