@@ -15,7 +15,7 @@ data:
   debris_thickness: ~/Research/USask/Debris_thick
   ice_thickness: ~/Research/USask/Thickness_data
   usgs_outlines: GlacierDEM/USGS_Glacier_Boundaries_shp/USGS_Glacier_Boundaries.shp
-usgs_outline: {glacier: Gulkana Glacier, date: 2007/08/11}  # the survey before the 2008 start, in place of RGI's 2009 outline
+usgs_outline: {glacier: Gulkana Glacier, date: 2007/08/11, dem: GlacierDEM/Deltas_20070811_DEM/Deltas_20070811_DEM.tif}  # the survey before the 2008 start, in place of RGI's 2009 outline
 
 # cold state of the domain itself (cases write their own, from their own first month)
 cold_start: 2008-01                             # first forcing month; its 12 months of raw ERA5 set the start

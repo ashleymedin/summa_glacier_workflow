@@ -14,7 +14,7 @@ data:
   debris_thickness: ~/Research/USask/Debris_thick
   ice_thickness: ~/Research/USask/Thickness_data
   usgs_outlines: GlacierDEM/USGS_Glacier_Boundaries_shp/USGS_Glacier_Boundaries.shp
-usgs_outline: {glacier: Wolverine Glacier, date: 2006/08/08}  # the survey before the 2008 start, in place of RGI's
+usgs_outline: {glacier: Wolverine Glacier, date: 2006/08/08, dem: GlacierDEM/EasternKenai_20060808_DEM/EasternKenai_20060808_DEM.tif}  # the survey before the 2008 start, in place of RGI's
 
 cold_start: 2008-01
 soil_offset: 1.5

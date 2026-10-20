@@ -18,7 +18,8 @@ as its equilibrium line. Debris is their debris cover, never in the accumulation
 at least its highest cells as accumulation. Debris thickness is Rounce et al. (2021), nearest neighbour, with
 thicknesses at or below --min-debris (0.04 m) raised to it (Herreid 2021; Rounce et al. 2018). Glacier
 thickness is Millan et al. (2022), zero off the outlines, filled from the nearest Millan cell where an outline
-reaches past it, and tapered linearly to the outline over margin_taper (150 m), at least 1 m. It also prints each glacier's lateral moraine width, the mean thinnest width of its debris polygons,
+reaches past it, and in the ablation zone no thicker than margin_slope (0.5) times the distance to the outline,
+at least 1 m: Gulkana's 1976 radar (GlaThiDa 319) has 0.42-0.72 m per m within 225 m of the 1979 margin. It also prints each glacier's lateral moraine width, the mean thinnest width of its debris polygons,
 for latMoraineWidth.
 
     ./glacier_rasters.py domains/wolverine.yaml
@@ -267,8 +268,9 @@ def main():
     xs, ys = rasterio.transform.xy(src.transform, rows, cols)
     centres = gpd.GeoSeries(gpd.points_from_xy(xs, ys), crs=crs).to_crs(c["utm_crs"])
     dist = centres.distance(rgi.to_crs(c["utm_crs"]).boundary.union_all()).values  # m to the nearest outline
-    taper = np.clip(dist / c.get("margin_taper", 150.0), 0, 1)
-    ice[rows, cols] = np.maximum(ice[rows, cols] * taper, 1.0)  # every outline cell keeps a metre
+    abl = np.isin(dtype[rows, cols], (CLEAN_ABLATION, DEBRIS_ABLATION))
+    cap = np.maximum(c.get("margin_slope", 0.5) * dist, 1.0)  # every outline cell keeps a metre
+    ice[rows[abl], cols[abl]] = np.minimum(ice[rows[abl], cols[abl]], cap[abl])
 
     surface = dem.astype(np.float64)
     if usgs and usgs.get("dem"):
