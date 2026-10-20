@@ -33,13 +33,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 GLACIER = os.path.dirname(HERE)
 SUMMA_DIR = os.path.abspath(os.environ.get("SUMMA_DIR", os.path.join(GLACIER, "..", "summa")))
 
-# paper1: one value of each soil parameter for every domain, as the paper-1 calibrations ran
+# paper1: one value of each soil parameter for every domain; windExposure is fixed per case, 0.77 on station wind, 1 on ERA5
 PAPER1 = ["k_soil", "theta_sat", "aquiferBaseflowExp", "aquiferBaseflowRate", "qSurfScale", "summerLAI",
           "frozenPrecipMultip", "Fcapil", "tempCritRain", "heightCanopyTop", "heightCanopyBottom",
           "windReductionParam", "vGn_n", "routingGammaScale", "routingGammaShape", "glacierWindFactor",
           "glacierTempReduction", "glacStor_kIce", "glacStor_kSnow", "glacStor_kFirn", "k_snow",
           "mw_exp", "albedoDecayRate", "albedoMax", "k_macropore", "tempRangeTimestep", "thCond_soil",
-          "newSnowDenMin", "windExposure"]
+          "newSnowDenMin"]
 PAPER1_CHAIN = ["theta_res", "critSoilWilting", "critSoilTranspire", "fieldCapacity", "theta_sat"]
 CANOPY_CHAIN = (["heightCanopyBottom", "heightCanopyTop"], 0.25, False)
 
