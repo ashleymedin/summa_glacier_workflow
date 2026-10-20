@@ -100,7 +100,7 @@ def drag(grid, fdir, acc, gid, glacier_id, possible):
             x0, y0 = x[i] + step[0], y[i] + step[1]
             if 0 <= y0 < possible.shape[0] and 0 <= x0 < possible.shape[1]:
                 new_shape[y0, x0] = 1
-        extend[new_shape == 1] = 1
+        extend[(new_shape == 1) & (possible0 == 1)] = 1  # never onto another glacier or out of the basin
         added += new_shape[possible == 1].sum()  # only cells not already glacier
         possible[extend == 1] = 0
         ext_shape = new_shape
