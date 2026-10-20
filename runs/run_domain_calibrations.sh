@@ -1,7 +1,7 @@
 #!/bin/tcsh -f
-# glacier paper on the domain search (upland soil and debris apart, debrisConc searched), on summa 3f91e2b6 (frozen);
+# glacier paper on the domain search (upland soil and debris apart, debrisConc searched), on summa 03a797ed (frozen);
 # starts once run_paper1_rest.sh is done; failed trials stay in <case>/<name>/output/failed_trials and are listed
-setenv SUMMA_DIR /Users/amedin/Research/SummaSundials/summa_frozen_cal_3f91e2b6
+setenv SUMMA_DIR /Users/amedin/Research/SummaSundials/summa_frozen_cal_03a797ed
 set py = ~/miniconda3/envs/glacier/bin/python
 cd /Users/amedin/Research/SummaSundials/summa_glacier_workflow/runs
 while (`ps -ax -o command | grep -c "run_paper1_rest.s[h]"` > 0)
