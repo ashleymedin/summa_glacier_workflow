@@ -10,10 +10,10 @@ min_debris_thickness: 0.04                      # m, thinner mapped debris is ra
 
 # global glacier products, downloaded by hand (README.md)
 data:
-  rgi: ~/Research/USask/RGI_data
-  debris_extent: ~/Research/USask/Debris_data
-  debris_thickness: ~/Research/USask/Debris_thick
-  ice_thickness: ~/Research/USask/Thickness_data
+  rgi: data/external/RGI_data
+  debris_extent: data/external/Debris_data
+  debris_thickness: data/external/Debris_thick
+  ice_thickness: data/external/Thickness_data
   usgs_outlines: GlacierDEM/USGS_Glacier_Boundaries_shp/USGS_Glacier_Boundaries.shp
 usgs_outline: {glacier: Gulkana Glacier, date: 2007/08/11, dem: GlacierDEM/Deltas_20070811_DEM/Deltas_20070811_DEM.tif}  # the survey before the 2008 start, in place of RGI's 2009 outline
 usgs_datum: -16.1                               # m added to USGS heights (WGS84 ellipsoid) to give the model DEM's

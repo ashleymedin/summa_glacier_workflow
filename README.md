@@ -10,6 +10,7 @@ elsewhere.
 | Path | What |
 | --- | --- |
 | `data/domain_{Gulkana,Wolverine}/` | each domain: the SYMFLUENCE upland domain, raw ERA5 2008–2022, the USGS station records, stakes and observations, copied in; and everything the pipeline writes |
+| `data/external/` | RGI 6.0, Herreid and Pellicciotti debris extent, Rounce debris thickness and Millan ice thickness (the domain YAMLs' `data:` paths); not in git |
 | `domains/{gulkana,wolverine}.yaml` | each domain's bounding box, gauge, data paths and setup choices |
 | `setup_glacier_domain.py` | runs the glacier pipeline on a domain, `--steps` to pick some |
 | `cases.yaml`, `build_cases.py` | builds the tests and runs from the domains |
