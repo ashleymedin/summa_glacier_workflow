@@ -1,0 +1,972 @@
+! SUMMA - Structure for Unifying Multiple Modeling Alternatives
+! Copyright (C) 2014-2020 NCAR/RAL; University of Saskatchewan; University of Washington
+!
+! This file is part of SUMMA
+!
+! For more information see: http://www.ral.ucar.edu/projects/summa
+!
+! This program is free software: you can redistribute it and/or modify
+! it under the terms of the GNU General Public License as published by
+! the Free Software Foundation, either version 3 of the License, or
+! (at your option) any later version.
+!
+! This program is distributed in the hope that it will be useful,
+! but WITHOUT ANY WARRANTY; without even the implied warranty of
+! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+! GNU General Public License for more details.
+!
+! You should have received a copy of the GNU General Public License
+! along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+module run_oneGRU_module
+
+! numerical recipes data types
+USE nr_type
+
+! physical constants
+USE multiconst,only: iden_water         ! intrinsic density of water (kg m-3)
+USE multiconst,only: Cp_water           ! specific heat of liquid water (J kg-1 K-1)
+USE multiconst,only: Tfreeze            ! freezing point of pure water (K)
+
+! constants
+USE globalData,only: yes,no             ! .true. and .false.
+USE globalData,only: data_step          ! length of data step (s)
+
+! define data types
+USE data_types,only:&
+                    ! GRU-to-HRU mapping
+                    gru2hru_map,       & ! HRU info
+                    ! no spatial dimension
+                    var_i,             & ! x%var(:)            (i4b)
+                    var_d,             & ! x%var(:)            (rkind)
+                    var_ilength,       & ! x%var(:)%dat        (i4b)
+                    var_dlength,       & ! x%var(:)%dat        (rkind)
+                    ! no variable dimension
+                    hru_i,             & ! x%hru(:)            (i4b)
+                    hru_dom_d,         & ! x%hru(:)%dom(:)     (rkind)
+                    ! hru dimension
+                    hru_int,           & ! x%hru(:)%var(:)     (i4b)
+                    hru_int8,          & ! x%hru(:)%var(:)     (i8b)
+                    hru_double,        & ! x%hru(:)%var(:)     (rkind)
+                    hru_intVec,        & ! x%hru(:)%var(:)%dat (i4b)
+                    !hru+dom dimension
+                    hru_dom_intVec,    & ! x%hru(:)%dom(:)%var(:)%dat (i4b)
+                    hru_dom_double,    & ! x%hru(:)%dom(:)%var(:)     (rkind)
+                    hru_dom_doubleVec, & ! x%hru(:)%dom(:)%var(:)%dat (rkind)
+                    ! hru+dom+z dimension
+                    hru_dom_z_vLookup, & ! x%hru(:)%z(:)%var(:)%lookup(:)
+                    ! grid dimension
+                    grid_double          ! x%grid(:)%var(:)%dat2(:,:) (dp)
+
+
+! provide access to the named variables that describe elements of parameter structures
+USE var_lookup,only:iLookTYPE          ! look-up values for classification of veg, soils etc.
+USE var_lookup,only:iLookID            ! look-up values for hru and gru IDs
+USE var_lookup,only:iLookATTR          ! look-up values for local attributes
+USE var_lookup,only:iLookFLUX          ! look-up values for local column model fluxes
+USE var_lookup,only:iLookDIAG          ! look-up values model diagnostic variables
+USE var_lookup,only:iLookBPAR          ! look-up values for basin-average model parameters
+USE var_lookup,only:iLookBVAR          ! look-up values for basin-average model variables
+USE var_lookup,only:iLookTIME          ! look-up values for model time data
+USE var_lookup,only:iLookPROG          ! look-up values for model prognostic (state) variables
+USE var_lookup,only:iLookINDEX         ! look-up values for model index variables
+USE var_lookup,only:iLookPARAM         ! look-up values for model parameters
+
+! provide access to model decisions
+USE globalData,only:model_decisions    ! model decision structure
+USE var_lookup,only:iLookDECISIONS     ! look-up values for model decisions
+
+! access missing values
+USE globalData,only:realMissing        ! missing real number
+
+! access domain types
+USE globalData,only:upland             ! horizontal domain type for upland areas
+USE globalData,only:soilLateralFlow    ! flag: soil layers drain laterally
+USE globalData,only:glacCln1           ! first horizontal domain type for glacier clean areas
+USE globalData,only:glacCln2           ! second horizontal domain type for glacier clean areas
+USE globalData,only:glacDbr            ! horizontal domain type for glacier debris areas
+USE globalData,only:wetland            ! horizontal domain type for wetland areas
+USE globalData,only:mfAquiferBaseflow  ! MODFLOW 6 coupler: per-HRU aquifer baseflow (m s-1), indexed by hru_ix
+USE globalData,only:mfSurfaceDischarge ! MODFLOW 6 coupler: per-HRU groundwater discharge at land surface (m s-1), indexed by hru_ix
+USE globalData,only:mfAquiferTranspire ! MODFLOW 6 coupler: per-HRU groundwater ET actually taken by MODFLOW (m s-1), indexed by hru_ix
+USE globalData,only:stream             ! horizontal domain type for stream reaches
+
+! look-up values for the choice of groundwater parameterization
+USE mDecisions_module,only:       &
+ qbaseTopmodel,                   & ! TOPMODEL-ish baseflow parameterization
+ modflowCpl,                      & ! MODFLOW coupled groundwater parameterization
+ modLatflow,                      & ! as modflowCpl, plus lateral flow in the soil above
+ bigBucket,                       & ! a big bucket (lumped aquifer model)
+ noExplicit                         ! no explicit groundwater parameterization
+
+! look-up values for the choice of method for the spatial representation of groundwater
+USE mDecisions_module,only:       &
+ localColumn,                     & ! separate groundwater representation in each local soil column
+ singleBasin                        ! single groundwater store over the entire basin
+
+! look-up values for the deep thermal state below the hydrologically active soil column
+USE mDecisions_module,only:       &
+ aquiferTempState,                & ! a well-mixed temperature carried by the big-bucket aquifer store
+ airTempGW                          ! groundwater temperature scaled from the air temperature (Wade et al., 2024)
+
+ implicit none
+private
+public::run_oneGRU
+
+! cached downHRUindex cascade order for one GRU
+type :: cascade_order
+  integer(i8b)              :: gru_id = 0
+  integer(i4b), allocatable :: downIdx(:)      ! index of the downslope HRU (0 = GRU outlet)
+  integer(i4b), allocatable :: hruOrder(:)     ! HRU indices upslope before downslope
+end type cascade_order
+type(cascade_order),allocatable,save :: cascade(:)
+contains
+
+! ************************************************************************************************
+! public subroutine run_oneGRU: simulation for a single GRU
+! ************************************************************************************************
+subroutine run_oneGRU(&
+                      ! model control
+                      gruInfo,            & ! intent(inout): HRU information for given GRU (# HRUs, #layers)
+                      dt_init,            & ! intent(inout): used to initialize the length of the sub-step for each HRU
+                      ixComputeVegFlux,   & ! intent(inout): flag to indicate if we are computing fluxes over vegetation (false=no, true=yes)
+                      ! data structures (input)
+                      timeVec,            & ! intent(in):    model time data
+                      typeHRU,            & ! intent(in):    local classification of soil veg etc. for each HRU
+                      idHRU,              & ! intent(in):    local values of hru and gru IDs
+                      attrHRU,            & ! intent(in):    local attributes for each HRU
+                      lookupHRU,          & ! intent(in):    local lookup tables for each HRU
+                      ! data structures (input-output)
+                      mparHRU,            & ! intent(in):    local model parameters
+                      bparData,           & ! intent(in):    basin model parameters
+                      indxHRU,            & ! intent(inout): model indices
+                      forcHRU,            & ! intent(inout): model forcing data
+                      progHRU,            & ! intent(inout): prognostic variables for a local HRU
+                      diagHRU,            & ! intent(inout): diagnostic variables for a local HRU
+                      fluxHRU,            & ! intent(inout): model fluxes for a local HRU
+                      bvarData,           & ! intent(inout): basin-average variables
+                      gridData,           & ! intent(inout): basin glacier grids, may be null
+                      ! error control
+                      elapsedUpdateArea,  & ! intent(inout): elapsed time for updating glacier and wetland area for all GRUs (s)
+                      err,message)          ! intent(out):   error control
+  ! ----- define downstream subroutines -----------------------------------------------------------------------------------
+  USE run_oneHRU_module,only:run_oneHRU                       ! module to run for one HRU
+  USE qTimeDelay_module,only:qGlacier                         ! route water through glacier (time lapse)
+  USE qTimeDelay_module,only:qOverland                        ! route water through an "unresolved" river network
+  USE glacAreaChange_module,only:time_updateGlacArea          ! check if glacier area needs to be updated
+  USE glacAreaChange_module,only:glacAreaChange               ! change glacier area with ice flow model
+  USE glacAreaChange_module,only:updateGlacDomain             ! change glacier domain area, elevation, layering
+  USE glacAreaChange_module,only:startGlacDomain              ! start a glacier domain that has just gained area
+  USE mDecisions_module,only:enthalpyForm                     ! enthalpy with soil temperature-enthalpy lookup tables
+  USE time_utils_module,only:elapsedSec                       ! calculate the elapsed time
+  ! ----- define dummy variables ------------------------------------------------------------------------------------------
+  implicit none
+  ! model control
+  type(gru2hru_map)       , intent(inout) :: gruInfo              ! HRU information for given GRU (# HRUs, #layers)
+  type(hru_dom_d)         , intent(inout) :: dt_init              ! used to initialize the length of the sub-step for each domain
+  type(hru_i)             , intent(inout) :: ixComputeVegFlux     ! flag to indicate if we are computing fluxes over vegetation (false=no, true=yes)
+  ! data structures (input)
+  type(var_i)             , intent(in)    :: timeVec              ! x%var(:)                               -- model time data
+  type(hru_int)           , intent(in)    :: typeHRU              ! x%hru(:)%var(:)                        -- local classification of soil veg etc. for each HRU
+  type(hru_int8)          , intent(in)    :: idHRU                ! x%hru(:)%var(:)                        -- local values of hru and gru IDs
+  type(hru_double)        , intent(in)    :: attrHRU              ! x%hru(:)%var(:)                        -- local attributes for each HRU
+  type(hru_dom_z_vLookup) , intent(in)    :: lookupHRU            ! x%hru(:)%dom(:)%z(:)%var(:)%lookup(:) -- lookup values for each HRU
+  ! data structures (input-output)
+  type(hru_dom_doubleVec) , intent(in)    :: mparHRU              ! x%hru(:)%dom(:)%var(:)%dat   -- local (HRU) model parameters
+  type(var_d)             , intent(in)    :: bparData             ! x%var                        -- basin-average parameters
+  type(hru_dom_intVec)    , intent(inout) :: indxHRU              ! x%hru(:)%dom(:)%var(:)%dat   -- model indices
+  type(hru_double)        , intent(inout) :: forcHRU              ! x%hru(:)%dom(:)%var(:)       -- model forcing data
+  type(hru_dom_doubleVec) , intent(inout) :: progHRU              ! x%hru(:)%dom(:)%var(:)%dat   -- model prognostic (state) variables
+  type(hru_dom_doubleVec) , intent(inout) :: diagHRU              ! x%hru(:)%dom(:)%var(:)%dat   -- model diagnostic variables
+  type(hru_dom_doubleVec) , intent(inout) :: fluxHRU              ! x%hru(:)%dom(:)%var(:)%dat   -- model fluxes
+  type(var_dlength)       , intent(inout) :: bvarData             ! x%var(:)%dat                 -- basin-average variables
+  type(grid_double)       , intent(inout) :: gridData             ! x%grid(:)%var(:)%dat2(:,:)   -- basin grids, currently used for glaciers only
+  ! error control
+  real(rkind)             , intent(inout) :: elapsedUpdateArea    ! time for updating glacier and wetland area for all GRUs (s)
+  integer(i4b)            , intent(out)   :: err                  ! error code
+  character(*)            , intent(out)   :: message              ! error message
+  ! ----- define local variables ------------------------------------------------------------------------------------------
+  character(len=512)                  :: cmessage                       ! error message
+  integer(i4b)                        :: iHRU,jHRU,kHRU                 ! HRU indices
+  integer(i4b)                        :: iDOM                           ! domain index
+  integer(i4b)                        :: iUpland                        ! index of the upland domain in an HRU
+  integer(i4b)                        :: iSeq                           ! position in the cascade processing order
+  integer(i4b)                        :: nOrder                         ! number of HRUs placed in the processing order
+  integer(i4b), allocatable           :: downIdx(:)                     ! index of the downslope HRU (0 = GRU outlet)
+  integer(i4b), allocatable           :: inDegree(:)                    ! number of HRUs draining into a given HRU
+  integer(i4b), allocatable           :: hruOrder(:)                    ! HRU indices in cascade order, upslope before downslope
+  integer(i4b)                        :: nDangling                      ! HRUs whose downHRUindex names no HRU in this GRU
+  integer(i4b)                        :: nInverted                      ! HRUs draining to a higher HRU
+  integer(i4b)                        :: nOutlet                        ! HRUs with downHRUindex = 0
+  integer(i4b)                        :: ixDangling                     ! first dangling HRU, for the message
+  integer(i4b)                        :: ixInverted                     ! first inverted HRU, for the message
+  logical(lgt)                        :: found                          ! the downslope HRU was found in this GRU
+  integer(i4b)                        :: iCache                         ! loop through the cached cascade orders
+  integer(i4b)                        :: ixCache                        ! cached cascade order for this GRU (0 = not yet built)
+  type(cascade_order), allocatable    :: cascadeTmp(:)                  ! for growing the cache
+  logical(lgt)                        :: runHRU                         ! flag to run the HRU (it has area)
+  logical(lgt)                        :: computeVegFluxFlag             ! flag to indicate if we are computing fluxes over vegetation (.false. means veg is buried with snow)
+  real(rkind)                         :: fracDOM                        ! fractional area of a given HRU domain in GRU (-)
+  real(rkind)                         :: ablMelt                        ! melt from the ablation part of a glacier domain (m s-1)
+  real(rkind)                         :: glacIceMelt                    ! glacier ice reservoir melt (m s-1)
+  real(rkind)                         :: glacSnowMelt                   ! glacier snow reservoir melt (m s-1)
+  real(rkind)                         :: glacFirnMelt                   ! glacier firn reservoir melt (m s-1)
+  ! stream temperature
+  integer(i4b)                        :: ixStreamHRU                    ! index of the HRU holding the stream domain (0 = none)
+  real(rkind)                         :: glacSoilKeep                   ! fraction of the routed glacier runoff that goes straight to the channel (-)
+  integer(i4b)                        :: ixSoilHRU                      ! the lowest HRU with upland soil, where diverted glacier runoff enters (0 = none)
+  integer(i4b)                        :: nSoilHyd                       ! number of soil layers that hold water in that HRU
+  real(rkind), allocatable            :: weight(:)                      ! share of the diverted glacier runoff entering each soil layer (-)
+  real(rkind)                         :: basinNrgFlux                   ! instantaneous energy flux carried by the runoff handed to the channel (W m-2)
+  real(rkind)                         :: routedNrgFlux                  ! routed energy flux carried by the runoff (W m-2)
+  real(rkind)                         :: notUsedNrgFlux                 ! instantaneous energy flux returned by the routing (W m-2)
+  real(rkind)                         :: tempTop                        ! temperature of the water leaving the surface of a domain (K)
+  real(rkind)                         :: tempBot                        ! temperature of the water draining from the bottom of a domain (K)
+  real(rkind)                         :: tempGW                         ! temperature of the groundwater reaching the channel (K)
+  ! glacier area update
+  logical(lgt)                        :: updateGlacArea                 ! flag to update glacier area this time step
+  logical(lgt)                        :: updateLakeArea                 ! flag to update wetland area this time step
+  logical(lgt)                        :: checkedUpdateTime              ! flag that the glacier update time has been checked for this GRU
+  logical(lgt)                        :: hasGlacier                     ! flag that the current HRU has a glacier domain
+  real(rkind)                         :: sec_since_last_update          ! seconds since last glacier area update
+  integer(i4b)                        :: nglacDOM,iglacDOM              ! number of glacier domains in the GRU, and index
+  integer(i4b)                        :: nglacHRU,iglacHRU              ! number of HRUs with a glacier domain in the GRU, and index
+  integer(i4b), allocatable           :: nclean(:)                      ! number of clean glacier domains in each glacier HRU
+  integer(i4b), allocatable           :: ndebris(:)                     ! number of debris glacier domains in each glacier HRU
+  integer(i8b), allocatable           :: glac_hru(:)                    ! HRU index of each glacier domain
+  real(rkind), allocatable            :: glac_area(:)                   ! area of each glacier domain (m2)
+  real(rkind), allocatable            :: glac_elev(:)                   ! elevation of each glacier domain (m)
+  real(rkind), allocatable            :: glac_tan_slope(:)              ! tan local ground surface slope of each glacier domain (m/m)
+  real(rkind), allocatable            :: glac_aspect(:)                 ! azimuth in degrees East of North of each glacier domain (degrees)
+  real(rkind), allocatable            :: glac_contourLength(:)          ! length of contour at downslope edge of each glacier domain (m)
+  real(rkind), allocatable            :: glac_debris_thick(:)           ! debris thickness of each glacier domain (m)
+  real(rkind), allocatable            :: glac_ablFrac(:)                ! ablation fraction of each glacier domain (-)
+  real(rkind), allocatable            :: massChange(:)                  ! glacier water equivalent change of each glacier domain since the last update (kg m-2)
+  real(rkind), allocatable            :: iden_soil_mean(:)              ! depth-weighted mean debris density of each glacier domain (kg m-3)
+  real(rkind), allocatable            :: theta_sat_mean(:)              ! depth-weighted mean debris porosity of each glacier domain (-)
+  real(rkind)                         :: soil_thick                     ! debris (soil) thickness of a debris domain (m)
+  logical(lgt), allocatable           :: newDOM(:,:)                    ! glacier domain that has just gained area, per HRU and domain
+  integer(i4b)                        :: jDOM                           ! domain index
+  integer(i4b)                        :: dnrHRU,dnrDOM                  ! HRU and domain of the donor to a new glacier domain
+  integer(i4b)                        :: dbrHRU,dbrDOM                  ! HRU and domain of the debris donor to a new debris domain
+  real(rkind)                         :: elevDiff,dbrDiff               ! elevation difference to the closest donor and debris donor (m)
+  real(rkind)                         :: dElev                          ! elevation difference to a candidate donor (m)
+  real(rkind)                         :: remaining_area                 ! HRU area not taken by glacier or wetland domains (m2)
+  real(rkind)                         :: remaining_elev                 ! area-weighted elevation of the remaining area (m m2)
+  real(rkind)                         :: remaining_tan_slope            ! area-weighted tan slope of the remaining area (m2)
+  real(rkind)                         :: remaining_aspect_sin           ! area-weighted sine of the aspect of the remaining area (m2)
+  real(rkind)                         :: remaining_aspect_cos           ! area-weighted cosine of the aspect of the remaining area (m2)
+  integer(i4b),dimension(8)           :: startUpdateArea,endUpdateArea  ! time at start and end of updating glacier and wetland area
+  real(rkind),parameter               :: deg2rad=PI_D/180._rkind        ! convert degrees to radians
+  real(rkind),parameter               :: rad2deg=180._rkind/PI_D        ! convert radians to degrees
+  real(rkind),parameter               :: aspect_tol=1.e-12_rkind        ! tolerance for undefined circular mean
+  ! ----------------------------------------------------------------------------------------------------------------------------------------------
+  ! initialize error control
+  err=0; write(message, '(A21,I0,A10,I0,A2)' ) 'run_oneGRU (gru_nc = ',gruInfo%gru_nc,', gruId = ',gruInfo%gru_id,')/'
+
+  if(model_decisions(iLookDECISIONS%spatial_gw)%iDecision == singleBasin)then
+    message=trim(message)//'multi_driver/bigBucket groundwater code not transferred from old code base yet'
+    err=20; return
+  endif
+
+  ! ----- basin initialization --------------------------------------------------------------------------------------------
+  associate(bvar => bvarData%var)
+    ! runoff variables
+    bvar(iLookBVAR%basin__SurfaceRunoff)%dat(1)    = 0._rkind ! surface runoff (m s-1)
+    bvar(iLookBVAR%basin__SoilDrainage)%dat(1)     = 0._rkind ! soil drainage (m s-1)
+    bvar(iLookBVAR%basin__ColumnOutflow)%dat(1)    = 0._rkind ! outflow from all "outlet" HRUs (those with no downstream HRU)
+    bvar(iLookBVAR%basin__TotalRunoff)%dat(1)      = 0._rkind ! total runoff to the channel from all active components (m s-1)
+    ! baseflow variables
+    bvar(iLookBVAR%basin__AquiferRecharge)%dat(1)  = 0._rkind ! recharge to the aquifer (m s-1)
+    bvar(iLookBVAR%basin__AquiferBaseflow)%dat(1)  = 0._rkind ! baseflow from the aquifer (m s-1)
+    bvar(iLookBVAR%basin__AquiferTranspire)%dat(1) = 0._rkind ! transpiration loss from the aquifer (m s-1)
+    ! storage change and glacier variables
+    bvar(iLookBVAR%basin__StorageChange)%dat(1)    = 0._rkind ! change in total basin storage (kg m-2 s-1)
+    bvar(iLookBVAR%basin__GlacierArea)%dat(1)      = 0._rkind ! glacier area (m2)
+    bvar(iLookBVAR%basin__GlacierMassChange)%dat(1)= 0._rkind ! glacier mass change per unit glacier area (kg m-2 s-1)
+  end associate
+  glacIceMelt    = 0._rkind
+  glacSnowMelt   = 0._rkind
+  glacFirnMelt   = 0._rkind
+  updateGlacArea = .false.
+  updateLakeArea = .false.
+  ixStreamHRU    = 0
+  basinNrgFlux   = 0._rkind
+
+  ! ----- initialize the column inflows, find the stream and glacier domains, and check if the glacier area is updated ------
+  nglacDOM = 0
+  nglacHRU = 0
+  checkedUpdateTime = .false.
+  do iHRU=1,gruInfo%hruCount
+    hasGlacier = .false.
+    do iDOM = 1, gruInfo%hruInfo(iHRU)%domCount
+      associate(typeDOM => gruInfo%hruInfo(iHRU)%domInfo(iDOM)%dom_type, &
+                DOMarea => progHRU%hru(iHRU)%dom(iDOM)%var(iLookPROG%DOMarea)%dat(1))
+        if(typeDOM==wetland)then; err=20; message=trim(message)//'ERROR:  wetland fluxes not yet implemented'; return; endif
+        if(typeDOM==stream .and. DOMarea>0._rkind) ixStreamHRU = iHRU ! the reach water column, run in the network pass (at most one per GRU)
+        fluxHRU%hru(iHRU)%dom(iDOM)%var(iLookFLUX%mLayerColumnInflow)%dat(:) = 0._rkind
+        fluxHRU%hru(iHRU)%dom(iDOM)%var(iLookFLUX%mLayerColumnInflowNrg)%dat(:) = 0._rkind
+        if(typeDOM/=glacCln1 .and. typeDOM/=glacCln2 .and. typeDOM/=glacDbr) cycle
+        nglacDOM = nglacDOM + 1
+        if(.not.hasGlacier) nglacHRU = nglacHRU + 1
+        hasGlacier = .true.
+        ! the glacier area is updated on the first of the lowest mass month of the year (October in the Northern Hemisphere,
+        !  April in the Southern, January at low latitudes); check once per GRU, from the first glacier domain with area
+        if(DOMarea>0._rkind .and. .not.checkedUpdateTime)then
+          call time_updateGlacArea(&
+                      ! input
+                      timeVec%var(iLookTIME%iyyy),timeVec%var(iLookTIME%im),timeVec%var(iLookTIME%id), timeVec%var(iLookTIME%ih),timeVec%var(iLookTIME%imin), & ! intent(in): current model time
+                      attrHRU%hru(iHRU)%var(iLookATTR%latitude),        & ! intent(in): latitude of HRU (degrees)
+                      ! output
+                      bvarData%var(iLookBVAR%updateJulDay)%dat(1),      & ! intent(inout): julian day of last glacier area update (fraction of day)
+                      bvarData%var(iLookBVAR%updateJulDayNext)%dat(1),  & ! intent(inout): julian day of next glacier area update (fraction of day)
+                      updateGlacArea,                                   & ! intent(inout): flag to update glacier area this time step
+                      sec_since_last_update,                            & ! intent(out):   seconds since last glacier area update
+                      ! error control
+                      err, cmessage)                                       ! intent(out):   error control
+          if(err/=0)then; err=30; message=trim(message)//trim(cmessage); return; endif
+          checkedUpdateTime = .true.
+        endif
+      end associate
+    enddo ! (looping through domains)
+  enddo ! (looping through HRUs)
+
+  ! glacier runoff diverted last step enters the upland soil of the lowest HRU, at the freezing point, spread by layer depth
+  glacSoilKeep = 1._rkind
+  if(bparData%var(iLookBPAR%glacSoilFrac) > 0._rkind)then
+    if(.not.soilLateralFlow)then
+      err=20; message=trim(message)//'glacSoilFrac > 0 needs soil lateral flow to carry the water on (set "soilLatflw" to "latflow")'; return
+    endif
+    glacSoilKeep = 1._rkind - bparData%var(iLookBPAR%glacSoilFrac)
+    ixSoilHRU = 0
+    do iHRU=1,gruInfo%hruCount
+      if(iHRU==ixStreamHRU .or. gruInfo%hruInfo(iHRU)%domInfo(1)%dom_type/=upland) cycle
+      if(progHRU%hru(iHRU)%dom(1)%var(iLookPROG%DOMarea)%dat(1) <= 0._rkind) cycle
+      if(ixSoilHRU==0)then; ixSoilHRU = iHRU; cycle; endif
+      if(attrHRU%hru(iHRU)%var(iLookATTR%elevation) < attrHRU%hru(ixSoilHRU)%var(iLookATTR%elevation)) ixSoilHRU = iHRU
+    enddo
+    if(ixSoilHRU > 0)then
+      associate(domInfo => gruInfo%hruInfo(ixSoilHRU)%domInfo(1), &
+                depth   => progHRU%hru(ixSoilHRU)%dom(1)%var(iLookPROG%mLayerDepth)%dat, &
+                height  => progHRU%hru(ixSoilHRU)%dom(1)%var(iLookPROG%mLayerHeight)%dat, &
+                inflow  => fluxHRU%hru(ixSoilHRU)%dom(1)%var(iLookFLUX%mLayerColumnInflow)%dat)
+        nSoilHyd = domInfo%nSoil - domInfo%nBedrock
+        allocate(weight(nSoilHyd))
+        ! it soaks in from the surface: the layers whose midpoints lie in the top metre, by thickness
+        weight(1:nSoilHyd) = merge(depth(domInfo%nSnow+domInfo%nLake+1:domInfo%nSnow+domInfo%nLake+nSoilHyd), 0._rkind, &
+                                   height(domInfo%nSnow+domInfo%nLake+1:domInfo%nSnow+domInfo%nLake+nSoilHyd) < 1._rkind)
+        if(sum(weight(1:nSoilHyd)) <= 0._rkind) weight(1) = 1._rkind
+        inflow(1:nSoilHyd) = inflow(1:nSoilHyd) + bparData%var(iLookBPAR%glacSoilFrac)*max(bvarData%var(iLookBVAR%glacierRoutedRunoff)%dat(1), 0._rkind) &
+                             *bvarData%var(iLookBVAR%basin__totalArea)%dat(1)*weight(1:nSoilHyd)/sum(weight(1:nSoilHyd))
+        deallocate(weight)
+      end associate
+    else
+      glacSoilKeep = 1._rkind ! no upland soil to take it
+    endif
+  endif
+
+  if(updateGlacArea)then
+    allocate(glac_hru(nglacDOM),glac_area(nglacDOM),glac_elev(nglacDOM),glac_tan_slope(nglacDOM),glac_aspect(nglacDOM), &
+             glac_contourLength(nglacDOM),glac_debris_thick(nglacDOM),glac_ablFrac(nglacDOM),massChange(nglacDOM), &
+             iden_soil_mean(nglacDOM),theta_sat_mean(nglacDOM),nclean(nglacHRU),ndebris(nglacHRU))
+  endif
+
+  ! ----- order the HRUs so that an HRU is run after everything that drains into it -----------------------------------------
+  ! the topology is static and the match below is O(hruCount^2), so build the order once per GRU
+  allocate(downIdx(gruInfo%hruCount), inDegree(gruInfo%hruCount), hruOrder(gruInfo%hruCount), stat=err)
+  if(err/=0)then; message=trim(message)//'problem allocating cascade ordering arrays'; return; endif
+
+  if(.not.allocated(cascade)) allocate(cascade(0))
+  ixCache = 0
+  do iCache=1,size(cascade)
+    if(cascade(iCache)%gru_id == gruInfo%gru_id .and. size(cascade(iCache)%downIdx) == gruInfo%hruCount)then
+      ixCache = iCache; exit
+    endif
+  enddo
+
+  if(ixCache > 0)then
+    downIdx  = cascade(ixCache)%downIdx
+    hruOrder = cascade(ixCache)%hruOrder
+  else
+  downIdx(:) = 0; inDegree(:) = 0
+  nDangling = 0; nInverted = 0; nOutlet = 0; ixDangling = 0; ixInverted = 0
+  do iHRU=1,gruInfo%hruCount
+    found = .false.
+    dsHRU: do jHRU=1,gruInfo%hruCount
+      if(typeHRU%hru(iHRU)%var(iLookTYPE%downHRUindex) == idHRU%hru(jHRU)%var(iLookID%hruId))then
+        found = .true.
+        if(jHRU==ixStreamHRU) exit dsHRU      ! draining to the stream HRU is draining to the channel: treat as a GRU outlet
+        downIdx(iHRU) = jHRU                  ! first match wins, as before
+        inDegree(jHRU) = inDegree(jHRU) + 1
+        ! draining uphill is a sign the topology was built against the wrong elevations
+        if(attrHRU%hru(jHRU)%var(iLookATTR%elevation) > attrHRU%hru(iHRU)%var(iLookATTR%elevation))then
+          nInverted = nInverted + 1
+          if(ixInverted==0) ixInverted = iHRU
+        endif
+        exit dsHRU
+      endif
+    enddo dsHRU
+    ! a downHRUindex matching no HRU here becomes an outlet silently, so count it apart from a deliberate 0
+    if(.not.found)then
+      if(typeHRU%hru(iHRU)%var(iLookTYPE%downHRUindex) == 0)then
+        nOutlet = nOutlet + 1
+      else
+        nDangling = nDangling + 1
+        if(ixDangling==0) ixDangling = iHRU
+      endif
+    endif
+  enddo
+
+  if(nDangling > 0)then
+    write(*,'(a,i0,a,i0,a,i0,a,i0,a)') 'run_oneGRU: WARNING - GRU ', gruInfo%gru_id, ': ', nDangling, &
+      ' of ', gruInfo%hruCount, ' HRUs have a downHRUindex naming no HRU in this GRU (first is local HRU ', &
+      ixDangling, '); they are being treated as GRU outlets'
+  endif
+  if(nInverted > 0)then
+    write(*,'(a,i0,a,i0,a,i0,a)') 'run_oneGRU: WARNING - GRU ', gruInfo%gru_id, ': ', nInverted, &
+      ' HRUs drain to a HIGHER HRU (first is local HRU ', ixInverted, &
+      '); check downHRUindex and elevation in the attributes file'
+  endif
+  if(nOutlet + nDangling > 1)then
+    write(*,'(a,i0,a,i0,a)') 'run_oneGRU: NOTE - GRU ', gruInfo%gru_id, ' has ', nOutlet + nDangling, &
+      ' HRUs draining out of the GRU rather than to a downslope HRU'
+  endif
+  ! repeatedly take an HRU nothing drains into, then remove its own contribution
+  nOrder = 0
+  do iHRU=1,gruInfo%hruCount
+    if(inDegree(iHRU)==0)then; nOrder = nOrder + 1; hruOrder(nOrder) = iHRU; endif
+  enddo
+  iSeq = 0
+  do while(iSeq < nOrder)
+    iSeq = iSeq + 1
+    kHRU = downIdx(hruOrder(iSeq))
+    if(kHRU > 0)then
+      inDegree(kHRU) = inDegree(kHRU) - 1
+      if(inDegree(kHRU)==0)then; nOrder = nOrder + 1; hruOrder(nOrder) = kHRU; endif
+    endif
+  end do
+  if(nOrder /= gruInfo%hruCount)then
+    err=20; message=trim(message)//'the downHRUindex cascade network contains a loop, so the HRUs cannot be ordered upslope to &
+      &downslope (check downHRUindex in the attributes file)'; return
+  endif
+
+  ! keep it for every later step
+  allocate(cascadeTmp(size(cascade)+1), stat=err)
+  if(err/=0)then; message=trim(message)//'problem growing the cascade order cache'; return; endif
+  ixCache = size(cascade) + 1
+  cascadeTmp(1:size(cascade)) = cascade
+  call move_alloc(cascadeTmp, cascade)
+  cascade(ixCache)%gru_id   = gruInfo%gru_id
+  cascade(ixCache)%downIdx  = downIdx
+  cascade(ixCache)%hruOrder = hruOrder
+  end if  ! (cascade order not yet cached for this GRU)
+
+  ! ********** RUN FOR ONE HRU ********************************************************************************************
+  do iSeq=1,gruInfo%hruCount
+    iHRU = hruOrder(iSeq)
+
+    ! skip HRUs with no area
+    runHRU = .false.
+    do iDOM = 1, gruInfo%hruInfo(iHRU)%domCount
+      if(progHRU%hru(iHRU)%dom(iDOM)%var(iLookPROG%DOMarea)%dat(1)>0._rkind) runHRU = .true.
+    enddo
+    if(.not.runHRU) cycle
+
+    ! ----- run the model --------------------------------------------------------------------------------------------------
+    computeVegFluxFlag = (ixComputeVegFlux%hru(iHRU) == yes)
+    call run_oneHRU(&
+                   ! model control
+                   gruInfo%hruInfo(iHRU)%hru_nc,   & ! intent(in):    hru count Id
+                   gruInfo%hruInfo(iHRU)%hru_id,   & ! intent(in):    hruId
+                   dt_init%hru(iHRU),              & ! intent(inout): initial time step
+                   computeVegFluxFlag,             & ! intent(inout): flag to indicate if we are computing fluxes over vegetation (false=no, true=yes)
+                   gruInfo%hruInfo(iHRU)%domCount, & ! intent(in):    total number of domains
+                   gruInfo%hruInfo(iHRU)%domInfo,  & ! intent(inout): domain type and layer information
+                   ! data structures (input)
+                   typeHRU%hru(iHRU),              & ! intent(in):    local classification of soil veg etc. for each HRU
+                   attrHRU%hru(iHRU),              & ! intent(in):    local attributes for each HRU
+                   lookupHRU%hru(iHRU),            & ! intent(in):    local lookup tables for each HRU
+                   bvarData,                       & ! intent(in):    basin-average model variables
+                   ! data structures (input-output)
+                   mparHRU%hru(iHRU),              & ! intent(in):    model parameters
+                   indxHRU%hru(iHRU),              & ! intent(inout): model indices
+                   forcHRU%hru(iHRU),              & ! intent(inout): model forcing data
+                   progHRU%hru(iHRU),              & ! intent(inout): model prognostic variables for a local HRU
+                   diagHRU%hru(iHRU),              & ! intent(inout): model diagnostic variables for a local HRU
+                   fluxHRU%hru(iHRU),              & ! intent(inout): model fluxes for a local HRU
+                   ! error control
+                   err,cmessage)                      ! intent(out):   error control
+    if(err/=0)then; err=20; message=trim(message)//trim(cmessage); return; endif
+    ixComputeVegFlux%hru(iHRU) = merge(yes, no, computeVegFluxFlag)
+
+    ! ----- lateral flow to the downslope HRU, and area-weighted basin (GRU) fluxes ------------------------------------------
+    kHRU = downIdx(iHRU) ! the downslope HRU, found once above with the cascade ordering
+    do iDOM = 1, gruInfo%hruInfo(iHRU)%domCount
+      associate(typeDOM    => gruInfo%hruInfo(iHRU)%domInfo(iDOM)%dom_type, &
+                nSnow      => gruInfo%hruInfo(iHRU)%domInfo(iDOM)%nSnow, &
+                nLake      => gruInfo%hruInfo(iHRU)%domInfo(iDOM)%nLake, &
+                nSoil      => gruInfo%hruInfo(iHRU)%domInfo(iDOM)%nSoil, &
+                flux       => fluxHRU%hru(iHRU)%dom(iDOM)%var, &
+                prog       => progHRU%hru(iHRU)%dom(iDOM)%var, &
+                diag       => diagHRU%hru(iHRU)%dom(iDOM)%var, &
+                bvar       => bvarData%var, &
+                DOMarea    => progHRU%hru(iHRU)%dom(iDOM)%var(iLookPROG%DOMarea)%dat(1), &
+                mLayerTemp => progHRU%hru(iHRU)%dom(iDOM)%var(iLookPROG%mLayerTemp)%dat, &
+                totalArea  => bvarData%var(iLookBVAR%basin__totalArea)%dat(1))
+        if(DOMarea==0._rkind) cycle ! skip domains with no area
+        fracDOM = DOMarea/totalArea
+
+        ! upland outflow goes to the downslope HRU (m3 s-1), or to the basin (GRU) column outflow if there is none
+        if(typeDOM==upland)then
+          if(kHRU > 0)then
+            fluxHRU%hru(kHRU)%dom(1)%var(iLookFLUX%mLayerColumnInflow)%dat(:) = fluxHRU%hru(kHRU)%dom(1)%var(iLookFLUX%mLayerColumnInflow)%dat(:) + flux(iLookFLUX%mLayerColumnOutflow)%dat(:)
+            ! the water carries the temperature of the layer it left, as liquid water no colder than freezing
+            associate(inflowNrg => fluxHRU%hru(kHRU)%dom(1)%var(iLookFLUX%mLayerColumnInflowNrg)%dat)
+              inflowNrg(1:nSoil) = inflowNrg(1:nSoil) + iden_water*Cp_water*flux(iLookFLUX%mLayerColumnOutflow)%dat(1:nSoil) &
+                                                        *(max(mLayerTemp(nSnow+nLake+1:nSnow+nLake+nSoil), Tfreeze) - Tfreeze)
+            end associate
+          else
+            bvar(iLookBVAR%basin__ColumnOutflow)%dat(1) = bvar(iLookBVAR%basin__ColumnOutflow)%dat(1) + sum(flux(iLookFLUX%mLayerColumnOutflow)%dat(:))
+            ! the water leaving each soil layer carries that layer's temperature to the channel (W m-2 over the GRU),
+            ! and it leaves as liquid water, so no colder than freezing even out of a frozen layer
+            basinNrgFlux = basinNrgFlux + iden_water*Cp_water*sum(flux(iLookFLUX%mLayerColumnOutflow)%dat(1:nSoil) &
+                                                                  *max(mLayerTemp(nSnow+nLake+1:nSnow+nLake+nSoil), Tfreeze))/totalArea
+          endif
+        endif
+
+        bvar(iLookBVAR%basin__StorageChange)%dat(1) = bvar(iLookBVAR%basin__StorageChange)%dat(1) + diag(iLookDIAG%scalarTotalMassChange)%dat(1)*fracDOM
+        if(typeDOM==upland)then
+          bvar(iLookBVAR%basin__SurfaceRunoff)%dat(1) = bvar(iLookBVAR%basin__SurfaceRunoff)%dat(1) + flux(iLookFLUX%scalarSurfaceRunoff)%dat(1)*fracDOM
+          bvar(iLookBVAR%basin__SoilDrainage)%dat(1)  = bvar(iLookBVAR%basin__SoilDrainage)%dat(1)  + flux(iLookFLUX%scalarSoilDrainage)%dat(1) *fracDOM
+          ! aquifer fluxes, only if the aquifer is computed for each HRU (singleBasin is computed later; glaciers have no groundwater)
+          if(model_decisions(iLookDECISIONS%spatial_gw)%iDecision == localColumn .and. &
+             model_decisions(iLookDECISIONS%groundwatr)%iDecision == bigBucket)then
+            bvar(iLookBVAR%basin__AquiferRecharge)%dat(1)  = bvar(iLookBVAR%basin__AquiferRecharge)%dat(1)  + flux(iLookFLUX%scalarAquiferRecharge)%dat(1) *fracDOM
+            bvar(iLookBVAR%basin__AquiferTranspire)%dat(1) = bvar(iLookBVAR%basin__AquiferTranspire)%dat(1) + flux(iLookFLUX%scalarAquiferTranspire)%dat(1)*fracDOM
+            bvar(iLookBVAR%basin__AquiferBaseflow)%dat(1)  = bvar(iLookBVAR%basin__AquiferBaseflow)%dat(1)  + flux(iLookFLUX%scalarAquiferBaseflow)%dat(1) *fracDOM
+          ! modflowCpl: SUMMA runs no aquifer. Recharge to the (MODFLOW) aquifer is just the SUMMA soil-column drainage, set it here directly.
+          ! Baseflow is taken from the MODFLOW aquifer via the mfAquiferBaseflow channel (indexed by hru_ix). Both are written into flux for per-HRU output
+          else if(model_decisions(iLookDECISIONS%spatial_gw)%iDecision == localColumn .and. &
+                 (model_decisions(iLookDECISIONS%groundwatr)%iDecision == modflowCpl .or. &
+                  model_decisions(iLookDECISIONS%groundwatr)%iDecision == modLatflow))then
+            flux(iLookFLUX%scalarAquiferRecharge)%dat(1)  = flux(iLookFLUX%scalarSoilDrainage)%dat(1)
+            bvar(iLookBVAR%basin__AquiferRecharge)%dat(1) = bvar(iLookBVAR%basin__AquiferRecharge)%dat(1) + flux(iLookFLUX%scalarSoilDrainage)%dat(1)*fracDOM
+            if(allocated(mfAquiferBaseflow))then
+              flux(iLookFLUX%scalarAquiferBaseflow)%dat(1)  = mfAquiferBaseflow(gruInfo%hruInfo(iHRU)%hru_ix)
+              bvar(iLookBVAR%basin__AquiferBaseflow)%dat(1) = bvar(iLookBVAR%basin__AquiferBaseflow)%dat(1) + mfAquiferBaseflow(gruInfo%hruInfo(iHRU)%hru_ix)*fracDOM
+            end if
+            ! groundwater seepage at land surface, reported separately from SUMMA's own saturation excess
+            if(allocated(mfSurfaceDischarge))then
+              fluxHRU%hru(iHRU)%dom(iDOM)%var(iLookFLUX%scalarAquiferSeepage)%dat(1) = mfSurfaceDischarge(gruInfo%hruInfo(iHRU)%hru_ix)
+              bvarData%var(iLookBVAR%basin__SurfaceRunoff)%dat(1) = bvarData%var(iLookBVAR%basin__SurfaceRunoff)%dat(1) &
+                                                                  + mfSurfaceDischarge(gruInfo%hruInfo(iHRU)%hru_ix)*fracDOM
+            end if
+            ! Groundwater ET that MODFLOW actually supplied (EVT, role = gw_et).  Reported only:
+            ! scalarCanopyTranspiration already accounts for this water on the energy side, and the
+            ! aquifer it came from is MODFLOW's, so adding it to a SUMMA state would double-count it.
+            ! What is worth seeing is how it compares with the demand SUMMA sent, which is what the
+            ! coupler's budget diagnostic reports; closing the gap needs the tight (XMI) coupling.
+            ! negated: the coupler reports fluxes positive out of the aquifer, SUMMA negative for water lost
+            if(allocated(mfAquiferTranspire))then
+              fluxHRU%hru(iHRU)%dom(iDOM)%var(iLookFLUX%scalarAquiferTranspire)%dat(1) = -mfAquiferTranspire(gruInfo%hruInfo(iHRU)%hru_ix)
+              bvarData%var(iLookBVAR%basin__AquiferTranspire)%dat(1) = bvarData%var(iLookBVAR%basin__AquiferTranspire)%dat(1) &
+                                                                    - mfAquiferTranspire(gruInfo%hruInfo(iHRU)%hru_ix)*fracDOM
+            end if
+          endif
+          ! the heat carried by the runoff to the channel, all of it liquid water (W m-2 over the GRU)
+          tempTop = max(mLayerTemp(1), Tfreeze)
+          tempBot = max(mLayerTemp(nSnow+nLake+nSoil), Tfreeze)
+          basinNrgFlux = basinNrgFlux + iden_water*Cp_water*fracDOM*flux(iLookFLUX%scalarSurfaceRunoff)%dat(1)*tempTop
+          ! the deep thermal state sets the temperature of the groundwater reaching the channel
+          select case(model_decisions(iLookDECISIONS%deepTherml)%iDecision)
+            case(aquiferTempState)
+              tempGW = max(prog(iLookPROG%scalarAquiferTemp)%dat(1), Tfreeze) ! lags and damps the soil column
+            case(airTempGW)
+              tempGW = max(bparData%var(iLookBPAR%C_ATGW) &
+                           *(prog(iLookPROG%scalarAirTempWindow)%dat(1) - prog(iLookPROG%scalarAirTempAnnual)%dat(1)) &
+                           + prog(iLookPROG%scalarAirTempAnnual)%dat(1), Tfreeze)
+            case default
+              tempGW = tempBot ! the base of the soil column, already floored at freezing
+          end select
+          ! the same components as basin__TotalRunoff below: aquifer baseflow with a deep aquifer, soil drainage without one
+          if(model_decisions(iLookDECISIONS%groundwatr)%iDecision == bigBucket .or. &
+             model_decisions(iLookDECISIONS%groundwatr)%iDecision == modflowCpl .or. &
+             model_decisions(iLookDECISIONS%groundwatr)%iDecision == modLatflow)then
+            if(model_decisions(iLookDECISIONS%spatial_gw)%iDecision == localColumn) &
+              basinNrgFlux = basinNrgFlux + iden_water*Cp_water*fracDOM*flux(iLookFLUX%scalarAquiferBaseflow)%dat(1)*tempGW
+            ! MODFLOW's land-surface seepage joined the surface runoff above, but it is groundwater
+            if(model_decisions(iLookDECISIONS%groundwatr)%iDecision /= bigBucket .and. &
+               model_decisions(iLookDECISIONS%spatial_gw)%iDecision == localColumn .and. allocated(mfSurfaceDischarge)) &
+              basinNrgFlux = basinNrgFlux + iden_water*Cp_water*fracDOM*mfSurfaceDischarge(gruInfo%hruInfo(iHRU)%hru_ix)*tempGW
+          else
+            basinNrgFlux = basinNrgFlux + iden_water*Cp_water*fracDOM*flux(iLookFLUX%scalarSoilDrainage)%dat(1)*tempGW
+          endif
+        else if(typeDOM==stream)then
+          ! the reach itself: rain and melt on the water minus evaporation join the flow, at the column temperature
+          ! NOTE: the stream domain runs in the network pass, so these are the values of the previous step
+          bvar(iLookBVAR%basin__SurfaceRunoff)%dat(1) = bvar(iLookBVAR%basin__SurfaceRunoff)%dat(1) + flux(iLookFLUX%scalarStreamRunoff)%dat(1)*fracDOM
+          basinNrgFlux = basinNrgFlux + iden_water*Cp_water*fracDOM*flux(iLookFLUX%scalarStreamRunoff)%dat(1)*max(diag(iLookDIAG%scalarStreamTemp)%dat(1), Tfreeze)
+          ! this step's outlet temperature for the hyporheic return flow, newest first
+          associate(hypTempPast => bvar(iLookBVAR%hypTempPast)%dat)
+            hypTempPast(2:size(hypTempPast)) = hypTempPast(1:size(hypTempPast)-1)
+            hypTempPast(1) = max(diag(iLookDIAG%scalarStreamTemp)%dat(1), Tfreeze)
+          end associate
+        else if(typeDOM==glacCln1 .or. typeDOM==glacCln2 .or. typeDOM==glacDbr)then
+          ! glacier melt (m s-1) into the firn reservoir from the accumulation zone, and the snow or ice reservoir from the ablation zone
+          ! NOTE: assumes either one HRU per GRU with many glaciers, or one glacier per GRU with many HRUs;
+          !       glaciers that are absent from a particular glacier HRU are not captured
+          associate(glacierMelt => flux(iLookFLUX%scalarGlacierMelt)%dat(1), ablFrac => prog(iLookPROG%scalarAblFrac)%dat(1))
+            glacFirnMelt = glacFirnMelt + glacierMelt*fracDOM*(1._rkind - ablFrac) ! no debris in the accumulation zone for lateral flow
+            ablMelt = (glacierMelt + sum(flux(iLookFLUX%mLayerColumnOutflow)%dat(:))/totalArea)*fracDOM*ablFrac
+          end associate
+          if(prog(iLookPROG%scalarSnowDepth)%dat(1)>0._rkind)then
+            glacSnowMelt = glacSnowMelt + ablMelt
+          else
+            glacIceMelt  = glacIceMelt  + ablMelt
+          endif
+          bvar(iLookBVAR%basin__GlacierArea)%dat(1)    = bvar(iLookBVAR%basin__GlacierArea)%dat(1) + DOMarea ! m2
+          bvar(iLookBVAR%basin__GlacierStorage)%dat(1) = bvar(iLookBVAR%basin__GlacierStorage)%dat(1) &
+                                                         + diag(iLookDIAG%scalarTotalMassChange)%dat(1)*data_step*DOMarea*1.e-12_rkind ! Gt (km3 of water equivalent)
+          bvar(iLookBVAR%basin__GlacierMassChange)%dat(1) = bvar(iLookBVAR%basin__GlacierMassChange)%dat(1) + diag(iLookDIAG%scalarTotalMassChange)%dat(1)*DOMarea ! kg s-1 until divided by the glacier area
+        endif ! (if domain type)
+      end associate
+    enddo ! (looping through domains)
+  enddo  ! (looping through HRUs)
+  ! ********** END LOOP THROUGH HRUS **************************************************************************************
+  if(bvarData%var(iLookBVAR%basin__GlacierArea)%dat(1) > 0._rkind) &
+    bvarData%var(iLookBVAR%basin__GlacierMassChange)%dat(1) = bvarData%var(iLookBVAR%basin__GlacierMassChange)%dat(1)/bvarData%var(iLookBVAR%basin__GlacierArea)%dat(1)
+
+  ! ----- collect the state of each glacier domain for the area update ----------------------------------------------------
+  if(updateGlacArea)then
+    glac_area          = 0._rkind
+    glac_elev          = realMissing
+    glac_tan_slope     = realMissing
+    glac_aspect        = realMissing
+    glac_contourLength = 0._rkind
+    glac_debris_thick  = 0._rkind
+    massChange         = 0._rkind
+    iden_soil_mean     = 0._rkind
+    theta_sat_mean     = 0._rkind
+    nclean             = 0
+    ndebris            = 0
+    iglacHRU = 0
+    iglacDOM = 0
+    do iHRU=1,gruInfo%hruCount
+      hasGlacier = .false.
+      do iDOM = 1, gruInfo%hruInfo(iHRU)%domCount
+        associate(typeDOM => gruInfo%hruInfo(iHRU)%domInfo(iDOM)%dom_type, &
+                  nSnow   => gruInfo%hruInfo(iHRU)%domInfo(iDOM)%nSnow, &
+                  nLake   => gruInfo%hruInfo(iHRU)%domInfo(iDOM)%nLake, &
+                  nSoil   => gruInfo%hruInfo(iHRU)%domInfo(iDOM)%nSoil, &
+                  prog    => progHRU%hru(iHRU)%dom(iDOM)%var, &
+                  mpar    => mparHRU%hru(iHRU)%dom(iDOM)%var)
+          if(typeDOM/=glacCln1 .and. typeDOM/=glacCln2 .and. typeDOM/=glacDbr) cycle
+          iglacDOM = iglacDOM + 1
+          if(.not.hasGlacier) iglacHRU = iglacHRU + 1
+          hasGlacier = .true.
+          glac_hru(iglacDOM) = iHRU
+          if(typeDOM==glacDbr)then
+            ndebris(iglacHRU) = ndebris(iglacHRU) + 1
+          else
+            nclean(iglacHRU) = nclean(iglacHRU) + 1
+          endif
+          if(prog(iLookPROG%DOMarea)%dat(1)<=0._rkind) cycle ! a domain with no area keeps the missing values
+          glac_area(iglacDOM)          = prog(iLookPROG%DOMarea)%dat(1)
+          glac_elev(iglacDOM)          = prog(iLookPROG%DOMelev)%dat(1)
+          glac_tan_slope(iglacDOM)     = prog(iLookPROG%DOMtan_slope)%dat(1)
+          glac_aspect(iglacDOM)        = prog(iLookPROG%DOMaspect)%dat(1)
+          glac_contourLength(iglacDOM) = prog(iLookPROG%DOMcontourLength)%dat(1)
+          massChange(iglacDOM)         = prog(iLookPROG%glacMass4AreaChange)%dat(1)
+          ! the debris of a debris domain is its soil column: thickness, and depth-weighted density and porosity
+          if(typeDOM==glacDbr)then
+            associate(soilDepth => prog(iLookPROG%mLayerDepth)%dat(nSnow+nLake+1:nSnow+nLake+nSoil))
+              soil_thick = sum(soilDepth)
+              glac_debris_thick(iglacDOM) = soil_thick
+              iden_soil_mean(iglacDOM)    = sum(mpar(iLookPARAM%soil_dens_intr)%dat(1:nSoil)*soilDepth)/soil_thick
+              theta_sat_mean(iglacDOM)    = sum(mpar(iLookPARAM%theta_sat)%dat(1:nSoil)*soilDepth)/soil_thick
+            end associate
+          endif
+        end associate
+      enddo ! (looping through domains)
+    enddo ! (looping through HRUs)
+  endif ! (if need to update glacier area)
+
+  ! ----- basin runoff and routing ----------------------------------------------------------------------------------------
+  ! lapse glacier fluxes to the basin by routing through each glacier
+  call qGlacier(&
+                ! input
+                bparData%var(iLookBPAR%glacStor_kIce),              & ! intent(in):    storage coefficient ice reservoir (hours)
+                bparData%var(iLookBPAR%glacStor_kSnow),             & ! intent(in):    storage coefficient snow reservoir (hours)
+                bparData%var(iLookBPAR%glacStor_kFirn),             & ! intent(in):    storage coefficient firn reservoir (hours)
+                glacIceMelt,                                        & ! intent(in):    total melt into ice reservoirs (m s-1)
+                glacSnowMelt,                                       & ! intent(in):    total melt into snow reservoirs (m s-1)
+                glacFirnMelt,                                       & ! intent(in):    total melt into firn reservoirs (m s-1)
+                bvarData%var(iLookBVAR%glacierAblArea)%dat,         & ! intent(in):    per glacier ablation area (m2)
+                bvarData%var(iLookBVAR%glacierAccArea)%dat,         & ! intent(in):    per glacier accumulation area (m2)
+                gruInfo%nGlac,                                      & ! intent(in):    number of glaciers in GRU
+                ! output
+                bvarData%var(iLookBVAR%glacIceRunoffFuture)%dat,    & ! intent(inout): per glacier ice reservoir runoff in future time steps (m s-1)
+                bvarData%var(iLookBVAR%glacSnowRunoffFuture)%dat,   & ! intent(inout): per glacier snow reservoir runoff in future time steps (m s-1)
+                bvarData%var(iLookBVAR%glacFirnRunoffFuture)%dat,   & ! intent(inout): per glacier firn reservoir runoff in future time steps (m s-1)
+                bvarData%var(iLookBVAR%glacierRoutedRunoff)%dat(1), & ! intent(out):   routed glacier runoff (m s-1)
+                err,cmessage)              ! error control
+  if(err/=0)then; err=20; message=trim(message)//trim(cmessage); return; endif
+
+  associate(bvar => bvarData%var, totalArea => bvarData%var(iLookBVAR%basin__totalArea)%dat(1))
+    ! total runoff: with a deep aquifer the column outflow is zero; without one, either the column outflow
+    !  (shallow groundwater) or the soil drainage is zero
+    if(model_decisions(iLookDECISIONS%groundwatr)%iDecision == bigBucket .or. &
+       model_decisions(iLookDECISIONS%groundwatr)%iDecision == modflowCpl .or. &
+       model_decisions(iLookDECISIONS%groundwatr)%iDecision == modLatflow)then
+      bvar(iLookBVAR%basin__TotalRunoff)%dat(1) = bvar(iLookBVAR%basin__SurfaceRunoff)%dat(1) + bvar(iLookBVAR%basin__ColumnOutflow)%dat(1)/totalArea + bvar(iLookBVAR%basin__AquiferBaseflow)%dat(1)
+    else
+      bvar(iLookBVAR%basin__TotalRunoff)%dat(1) = bvar(iLookBVAR%basin__SurfaceRunoff)%dat(1) + bvar(iLookBVAR%basin__ColumnOutflow)%dat(1)/totalArea + bvar(iLookBVAR%basin__SoilDrainage)%dat(1)
+    endif
+    ! evaporation from open water (a stream domain) can exceed the rest of the runoff on a dry day; the river
+    ! network takes no negative lateral inflow, so that small loss is then not debited from the channel
+    if(ixStreamHRU > 0 .and. bvar(iLookBVAR%basin__TotalRunoff)%dat(1) < 0._rkind)then
+      basinNrgFlux = 0._rkind
+      bvar(iLookBVAR%basin__TotalRunoff)%dat(1) = 0._rkind
+    endif
+
+    call qOverland(&
+                   ! input
+                   model_decisions(iLookDECISIONS%subRouting)%iDecision, & ! intent(in):    index for routing method
+                   bvar(iLookBVAR%basin__TotalRunoff)%dat(1),            & ! intent(in):    total runoff to the channel from all active components (m s-1)
+                   bvar(iLookBVAR%routingFractionFuture)%dat,            & ! intent(in):    fraction of runoff in future time steps (m s-1)
+                   bvar(iLookBVAR%routingRunoffFuture)%dat,              & ! intent(inout): runoff in future time steps (m s-1)
+                   ! output
+                   bvar(iLookBVAR%averageInstantRunoff)%dat(1),          & ! intent(out):   instantaneous runoff (m s-1)
+                   bvar(iLookBVAR%averageRoutedRunoff)%dat(1),           & ! intent(out):   routed runoff (m s-1)
+                   err,cmessage)                                           ! intent(out):   error control
+    if(err/=0)then; err=20; message=trim(message)//trim(cmessage); return; endif
+
+    ! add glacier runoff to overland runoff
+    bvar(iLookBVAR%averageInstantRunoff)%dat(1) = bvar(iLookBVAR%averageInstantRunoff)%dat(1) + glacIceMelt + glacSnowMelt + glacFirnMelt
+    bvar(iLookBVAR%averageRoutedRunoff)%dat(1)  = bvar(iLookBVAR%averageRoutedRunoff)%dat(1)  + glacSoilKeep*bvar(iLookBVAR%glacierRoutedRunoff)%dat(1)
+
+    ! route the heat carried by the runoff through the same time delay (the routing is linear), so the temperature
+    ! of the water handed to the river network is consistent with the routed runoff; glacier runoff arrives at the freezing point
+    call qOverland(&
+                   ! input
+                   model_decisions(iLookDECISIONS%subRouting)%iDecision, & ! intent(in):    index for routing method
+                   basinNrgFlux,                                         & ! intent(in):    energy flux carried by the runoff to the channel (W m-2)
+                   bvar(iLookBVAR%routingFractionFuture)%dat,            & ! intent(in):    fraction of runoff in future time steps (-)
+                   bvar(iLookBVAR%routingNrgFuture)%dat,                 & ! intent(inout): energy flux in future time steps (W m-2)
+                   ! output
+                   notUsedNrgFlux,                                       & ! intent(out):   instantaneous energy flux (W m-2)
+                   routedNrgFlux,                                        & ! intent(out):   routed energy flux (W m-2)
+                   err,cmessage)                                           ! intent(out):   error control
+    if(err/=0)then; err=20; message=trim(message)//trim(cmessage); return; endif
+    routedNrgFlux = routedNrgFlux + iden_water*Cp_water*Tfreeze*glacSoilKeep*bvar(iLookBVAR%glacierRoutedRunoff)%dat(1)
+    if(bvar(iLookBVAR%averageRoutedRunoff)%dat(1) > tiny(routedNrgFlux))then
+      bvar(iLookBVAR%averageRoutedRunoffTemp)%dat(1) = max(routedNrgFlux/(iden_water*Cp_water*bvar(iLookBVAR%averageRoutedRunoff)%dat(1)), Tfreeze)
+    else
+      bvar(iLookBVAR%averageRoutedRunoffTemp)%dat(1) = Tfreeze
+    endif
+  end associate
+
+  ! ----- update the glacier area, and the glacier and upland domains ------------------------------------------------------
+  call date_and_time(values=startUpdateArea)
+  if(updateGlacArea)then
+    call glacAreaChange(&
+                  ! model control
+                  sec_since_last_update,                      & ! intent(in):    seconds since last glacier area update
+                  nglacHRU,                                   & ! intent(in):    number of HRUs that have a glacier domain
+                  nglacDOM,                                   & ! intent(in):    number of domains that have glaciers
+                  ndebris,                                    & ! intent(in):    number of debris domains in each HRU
+                  nclean,                                     & ! intent(in):    number of clean domains in each HRU
+                  glac_hru,                                   & ! intent(in):    HRU index of glacier domain
+                  ! glacier topography
+                  gruInfo%nGlac,                              & ! intent(in):    number of glaciers in GRU
+                  gruInfo%glacInfo,                           & ! intent(in):    information for each glacier
+                  gruInfo%gridInfo,                           & ! intent(in):    grid information for each grid
+                  gridData,                                   & ! intent(inout): grid data for each grid
+                  ! mass balance per glacier domain
+                  massChange,                                 & ! intent(in):    glacier water equivalent change since updateJulDay (kg m-2)
+                  glac_elev,                                  & ! intent(inout): elevation of each glacier domain (m)
+                  glac_tan_slope,                             & ! intent(inout): tan local ground surface slope of each glacier domain (m/m)
+                  glac_aspect,                                & ! intent(inout): azimuth in degrees East of North of each glacier domain (degrees)
+                  glac_contourLength,                         & ! intent(inout): length of contour at downslope edge of each glacier domain (m)
+                  ! debris
+                  glac_debris_thick,                          & ! intent(inout): debris thickness of each glacier domain (m)
+                  iden_soil_mean,                             & ! intent(in):    mean soil density (kg m-3)
+                  theta_sat_mean,                             & ! intent(in):    mean soil porosity (-)
+                  bparData%var(iLookBPAR%debrisConc),         & ! intent(in):    englacial debris concentration (kg m-3)
+                  bparData%var(iLookBPAR%wallErosionRate),    & ! intent(in):    glacier wall erosion rate input for debris advection (mm yr-1)
+                  bparData%var(iLookBPAR%debrisCritStress),   & ! intent(in):    critical driving stress where debris slides on terminal wedge (Pa)
+                  bparData%var(iLookBPAR%latMoraineWidth),    & ! intent(in):    lateral moraine width or rockfall length (m)
+                  ! area
+                  bvarData%var(iLookBVAR%glacierAblArea)%dat, & ! intent(inout): per glacier ablation area (m2)
+                  bvarData%var(iLookBVAR%glacierAccArea)%dat, & ! intent(inout): per glacier accumulation area (m2)
+                  glac_area,                                  & ! intent(inout): area of each glacier domain (m2)
+                  glac_ablFrac,                               & ! intent(out):   fraction of glacier domain that is ablation area
+                  ! error handling
+                  err, cmessage)                                ! intent(out):   error control
+    if(err/=0)then; err=20; message=trim(message)//trim(cmessage); return; endif
+
+    ! update the glacier domains and their layers in each HRU
+    allocate(newDOM(gruInfo%hruCount, maxval(gruInfo%hruInfo(:)%domCount)))
+    newDOM = .false.
+    iglacDOM = 0
+    do iHRU=1,gruInfo%hruCount
+      do iDOM = 1, gruInfo%hruInfo(iHRU)%domCount
+        associate(domInfo => gruInfo%hruInfo(iHRU)%domInfo(iDOM))
+          if(domInfo%dom_type/=glacCln1 .and. domInfo%dom_type/=glacCln2 .and. domInfo%dom_type/=glacDbr) cycle
+          iglacDOM = iglacDOM + 1
+          newDOM(iHRU,iDOM) = (progHRU%hru(iHRU)%dom(iDOM)%var(iLookPROG%DOMarea)%dat(1) <= 0._rkind)
+          call updateGlacDomain(&
+                      ! input
+                      iglacDOM,                                  & ! intent(inout): glacier domain index
+                      glac_elev,                                 & ! intent(in):    elevation of each glacier domain (m) per HRU
+                      glac_area,                                 & ! intent(in):    area of each glacier domain (m2)
+                      glac_tan_slope,                            & ! intent(in):    tan local ground surface slope of the domain (m/m)
+                      glac_aspect,                               & ! intent(in):    azimuth in degrees East of North of the domain (degrees)
+                      glac_contourLength,                        & ! intent(in):    length of contour at downslope edge of the domain (m)
+                      glac_ablFrac,                              & ! intent(in):    fraction of glacier area that is ablation area
+                      glac_debris_thick,                         & ! intent(in):    debris thickness of each glacier domain (m) per HRU
+                      domInfo%dom_type,                          & ! intent(in):    domain type
+                      domInfo%nSnow,                             & ! intent(in):    number of snow layers
+                      domInfo%nLake,                             & ! intent(in):    number of lake layers
+                      domInfo%nSoil,                             & ! intent(in):    number of soil layers
+                      domInfo%nGlce,                             & ! intent(in):    number of glacier ice layers
+                      model_decisions(iLookDECISIONS%nrgConserv)%iDecision==enthalpyForm, & ! intent(in):    flag to use the lookup table for soil enthalpy
+                      ! data structures
+                      mparHRU%hru(iHRU)%dom(iDOM),               & ! intent(in):    model parameters
+                      lookupHRU%hru(iHRU)%dom(iDOM),             & ! intent(in):    lookup tables
+                      indxHRU%hru(iHRU)%dom(iDOM),               & ! intent(in):    model indices
+                      progHRU%hru(iHRU)%dom(iDOM),               & ! intent(inout): model prognostic variables
+                      diagHRU%hru(iHRU)%dom(iDOM),               & ! intent(inout): model diagnostic variables
+                      fluxHRU%hru(iHRU)%dom(iDOM),               & ! intent(inout): model fluxes
+                      ! error handling
+                      err, cmessage)                               ! intent(out):   error control
+          if(err/=0)then; err=20; message=trim(message)//trim(cmessage); return; endif
+          newDOM(iHRU,iDOM) = newDOM(iHRU,iDOM) .and. progHRU%hru(iHRU)%dom(iDOM)%var(iLookPROG%DOMarea)%dat(1) > 0._rkind
+        end associate
+      enddo ! (looping through domains)
+    enddo ! (looping through HRUs)
+
+    ! start each new glacier domain from the glacier domain closest in elevation, and its debris from the closest debris domain
+    do iHRU=1,gruInfo%hruCount
+      do iDOM = 1, gruInfo%hruInfo(iHRU)%domCount
+        if(.not.newDOM(iHRU,iDOM)) cycle
+        dnrHRU = 0; dnrDOM = 0; elevDiff = huge(elevDiff)
+        dbrHRU = 0; dbrDOM = 0; dbrDiff = huge(dbrDiff)
+        do jHRU=1,gruInfo%hruCount
+          do jDOM = 1, gruInfo%hruInfo(jHRU)%domCount
+            associate(jType => gruInfo%hruInfo(jHRU)%domInfo(jDOM)%dom_type)
+              if(jType/=glacCln1 .and. jType/=glacCln2 .and. jType/=glacDbr) cycle
+              if(newDOM(jHRU,jDOM) .or. progHRU%hru(jHRU)%dom(jDOM)%var(iLookPROG%DOMarea)%dat(1) <= 0._rkind) cycle
+              dElev = abs(progHRU%hru(jHRU)%dom(jDOM)%var(iLookPROG%DOMelev)%dat(1) - progHRU%hru(iHRU)%dom(iDOM)%var(iLookPROG%DOMelev)%dat(1))
+              if(dElev < elevDiff)then; elevDiff = dElev; dnrHRU = jHRU; dnrDOM = jDOM; endif
+              if(jType==glacDbr .and. dElev < dbrDiff)then; dbrDiff = dElev; dbrHRU = jHRU; dbrDOM = jDOM; endif
+            end associate
+          enddo
+        enddo
+        if(dnrHRU==0) cycle ! no donor, keep the stored state
+        if(gruInfo%hruInfo(iHRU)%domInfo(iDOM)%dom_type==glacDbr .and. dbrHRU>0)then
+          call startGlacDomain(&
+                    model_decisions(iLookDECISIONS%nrgConserv)%iDecision==enthalpyForm, & ! intent(in):    flag to use the lookup table for soil enthalpy
+                    indxHRU%hru(dnrHRU)%dom(dnrDOM),          & ! intent(in):    snow and ice donor model indices
+                    progHRU%hru(dnrHRU)%dom(dnrDOM),          & ! intent(in):    snow and ice donor prognostic variables
+                    mparHRU%hru(iHRU)%dom(iDOM),              & ! intent(in):    model parameters
+                    lookupHRU%hru(iHRU)%dom(iDOM),            & ! intent(in):    lookup tables
+                    indxHRU%hru(iHRU)%dom(iDOM),              & ! intent(inout): model indices
+                    progHRU%hru(iHRU)%dom(iDOM),              & ! intent(inout): model prognostic variables
+                    diagHRU%hru(iHRU)%dom(iDOM),              & ! intent(inout): model diagnostic variables
+                    fluxHRU%hru(iHRU)%dom(iDOM),              & ! intent(inout): model fluxes
+                    err, cmessage,                            & ! intent(out):   error control
+                    indx_dbr=indxHRU%hru(dbrHRU)%dom(dbrDOM), & ! intent(in):    debris donor model indices
+                    prog_dbr=progHRU%hru(dbrHRU)%dom(dbrDOM))   ! intent(in):    debris donor prognostic variables
+        else
+          call startGlacDomain(&
+                    model_decisions(iLookDECISIONS%nrgConserv)%iDecision==enthalpyForm, & ! intent(in):    flag to use the lookup table for soil enthalpy
+                    indxHRU%hru(dnrHRU)%dom(dnrDOM),          & ! intent(in):    snow and ice donor model indices
+                    progHRU%hru(dnrHRU)%dom(dnrDOM),          & ! intent(in):    snow and ice donor prognostic variables
+                    mparHRU%hru(iHRU)%dom(iDOM),              & ! intent(in):    model parameters
+                    lookupHRU%hru(iHRU)%dom(iDOM),            & ! intent(in):    lookup tables
+                    indxHRU%hru(iHRU)%dom(iDOM),              & ! intent(inout): model indices
+                    progHRU%hru(iHRU)%dom(iDOM),              & ! intent(inout): model prognostic variables
+                    diagHRU%hru(iHRU)%dom(iDOM),              & ! intent(inout): model diagnostic variables
+                    fluxHRU%hru(iHRU)%dom(iDOM),              & ! intent(inout): model fluxes
+                    err, cmessage)                              ! intent(out):   error control
+        endif
+        if(err/=0)then; err=20; message=trim(message)//trim(cmessage); return; endif
+        gruInfo%hruInfo(iHRU)%domInfo(iDOM)%nSnow = indxHRU%hru(iHRU)%dom(iDOM)%var(iLookINDEX%nSnow)%dat(1)
+      enddo
+    enddo
+    deallocate(newDOM)
+    deallocate(glac_hru,glac_area,glac_elev,glac_tan_slope,glac_aspect,glac_contourLength,glac_debris_thick, &
+               glac_ablFrac,massChange,iden_soil_mean,theta_sat_mean,nclean,ndebris)
+  endif ! (if updateGlacArea)
+
+  ! give the upland domain of each HRU the area, elevation, slope and aspect not taken by the other domains
+  ! NOTE: contour length is not updated as we do not know how much of the HRU contour length belongs to the glacier/lake
+  if(updateGlacArea .or. updateLakeArea)then
+    do iHRU=1,gruInfo%hruCount
+      associate(attr => attrHRU%hru(iHRU)%var)
+        ! start from the HRU attributes and remove the area-weighted contribution of each non-upland domain
+        remaining_area       = attr(iLookATTR%HRUarea)
+        remaining_elev       = attr(iLookATTR%HRUarea)*attr(iLookATTR%elevation)
+        remaining_tan_slope  = attr(iLookATTR%HRUarea)*attr(iLookATTR%tan_slope)
+        remaining_aspect_sin = attr(iLookATTR%HRUarea)*sin(attr(iLookATTR%aspect)*deg2rad)
+        remaining_aspect_cos = attr(iLookATTR%HRUarea)*cos(attr(iLookATTR%aspect)*deg2rad)
+        iUpland = 0
+        do iDOM = 1, gruInfo%hruInfo(iHRU)%domCount
+          associate(typeDOM => gruInfo%hruInfo(iHRU)%domInfo(iDOM)%dom_type, &
+                    DOMarea => progHRU%hru(iHRU)%dom(iDOM)%var(iLookPROG%DOMarea)%dat(1), &
+                    DOMelev => progHRU%hru(iHRU)%dom(iDOM)%var(iLookPROG%DOMelev)%dat(1), &
+                    DOMtan_slope => progHRU%hru(iHRU)%dom(iDOM)%var(iLookPROG%DOMtan_slope)%dat(1), &
+                    DOMaspect => progHRU%hru(iHRU)%dom(iDOM)%var(iLookPROG%DOMaspect)%dat(1))
+            if(typeDOM==upland)then
+              iUpland = iDOM
+            elseif(DOMarea>0._rkind)then
+              remaining_area       = remaining_area       - DOMarea
+              remaining_elev       = remaining_elev       - DOMarea*DOMelev
+              remaining_tan_slope  = remaining_tan_slope  - DOMarea*DOMtan_slope
+              remaining_aspect_sin = remaining_aspect_sin - DOMarea*sin(DOMaspect*deg2rad)
+              remaining_aspect_cos = remaining_aspect_cos - DOMarea*cos(DOMaspect*deg2rad)
+            endif
+          end associate
+        enddo
+        if(iUpland==0) cycle
+        associate(DOMarea => progHRU%hru(iHRU)%dom(iUpland)%var(iLookPROG%DOMarea)%dat(1), &
+                  DOMelev => progHRU%hru(iHRU)%dom(iUpland)%var(iLookPROG%DOMelev)%dat(1), &
+                  DOMtan_slope => progHRU%hru(iHRU)%dom(iUpland)%var(iLookPROG%DOMtan_slope)%dat(1), &
+                  DOMaspect => progHRU%hru(iHRU)%dom(iUpland)%var(iLookPROG%DOMaspect)%dat(1), &
+                  DOMcontourLength => progHRU%hru(iHRU)%dom(iUpland)%var(iLookPROG%DOMcontourLength)%dat(1))
+          if(remaining_area>0._rkind)then
+            ! the upland domain inherits the HRU attributes, re-derived by area weighting if other domains took part of the HRU
+            DOMarea          = remaining_area
+            DOMelev          = attr(iLookATTR%elevation)
+            DOMtan_slope     = attr(iLookATTR%tan_slope)
+            DOMaspect        = attr(iLookATTR%aspect)
+            DOMcontourLength = attr(iLookATTR%contourLength) ! could be improved in the future
+            if(remaining_area /= attr(iLookATTR%HRUarea))then
+              DOMelev      = remaining_elev/remaining_area
+              DOMtan_slope = remaining_tan_slope/remaining_area
+              if(DOMaspect /= realMissing)then ! aspect is optional, realMissing when absent
+                DOMaspect = 0._rkind
+                if(remaining_aspect_sin**2 + remaining_aspect_cos**2 > aspect_tol) &
+                  DOMaspect = modulo(atan2(remaining_aspect_sin,remaining_aspect_cos)*rad2deg,360._rkind)
+              endif
+            endif
+          else
+            DOMarea          = 0._rkind
+            DOMelev          = realMissing
+            DOMtan_slope     = realMissing
+            DOMaspect        = realMissing
+            DOMcontourLength = 0._rkind
+          endif
+        end associate
+      end associate
+    enddo ! (looping through HRUs)
+  endif ! (if updated glacier or wetland area)
+  call date_and_time(values=endUpdateArea)
+  elapsedUpdateArea = elapsedUpdateArea + elapsedSec(startUpdateArea,endUpdateArea)
+
+  deallocate(downIdx,inDegree,hruOrder)
+
+end subroutine run_oneGRU
+
+end module run_oneGRU_module
