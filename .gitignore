@@ -12,3 +12,5 @@ tests/*_run/
 runs/*/calibration/
 runs/*/evaluation/
 data/external/
+~$Temperature,_water.degC.Work@15478040.20060223.xlsx
+scratch/2026-10-22/arcticdem/
