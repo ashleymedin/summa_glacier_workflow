@@ -21,7 +21,8 @@ elsewhere.
 
 The pipeline's scripts: `glacier_rasters.py`, `glacier_extend.py`, `glacier_zonal_stats.py`,
 `correct_forcing_to_station.py`, `spechum_ratio_from_campaign.py` and `glacier_cold_state.py`; and
-`acquire_glacier_mass_balance.py` for the mass-balance observations. `acquire_balance_profile.py` writes the USGS
+`acquire_glacier_mass_balance.py` for the mass-balance observations; `acquire_arcticdem.py` fetches the ArcticDEM
+strips the rasters step reads (into `GlacierDEM/`, not in git), before the rasters step. `acquire_balance_profile.py` writes the USGS
 yearly balance profiles as a `glacierMassBalFile`, which `runs/rerun_trials.py --massbal` gives the flow model in
 place of the simulated balance (USGS heights are ellipsoidal, 16.1 m above the model's at Gulkana, 14.0 at Wolverine).
 
@@ -53,6 +54,11 @@ wetland domain (a proglacial lake or wetted forefield) copied from the stream do
    thickness, filled from the nearest Millan cell where an outline reaches past it. The glacier surface is the DEM, or that survey's own DEM on the
    glacier where `usgs_outline` names one (`dem`), levelled to the DEM on the ground around it. Where the survey
    covers less than half a cell, its change from the DEM is carried harmonically to zero at the ice-free ground.
+   Where `later_outline` names a later survey, the bed under the ice lost between the two outlines is the surface
+   of the ArcticDEM strips after it (`acquire_arcticdem.py`, each levelled to the DEM on the ground), and that change
+   of the bed is carried harmonically over the glacier within 250 m (`reach`), to zero at the ice-free ground. Millan
+   is about three times too thick on Gulkana's debris-covered tongue; 250 m leaves the bed under Gulkana's 2024
+   radar, which matches Millan, unchanged.
 2. **extend.** The basin is delineated on the bed above the gauge, and each glacier at least 80% inside
    it gets room to advance by dragging its terminus downstream.
 3. **hrus.** Each HRU's area, centre, elevation, slope and contour length in `attributes.nc` and the HRU

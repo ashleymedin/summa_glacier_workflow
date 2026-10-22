@@ -10,7 +10,10 @@ From the global glacier products (each downloaded by hand, see README.md) writes
 and in attributes/elevation/dem domain_<name>_glacier_elv.tif, the glacier surface: the DEM, with the survey DEM
 of the USGS outline on that glacier where usgs_outline names one (levelled to the DEM on the ground around it, its
 change from the DEM carried smoothly over the glacier cells it does not cover);
-and domain_<name>_bedrock_elv.tif, that surface less the glacier thickness.
+and domain_<name>_bedrock_elv.tif, that surface less the glacier thickness. Where later_outline names a later
+survey of that glacier, the bed under the ice lost between the two outlines is the surface of the ArcticDEM strips
+after it (acquire_arcticdem.py, each levelled to the DEM on the ground around the glacier), and that change of
+the bed is carried harmonically over the glacier within reach (250 m) of them, to nothing at the ice-free ground.
 
 Glacier outlines are RGI 6.0, replaced by the Herreid and Pellicciotti (2020) outline where it has one, and by a
 USGS survey outline (McNeil et al. 2019, doi:10.5066/P9R8BP3K) where the YAML's usgs_outline names one. Their
@@ -26,6 +29,7 @@ debris polygons, for latMoraineWidth.
 """
 
 import argparse
+import glob
 import os
 import shutil
 
@@ -167,6 +171,46 @@ def survey_surface(dem, glacier, src, outlines, path, buffer=1000.0, min_cover=0
     return np.where(glacier, dem + change, dem)
 
 
+def melt_out_bed(dem, surface, bed, glacier, src, start, later, outlines, paths, reach=250.0, buffer=1000.0,
+                 min_cover=0.5):
+    """The bed where the ice melted out between the start and later outlines (GeoSeries) set to the strips' surface,
+    and its change carried harmonically over the glacier cells within reach (m) of them, to nothing at the ice-free
+    ground and beyond reach. Each strip
+    is levelled to the DEM by their median difference on the ground (off all outlines) within buffer (m) of the start
+    outline; a cell takes the strips' median where at least min_cover of it is lost ice they cover. The bed is held
+    at or below the surface."""
+    lost = start.union_all().difference(later.to_crs(start.crs).union_all())
+    heights = []
+    for path in paths:
+        with rasterio.open(path) as s:
+            z = s.read(1, masked=True).astype(np.float64).filled(np.nan)
+            gone = geometry_mask([gpd.GeoSeries([lost], crs=start.crs).to_crs(s.crs).iloc[0]], transform=s.transform,
+                                 invert=True, out_shape=z.shape)
+            ice = geometry_mask(list(outlines.to_crs(s.crs).geometry), transform=s.transform, invert=True, out_shape=z.shape)
+            near = geometry_mask(list(start.to_crs(s.crs).buffer(buffer)), transform=s.transform, invert=True, out_shape=z.shape)
+            means = {}
+            for key, values in (("lost", np.where(gone, z, np.nan)), ("ground", np.where(near & ~ice, z, np.nan)),
+                                ("cover", (gone & np.isfinite(z)).astype(np.float64))):
+                out = np.full(dem.shape, np.nan)
+                reproject(values, out, src_transform=s.transform, src_crs=s.crs, src_nodata=np.nan,
+                          dst_transform=src.transform, dst_crs=src.crs, dst_nodata=np.nan, resampling=Resampling.average)
+                means[key] = out
+        offset = np.nanmedian(dem - means["ground"])
+        heights.append(np.where(np.nan_to_num(means["cover"]) >= min_cover, means["lost"] + offset, np.nan))
+        print(f"{os.path.basename(path)[:8]}: {offset:+.1f} m to the DEM, covers {np.isfinite(heights[-1]).sum()} lost cells")
+    with np.errstate(all="ignore"):
+        after = np.nanmedian(heights, axis=0) if heights else np.full(dem.shape, np.nan)
+    known = glacier & np.isfinite(after)
+    dy = abs(src.transform.e) * 111320.0  # m per cell of the geographic grid
+    dx = src.transform.a * 111320.0 * np.cos(np.radians(src.transform.f + src.transform.e * dem.shape[0] / 2))
+    near = distance_transform_edt(~known, sampling=(dy, dx)) <= reach
+    change = harmonic_fill(np.where(known, np.minimum(after, surface) - bed, 0.0), known, glacier & near)
+    moved = glacier & ~known & (np.abs(change) > 1)
+    print(f"bed under lost ice on {known.sum()} cells: median change {np.median(change[known]) if known.any() else 0:+.0f} m, "
+          f"carried over {moved.sum()} more by over 1 m")
+    return np.where(glacier, np.minimum(bed + change, surface), bed)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
@@ -205,8 +249,9 @@ def main():
             rgi.at[i, "geometry"] = glc[glc["RGIId"] == glacier["RGIId"]]["geometry"].values[0]
     usgs = c.get("usgs_outline")
     if usgs:
-        u = gpd.read_file(c["data"]["usgs_outlines"]).to_crs(crs)
-        u = u[(u["Glacier"] == usgs["glacier"]) & (u["Date"] == usgs["date"])].geometry.union_all()
+        surveys = gpd.read_file(c["data"]["usgs_outlines"]).to_crs(crs)
+        surveys = surveys[surveys["Glacier"] == usgs["glacier"]]
+        u = surveys[surveys["Date"] == usgs["date"]].geometry.union_all()
         i = rgi.geometry.intersection(u).area.idxmax()  # the RGI glacier it overlaps most
         print(f"{rgi.at[i, 'RGIId']}: USGS outline of {usgs['date']}")
         rgi.at[i, "geometry"] = u
@@ -297,6 +342,12 @@ def main():
     if usgs and usgs.get("dem"):
         surface = survey_surface(surface, glacier, src, rgi.to_crs(c["utm_crs"]), os.path.join(HERE, usgs["dem"]))
     bed = np.maximum(surface - ice, 0)
+    later = c.get("later_outline")
+    if usgs and later:
+        start = gpd.GeoSeries([u], crs=crs).to_crs(c["utm_crs"])
+        bed = melt_out_bed(dem, surface, bed, glacier, src, start, surveys[surveys["Date"] == later["date"]].geometry,
+                           rgi.geometry, sorted(glob.glob(os.path.join(HERE, later["dems"], "*.tif"))),
+                           later.get("reach", 250.0))
     with rasterio.open(os.path.join(bed_dir, f"domain_{name}_bedrock_elv.tif"), "w", **meta) as dst:
         dst.write(bed.astype(np.float32), 1)
     with rasterio.open(os.path.join(bed_dir, f"domain_{name}_glacier_elv.tif"), "w", **meta) as dst:
