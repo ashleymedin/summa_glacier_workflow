@@ -1,0 +1,28 @@
+
+Gulkana meltout_usgsmb_A0.4: 2007 ice 1650-2050 m 8.99 km2; dx 51 m; years 2009-2021
+set                        km2  H0 med  Millan own %  Millan H  dist m  balance m ice  flow m  dH m  Hugonnet m/yr  debris %
+model loses, 2021 keeps    0.20      7        100        27      71         -23.8    11.2  -6.9         -1.15         0
+both lose                  0.10      8         89        11      51         -27.9    14.4  -7.7         -0.74         0
+model keeps, 2021 loses    0.21     25         79         8       0          -5.1     2.2  -2.9         -0.41         0
+both keep, edge 200 m      3.33     43         98        46     113          -5.7     1.9  -5.2         -0.74         0
+ band  over-lost km2  of band ice %  H0 med  balance  flow
+  1600          0.06             8      16    -31.4  13.9
+  1700          0.10             5       7    -21.6   9.3
+  1800          0.04             1       4     -9.7   7.1
+  1900          0.00             0     nan      nan   nan
+  2000          0.00             0     nan      nan   nan
+ over-lost aspect (deg, 0 north) quartiles [ 86. 118. 176.]
+
+Gulkana usgsmb3_A0.4: 2007 ice 1650-2050 m 9.07 km2; dx 51 m; years 2009-2021
+set                        km2  H0 med  Millan own %  Millan H  dist m  balance m ice  flow m  dH m  Hugonnet m/yr  debris %
+model loses, 2021 keeps    0.17     13        100        27      71         -24.0    10.2 -13.3         -1.17         0
+both lose                  0.08     10         81         6      51         -26.8     9.4 -10.1         -0.48         0
+model keeps, 2021 loses    0.29     26         77         9      51          -7.3     2.2  -5.6         -0.42         0
+both keep, edge 200 m      3.37     44         98        46     113          -5.8     1.9  -5.5         -0.74         0
+ band  over-lost km2  of band ice %  H0 med  balance  flow
+  1600          0.06             7      20    -32.4  12.3
+  1700          0.08             4       7    -21.9  11.0
+  1800          0.04             1       4     -9.9   7.1
+  1900          0.00             0     nan      nan   nan
+  2000          0.00             0     nan      nan   nan
+ over-lost aspect (deg, 0 north) quartiles [ 83. 112. 140.]

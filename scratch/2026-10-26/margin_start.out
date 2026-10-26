@@ -1,0 +1,17 @@
+over-lost        n   77  cold-state H   6.9  setup H   7.3  Millan nearest  27.2 (bare 1%)  dist 71 m
+kept edge 200 m  n 1303  cold-state H  43.4  setup H  43.4  Millan nearest  46.5 (bare 4%)  dist 113 m
+setup minus cold state at over-lost cells, quartiles [0. 0. 0. 0. 0.]
+DEM grid EPSG:4326 res (0.0008333333333333334, 0.0008333333333333334)
+over-lost on DEM grid: setup H [ 4.1  8.8 19.3]  Millan mosaic [ 4.3 13.6 20.1]  bed raised vs surface-Millan (m) [0.  0.2 5.5]
+
+dist in (m)  km2   cold-state H  Millan direct  ratio   (2007 ice, all elevations)
+    0-60     1.66       19.7         19.6    1.00
+   60-120    3.13       32.1         34.8    0.92
+  120-200    2.61       58.3         65.8    0.89
+  200-400    6.43       93.6        100.1    0.93
+  400-10000  2.50      125.3        125.8    1.00
+volume km3: cold state 1.261, Millan direct 1.353
+over-lost: 8 picks in 1 cells; 2024 radar thickness med 93 m, start H 11, Millan direct 83, model 2021 H 0; radar bed minus setup bed med -102 m (USGS heights)
+upper band, kept, within 300 m of edge: 6910 picks in 139 cells; 2024 radar thickness med 100 m, start H 119, Millan direct 111, model 2021 H 103; radar bed minus setup bed med 10 m (USGS heights)
+
+over-lost: start H < half Millan direct in 77% of cells; Millan direct > the run's balance+flow loss in 95%, 0.19 of 0.20 km2
