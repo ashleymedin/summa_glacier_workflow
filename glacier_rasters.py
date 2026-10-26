@@ -216,18 +216,20 @@ def survey_on_grid(dem, grid, outlines, path, buffer=1000.0, anchor=None, around
 
 
 def survey_surface(dem, glacier, grid, outlines, paths, date=None, min_cover=0.5, anchor=None, around=None,
-                   offset=None):
+                   offset=None, dhdt=None):
     """The DEM with the survey DEMs' surface on the glacier cells they cover by at least min_cover, linear in time
     between the nearest surveys before and after date (decimal year) that cover each cell, or the nearer one
-    where only one side does. The change from the DEM is carried harmonically onto the glacier cells none covers,
-    to nothing at the ice-free ground. Every survey is levelled to anchor (levelled ground means), else the first
-    by offset or to the DEM and the rest to it. Returns the surface and the levelled ground of the first survey."""
+    where only one side does; with dhdt (m/yr on the grid), each survey is first carried to date at that rate.
+    The change from the DEM is carried harmonically onto the glacier cells none covers, to nothing at the ice-free
+    ground. Every survey is levelled to anchor (levelled ground means), else the first by offset or to the DEM and the rest to it. Returns the surface and the levelled ground of the first survey."""
     zs, years = [], []
     for path in paths:
         z, cover, ground = survey_on_grid(dem, grid, outlines, path, anchor=anchor, around=around, offset=offset)
         anchor = ground if anchor is None else anchor
-        zs.append(np.where(cover >= min_cover, z, np.nan))
         years.append(decimal_year(re.search(r"(\d{8})", os.path.basename(path)).group(1)))
+        if dhdt is not None and date is not None:
+            z = z + dhdt * (date - years[-1])
+        zs.append(np.where(cover >= min_cover, z, np.nan))
     zs, years = np.array(zs), np.array(years)
     date = years[0] if date is None else date
     have = np.isfinite(zs)
@@ -299,12 +301,27 @@ def thickness_on_grid(files, glacier, grid, shape):
     return np.where(glacier, ice, 0.0)
 
 
+def rate_on_grid(files, grid, shape):
+    """A rate raster mosaic (Hugonnet's dh/dt tiles) sampled once onto a grid, bilinear, with cells it leaves bare
+    taking the nearest value."""
+    rate = np.full(shape, np.nan)
+    for path in files:
+        with rasterio.open(path) as s:
+            out = np.full(shape, np.nan)
+            reproject(rasterio.band(s, 1), out, src_transform=s.transform, src_crs=s.crs, src_nodata=s.nodata,
+                      dst_transform=grid.transform, dst_crs=grid.crs, dst_nodata=np.nan, resampling=Resampling.bilinear)
+            rate = np.where(np.isfinite(out), out, rate)
+    _, (r, k) = distance_transform_edt(~np.isfinite(rate), return_indices=True)
+    return rate[r, k]
+
+
 def surface_and_bed(c, dem, glacier, grid, ice, outlines, surveys, start):
     """The start glacier surface and the bed on one grid (outlines, surveys and the start outline in the UTM CRS).
     The bed is Millan's reference surface (millan_reference: a survey inside his 2010-2020 decade, levelled to the
     DEM by usgs_datum) less his thickness, and that surface itself where the reference outline has no ice, so it does not
     depend on the start. The start surface is the usgs_outline survey (dem), or the surveys it lists (dems)
-    interpolated to its date, each levelled to the reference. Where later_outline names a later survey, the bed
+    interpolated to its date, each levelled to the reference and, with dhdt (a glob of rate tiles), carried to the
+    date at that rate. Where later_outline names a later survey, the bed
     under ice lost by then is the ArcticDEM surface after it."""
     usgs, ref, later = c.get("usgs_outline"), c.get("millan_reference"), c.get("later_outline")
     surface, anchor, reference = dem.astype(np.float64), None, None
@@ -322,7 +339,8 @@ def surface_and_bed(c, dem, glacier, grid, ice, outlines, surveys, start):
                                transform=grid.transform, invert=True, out_shape=dem.shape)
     if usgs and (usgs.get("dems") or usgs.get("dem")):
         paths = [os.path.join(HERE, p) for p in usgs.get("dems", [usgs.get("dem")])]
-        surface, _ = survey_surface(dem, glacier, grid, ever, paths, decimal_year(usgs["date"]), anchor=anchor)
+        dhdt = rate_on_grid(sorted(glob.glob(os.path.join(HERE, usgs["dhdt"]))), grid, dem.shape) if usgs.get("dhdt") else None
+        surface, _ = survey_surface(dem, glacier, grid, ever, paths, decimal_year(usgs["date"]), anchor=anchor, dhdt=dhdt)
     reference = surface if reference is None else np.where(own, reference, surface)
     bed = np.where(glacier, reference - ice, surface)
     if usgs and later:

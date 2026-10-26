@@ -58,7 +58,9 @@ wetland domain (a proglacial lake or wetted forefield) copied from the stream do
    DEM by `usgs_datum` (the DEM's offset from the surveys varies by tens of metres with slope), and where its
    outline has no ice the bed is its surface. The glacier surface is the DEM, or the benchmark glacier's start
    surface: one survey DEM (`dem`), or several (`dems`) interpolated linearly in time to `usgs_outline`'s date
-   between the nearest surveys before and after it that cover each cell. Every survey is levelled to the
+   between the nearest surveys before and after it that cover each cell, or one survey carried to the date by a
+   dh/dt mosaic (`dhdt`, a glob: Gulkana's 2007 survey by Hugonnet et al.'s 2000–2020 rate, as its 1993 and 2005
+   surveys scatter 5 m on stable ground). Every survey is levelled to the
    reference by a plane and an elevation term fitted on ground under 20°. The start outline is that survey's,
    or between the two `outlines` listed, as the zero contour of their blended signed distances, its area
    linear in time. Where the surveys cover less than half a cell, the change from the DEM is carried
