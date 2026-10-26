@@ -15,6 +15,7 @@ data:
   ice_thickness: data/external/Thickness_data
   usgs_outlines: GlacierDEM/USGS_Glacier_Boundaries_shp/USGS_Glacier_Boundaries.shp
 usgs_outline: {glacier: Wolverine Glacier, date: 2006/08/08, dem: GlacierDEM/EasternKenai_20060808_DEM/EasternKenai_20060808_DEM.tif}  # the survey before the 2008 start, in place of RGI's
+millan_reference: {date: 2015/08/13, dem: GlacierDEM/EasternKenai_20150813_DEM/EasternKenai_20150813_DEM.tif}  # the survey inside Millan's 2010-2020 decade; the bed is it less his thickness
 later_outline: {date: 2020/10/19, dems: GlacierDEM/ArcticDEM_Wolverine}  # the last survey; ArcticDEM strips after it give the bed where ice melted out
 usgs_datum: -14.0                               # m added to USGS heights (WGS84 ellipsoid) to give the model DEM's
 

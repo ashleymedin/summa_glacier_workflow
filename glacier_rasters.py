@@ -150,27 +150,36 @@ def harmonic_fill(values, known, region):
     return out
 
 
-def survey_surface(dem, glacier, src, outlines, path, buffer=1000.0, min_cover=0.5):
+def survey_surface(dem, glacier, src, outlines, path, buffer=1000.0, min_cover=0.5, level=None):
     """The DEM with a survey DEM's mean on the glacier cells it covers by at least min_cover, levelled to the DEM
-    by their median difference on the ground within buffer (m) of the outlines. The survey's change from the DEM
-    is carried harmonically onto the glacier cells it leaves out, to nothing at the ice-free ground."""
+    by their median difference on the ground within buffer (m) of the outlines, or to another survey on the
+    ground both cover (level: that survey's ground means and offset). The survey's change from the DEM is
+    carried harmonically onto the glacier cells it leaves out, to nothing at the ice-free ground. Returns the
+    surface and this survey's (ground means, offset)."""
     with rasterio.open(path) as s:
-        z = s.read(1, masked=True).astype(np.float64).filled(np.nan)
-        on_ice = geometry_mask(list(outlines.to_crs(s.crs).geometry), transform=s.transform, invert=True, out_shape=z.shape)
-        near = geometry_mask(list(outlines.to_crs(s.crs).buffer(buffer)), transform=s.transform, invert=True, out_shape=z.shape)
+        f = max(1, int(2.0 / abs(s.res[0])))  # surveys finer than 2 m are read at 2 m
+        z = s.read(1, masked=True, out_shape=(s.height // f, s.width // f),
+                   resampling=Resampling.average).astype(np.float64).filled(np.nan)
+        t = s.transform * s.transform.scale(s.width / z.shape[1], s.height / z.shape[0])
+        on_ice = geometry_mask(list(outlines.to_crs(s.crs).geometry), transform=t, invert=True, out_shape=z.shape)
+        near = geometry_mask(list(outlines.to_crs(s.crs).buffer(buffer)), transform=t, invert=True, out_shape=z.shape)
         means = {}
         for key, keep in (("ice", on_ice), ("ground", near & ~on_ice), ("cover", None)):
             out = np.full(dem.shape, np.nan)
             values = np.isfinite(z).astype(np.float64) if keep is None else np.where(keep, z, np.nan)
-            reproject(values, out, src_transform=s.transform, src_crs=s.crs, src_nodata=np.nan,
+            reproject(values, out, src_transform=t, src_crs=s.crs, src_nodata=np.nan,
                       dst_transform=src.transform, dst_crs=src.crs, dst_nodata=np.nan, resampling=Resampling.average)
             means[key] = out
-    offset = np.nanmedian(dem - means["ground"])
+    if level is None:
+        offset, n = np.nanmedian(dem - means["ground"]), np.isfinite(means["ground"]).sum()
+    else:
+        both = np.isfinite(level[0]) & np.isfinite(means["ground"])
+        offset, n = level[1] + np.median((level[0] - means["ground"])[both]), both.sum()
     known = glacier & np.isfinite(means["ice"]) & (np.nan_to_num(means["cover"]) >= min_cover)
-    print(f"{os.path.basename(path)}: {offset:+.1f} m to the DEM on {np.isfinite(means['ground']).sum()} ground cells, "
+    print(f"{os.path.basename(path)}: {offset:+.1f} m to the DEM, levelled on {n} ground cells, "
           f"covers {known.sum()} of {glacier.sum()} glacier cells")
     change = harmonic_fill(np.where(known, means["ice"] + offset - dem, 0.0), known, glacier)
-    return np.where(glacier, dem + change, dem)
+    return np.where(glacier, dem + change, dem), (means["ground"], offset)
 
 
 def cell_size(grid, shape):
@@ -205,15 +214,19 @@ def surface_and_bed(c, dem, glacier, grid, ice, outlines, surveys):
     later_outline names a later survey, the bed under ice lost by then is the ArcticDEM surface after it."""
     usgs, ref, later = c.get("usgs_outline"), c.get("millan_reference"), c.get("later_outline")
     start = surveys[surveys["Date"] == usgs["date"]].geometry.union_all() if usgs else None
-    surface = dem.astype(np.float64)
+    surface, level = dem.astype(np.float64), None
     if usgs and usgs.get("dem"):
-        surface = survey_surface(surface, glacier, grid, outlines, os.path.join(HERE, usgs["dem"]))
+        surface, level = survey_surface(surface, glacier, grid, outlines, os.path.join(HERE, usgs["dem"]))
     reference = surface
-    if ref:
+    if ref:  # on the reference survey's own glacier only, levelled to the start survey
+        main = outlines.geometry.intersection(start).area.idxmax()
+        own = glacier & geometry_mask(list(outlines.loc[[main]].to_crs(grid.crs).geometry), transform=grid.transform,
+                                      invert=True, out_shape=dem.shape)
         on_ref = outlines.copy()
-        on_ref.loc[outlines.geometry.intersection(start).area.idxmax(), "geometry"] = \
-            surveys[surveys["Date"] == ref["date"]].geometry.union_all()
-        reference = survey_surface(dem.astype(np.float64), glacier, grid, on_ref, os.path.join(HERE, ref["dem"]))
+        on_ref.loc[main, "geometry"] = surveys[surveys["Date"] == ref["date"]].geometry.union_all()
+        ref_surface, _ = survey_surface(dem.astype(np.float64), own, grid, on_ref, os.path.join(HERE, ref["dem"]),
+                                        level=level)
+        reference = np.where(own, ref_surface, surface)
     bed = np.where(glacier, reference - ice, surface)
     if usgs and later:
         bed = melt_out_bed(dem, surface, bed, glacier, grid, gpd.GeoSeries([start], crs=surveys.crs),
@@ -227,7 +240,8 @@ def surface_and_bed(c, dem, glacier, grid, ice, outlines, surveys):
     print(f"bed above the start surface on {above.sum()} glacier cells ({above.sum() * dx * dy / 1e6:.3f} km2, median "
           f"{np.median((bed - surface)[above]) if above.any() else 0:.1f} m), held at the surface; "
           f"{perched.sum()} of {(glacier & np.isfinite(high)).sum()} edge cells have it above their highest ice-free "
-          f"neighbour (median {np.median((bed - high)[perched]) if perched.any() else 0:.1f} m)")
+          f"neighbour (median {np.median((bed - high)[perched]) if perched.any() else 0:.1f} m), lowered to it")
+    bed = np.where(perched, high, bed)  # no bed step up from the ice-free ground at the margin
     return surface, np.maximum(np.minimum(bed, surface), 0)
 
 

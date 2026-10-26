@@ -16,6 +16,7 @@ data:
   ice_thickness: data/external/Thickness_data
   usgs_outlines: GlacierDEM/USGS_Glacier_Boundaries_shp/USGS_Glacier_Boundaries.shp
 usgs_outline: {glacier: Gulkana Glacier, date: 2007/08/11, dem: GlacierDEM/Deltas_20070811_DEM/Deltas_20070811_DEM.tif}  # the survey before the 2008 start, in place of RGI's 2009 outline
+millan_reference: {date: 2016/08/30, dem: GlacierDEM/Deltas_20160830_DEM/Deltas_20160830_DEM.tif}  # the survey inside Millan's 2010-2020 decade; the bed is it less his thickness
 later_outline: {date: 2021/09/19, dems: GlacierDEM/ArcticDEM_Gulkana}  # the last survey; ArcticDEM strips after it give the bed where ice melted out
 usgs_datum: -16.1                               # m added to USGS heights (WGS84 ellipsoid) to give the model DEM's
 
