@@ -49,7 +49,11 @@ wetland domain (a proglacial lake or wetted forefield) copied from the stream do
 1. **rasters.** RGI 6.0 outlines, replaced by the Herreid and Pellicciotti (2020) outline where it has
    one, and the benchmark glacier's by its last USGS survey outline before 2008 (`usgs_outline`: Gulkana
    11 August 2007, Wolverine 8 August 2006). Their ablation zones (buffered 50 m) and debris cover give the
-   domain type: 1 upland, 2 accumulation, 3 clean ablation, 4 debris ablation. Debris thickness is Rounce
+   domain type: 1 upland, 2 accumulation, 3 clean ablation, 4 debris ablation. Their debris map is of one image
+   (Gulkana 2010.7, Wolverine 2013.6): on the benchmark glacier, start-outline cells beyond their outline take the
+   nearest type and thickness, and the debris area is scaled to the start by the ratio of the survey outlines' area
+   (linear in time) at the start and in the image year, moving the debris edge over the ablation zone in whole cells.
+   Debris thickness is Rounce
    et al. (2021), raised to 4 cm where thinner. The bed is Millan et al.'s (2022) reference surface less his
    thickness: the survey DEM `millan_reference` names, inside his 2010–2020 decade, else the start surface.
    His thickness is sampled once, bilinear, onto each grid, and outline cells he leaves bare take the nearest

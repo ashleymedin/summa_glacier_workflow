@@ -9,7 +9,7 @@ From the global glacier products (each downloaded by hand, see README.md) writes
 
 and in attributes/elevation/dem domain_<name>_glacier_elv.tif, the glacier surface: the DEM, with the start
 surface of the glacier usgs_outline names (its survey DEM, or its survey DEMs interpolated in time to its date,
-each levelled to the millan_reference survey; the change from the DEM carried smoothly over cells none covers);
+or carried to it by the dhdt rate tiles, each levelled to the millan_reference survey; the change from the DEM carried smoothly over cells none covers);
 and domain_<name>_bedrock_elv.tif, Millan's reference surface (the survey DEM millan_reference names, levelled
 by usgs_datum, else the glacier surface) less his thickness, and that surface itself where the reference outline
 has no ice; both again as *_elv_utm.tif on the flow model's UTM grid, with Millan sampled straight onto it. The
@@ -22,7 +22,9 @@ Glacier outlines are RGI 6.0, replaced by the Herreid and Pellicciotti (2020) ou
 USGS survey outline (McNeil et al. 2019, doi:10.5066/P9R8BP3K) where the YAML's usgs_outline names one. Their
 ablation zones (buffered 50 m, clipped to the glacier) set the ablation area; a glacier without one uses Zmed
 as its equilibrium line. Debris is their debris cover, never in the accumulation zone, and every glacier keeps
-at least its highest cells as accumulation. Debris thickness is Rounce et al. (2021), nearest neighbour, with
+at least its highest cells as accumulation. On the usgs_outline glacier, start-outline cells beyond their outline
+take the nearest type, and the debris area is scaled from their image year to the start by the survey outlines'
+area, the debris edge moved over the ablation zone. Debris thickness is Rounce et al. (2021), nearest neighbour, with
 thicknesses at or below --min-debris (0.04 m) raised to it (Herreid 2021; Rounce et al. 2018). Glacier
 thickness is Millan et al. (2022), bilinear over his cells, zero off the outlines and filled from the nearest
 Millan cell where an outline reaches past it. It also prints each glacier's lateral moraine width, the mean thinnest width of its
@@ -276,6 +278,33 @@ def start_outline(usgs, surveys):
     return g
 
 
+def survey_area(surveys, year):
+    """The area (km2) of a glacier's survey outlines (UTM) linear in time at year (decimal), or the nearest one's."""
+    t = np.array([decimal_year(d) for d in surveys["Date"].unique()])
+    a = np.array([surveys[surveys["Date"] == d].geometry.union_all().area / 1e6 for d in surveys["Date"].unique()])
+    return float(np.interp(year, t[np.argsort(t)], a[np.argsort(t)]))
+
+
+def start_debris(dtype, own, mapped, ratio, dx, dy):
+    """The benchmark glacier's domain types on its start outline (own): cells beyond the mapped outline take the
+    nearest mapped type, then the debris extent grows or shrinks over the ablation zone, by a signed distance, to
+    the cell count nearest ratio times the mapped debris area. Returns the types and the mapped debris cells."""
+    debris0 = own & mapped & (dtype == DEBRIS_ABLATION)
+    _, (r, k) = distance_transform_edt(~(own & mapped), sampling=(dy, dx), return_indices=True)
+    dtype = np.where(own & ~mapped, dtype[r, k], dtype)
+    ablation = own & np.isin(dtype, (CLEAN_ABLATION, DEBRIS_ABLATION))
+    debris = own & (dtype == DEBRIS_ABLATION)
+    signed = distance_transform_edt(debris, sampling=(dy, dx)) - distance_transform_edt(~debris, sampling=(dy, dx))
+    edges = np.unique(signed[ablation])
+    counts = np.array([(signed[ablation] >= e).sum() for e in edges])
+    d = edges[np.argmin(np.abs(counts - ratio * debris0.sum()))]  # the cell steps nearest the scaled area
+    scaled = ablation & (signed >= d)
+    print(f"start debris: {debris0.sum()} mapped cells, {debris.sum()} with the cells beyond the mapped outline, "
+          f"{scaled.sum()} for {ratio:.3f} times the mapped area ({ratio * debris0.sum():.0f}); "
+          f"{(own & ~mapped).sum()} cells beyond it take the nearest type")
+    return np.where(ablation, np.where(scaled, DEBRIS_ABLATION, CLEAN_ABLATION), dtype), debris0
+
+
 def cell_size(grid, shape):
     """A grid's cell width and height (m), geographic or projected."""
     if not grid.crs.is_geographic:
@@ -446,6 +475,8 @@ def main():
         i = rgi.geometry.intersection(u).area.idxmax()  # the RGI glacier it overlaps most
         print(f"{rgi.at[i, 'RGIId']}: USGS outline of {usgs['date']}")
         rgi.at[i, "geometry"] = u
+        main_id, mapped_outline = rgi.at[i, "RGIId"], glc[glc["RGIId"] == rgi.at[i, "RGIId"]].geometry
+        image_year = float(deb[deb.intersects(mapped_outline.union_all())]["img_time"].median()) if len(mapped_outline) else None
     deb = gpd.overlay(deb, rgi, how="intersection")
     abl = gpd.overlay(abl, rgi, how="intersection")
     abl = abl.to_crs(c["utm_crs"])
@@ -493,6 +524,15 @@ def main():
         inside = geometry_mask([glacier.geometry], transform=src.transform, invert=True, out_shape=dem.shape)
         rgi_id[inside] = int(glacier["RGIId"][9:]) + int(glacier["RGIId"][6:8]) * 100000
     dtype[rgi_id == 0] = UPLAND  # ablation zones are clipped to the Herreid and Pellicciotti outline, not the final one
+    debris0 = np.zeros(dem.shape, dtype=bool)
+    if usgs and image_year:  # Herreid and Pellicciotti map one image year; scale to the start by the glacier's area
+        own = rgi_id == int(main_id[9:]) + int(main_id[6:8]) * 100000
+        mapped = geometry_mask(list(mapped_outline), transform=src.transform, invert=True, out_shape=dem.shape)
+        su = surveys.to_crs(c["utm_crs"])
+        ratio = start.area / 1e6 / survey_area(su, image_year)
+        print(f"{main_id}: debris mapped in {image_year:.2f}, glacier {survey_area(su, image_year):.2f} km2 then and "
+              f"{start.area / 1e6:.2f} km2 at the start")
+        dtype, debris0 = start_debris(dtype, own, mapped, ratio, *cell_size(src, dem.shape))
     meta.update(count=1, dtype="int16")
     with rasterio.open(os.path.join(glacier_dir, f"domain_{name}_domain_type.tif"), "w", **meta) as dst:
         dst.write(dtype, 1)
@@ -514,6 +554,9 @@ def main():
         values = mosaic_to_dem(thick_files, crs, dem.shape, src.transform, os.path.join(glacier_dir, "dtk_temp"))
         values[values >= 1.e19] = 0  # no-data fill
         values[values <= c.get("min_debris_thickness", 0.04)] = c.get("min_debris_thickness", 0.04)
+        if debris0.any():  # debris added at the start takes the nearest mapped thickness
+            _, (r, k) = distance_transform_edt(~debris0, return_indices=True)
+            values = np.where((dtype == DEBRIS_ABLATION) & ~debris0 & (rgi_id == rgi_id[debris0][0]), values[r, k], values)
         debris[dtype == DEBRIS_ABLATION] = values[dtype == DEBRIS_ABLATION]
     meta.update(count=1, dtype="float32")
     with rasterio.open(os.path.join(glacier_dir, f"domain_{name}_debris_thickness.tif"), "w", **meta) as dst:
