@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Rerun front members of a calibration with daily output, for plotting.
 
-Each trial is rerun as calibrate.py evaluate reruns it (parameters pinned, spin-up over 2008 at the defaults,
-2009-2022), but with write_timeseries (and mizuRoute's reach discharge and temperature) on, daily means of runoff, glacier and snow variables and yearly glacier surface and debris grids added to its outputControl, in
+Each trial is rerun as calibrate.py evaluate reruns it (parameters pinned, spin-up at the defaults over the year
+before the calibration start, to the end of the evaluation years), but with write_timeseries (and mizuRoute's reach discharge and temperature) on, daily means of runoff, glacier and snow variables and yearly glacier surface and debris grids added to its outputControl, in
 <case>/<name>_rerun/sample_<n>. --inputs reruns them on other summa_inputs than the case's, such as a rebuilt domain's.
 
     ./rerun_trials.py gulkana_corrected calibration 451 455 411 --jobs 3
@@ -19,7 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import netCDF4 as nc4
 
-from calibrate import HERE, config_text, fit12, pin_settings, run_driver, search_of, searched_names
+from calibrate import HERE, config_text, fit12, periods, pin_settings, run_driver, search_of, searched_names
 
 OUTPUTS = ["averageRoutedRunoff", "glacierRoutedRunoff", "basin__GlacierMassChange", "basin__GlacierArea",
            "basin__SurfaceRunoff", "basin__AquiferBaseflow", "scalarSWE", "scalarRainfall", "scalarSnowfall",
@@ -84,7 +84,8 @@ def main():
         with open(os.path.join(pinned, "outputControl.txt"), "a") as f:
             f.writelines(f"{v:<26}| day | mean\n" for v in OUTPUTS + a.extra)
             f.writelines(f"{v:<26}| annual\n" for v in GRIDS)
-        config = config_text(a.case, run_dir, pinned, work, "2009-01-01", "2022-12-31", "2016-01-01", "2022-12-31",
+        cal0, _, ev0, ev1 = periods(a.case)
+        config = config_text(a.case, run_dir, pinned, work, cal0, ev1, ev0, ev1,
                              "dds", 1, 1, temperature=True, search=search, pinned=values[s]).replace("write_timeseries = false", "write_timeseries = true") \
             .replace("write_Qreach = false", "write_Qreach = true")
         if a.massbal:

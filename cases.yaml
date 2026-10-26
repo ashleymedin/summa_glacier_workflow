@@ -37,6 +37,8 @@ gulkana_wolverine:
 
 # the full runs of glacier.tex: spin-up 2008, calibrated 2009-2015, evaluated 2016-2022
 gulkana_raw:
+  calibrate: [2009-01-01, 2015-12-31]
+  evaluate: [2016-01-01, 2022-12-31]
   domain: gulkana
   dest: runs/gulkana_raw
   template: tests/gulkana/summa_inputs
@@ -46,6 +48,8 @@ gulkana_raw:
   copy_forcing: false
 
 gulkana_corrected:
+  calibrate: [2009-01-01, 2015-12-31]
+  evaluate: [2016-01-01, 2022-12-31]
   domain: gulkana
   dest: runs/gulkana_corrected
   template: tests/gulkana/summa_inputs
@@ -55,6 +59,8 @@ gulkana_corrected:
   copy_forcing: false
 
 wolverine_raw:
+  calibrate: [2009-01-01, 2015-12-31]
+  evaluate: [2016-01-01, 2022-12-31]
   domain: wolverine
   dest: runs/wolverine_raw
   template: tests/wolverine/summa_inputs
@@ -64,6 +70,8 @@ wolverine_raw:
   copy_forcing: false
 
 wolverine_corrected:
+  calibrate: [2009-01-01, 2015-12-31]
+  evaluate: [2016-01-01, 2022-12-31]
   domain: wolverine
   dest: runs/wolverine_corrected
   template: tests/wolverine/summa_inputs

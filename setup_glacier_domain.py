@@ -5,9 +5,11 @@ Steps, in order (--steps picks some; the default is all of them):
 
   rasters   glacier_rasters.py: domain type, RGI id, debris thickness and bed rasters
   extend    glacier_extend.py: basin on the bed, glacier-capable cells downstream (needs pysheds)
-            -- then, in SYMFLUENCE: elevation-band HRUs, forcing remapping, upland attributes.nc and coldState.nc --
+            -- then, in SYMFLUENCE: elevation-band HRUs, upland attributes.nc and coldState.nc --
   hrus      hru_attributes.py: HRU area, centre, elevation, slope and contour length from the polygons and DEM
   zonal     glacier_zonal_stats.py: per-HRU debris, domain-type, elevation, slope and aspect statistics
+  era5      acquire_era5.py over the YAML's forcing_period (months not yet in forcing/raw_data), then
+            remap_forcing.py: forcing/SUMMA_input
   forcing   spechum_ratio_from_campaign.py (if the YAML names a campaign) and correct_forcing_to_station.py:
             forcing/SUMMA_input/station_corrected
   coldstate glacier_cold_state.py: attributes_glac.nc and coldstate_glac.nc, started from cold_start
@@ -25,7 +27,7 @@ import sys
 from domain_config import load_config
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-STEPS = ("rasters", "extend", "hrus", "zonal", "forcing", "coldstate")
+STEPS = ("rasters", "extend", "hrus", "zonal", "era5", "forcing", "coldstate")
 
 
 def run(*args):
@@ -51,6 +53,9 @@ def main():
         run(py, os.path.join(HERE, "hru_attributes.py"), a.config)
     if "zonal" in a.steps:
         run(py, os.path.join(HERE, "glacier_zonal_stats.py"), a.config)
+    if "era5" in a.steps:
+        run(py, os.path.join(HERE, "acquire_era5.py"), a.config, c["forcing_period"]["first"], c["forcing_period"]["last"])
+        run(py, os.path.join(HERE, "remap_forcing.py"), a.config)
     if "forcing" in a.steps:
         forcing = os.path.join(project, "forcing", "SUMMA_input")
         attributes = os.path.join(project, "settings", "SUMMA", "attributes.nc")

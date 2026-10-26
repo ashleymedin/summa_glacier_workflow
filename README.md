@@ -9,7 +9,7 @@ elsewhere.
 
 | Path | What |
 | --- | --- |
-| `data/domain_{Gulkana,Wolverine}/` | each domain: the SYMFLUENCE upland domain, raw ERA5 2008–2022, the USGS station records, stakes and observations, copied in; and everything the pipeline writes |
+| `data/domain_{Gulkana,Wolverine}/` | each domain: the SYMFLUENCE upland domain, gridded ERA5 (`forcing/raw_data`, 2008–2022 from SYMFLUENCE, the rest from `acquire_era5.py`), the USGS station records, stakes and observations, copied in; and everything the pipeline writes |
 | `data/external/` | RGI 6.0, Herreid and Pellicciotti debris extent, Rounce debris thickness and Millan ice thickness (the domain YAMLs' `data:` paths); not in git |
 | `domains/{gulkana,wolverine}.yaml` | each domain's bounding box, gauge, data paths and setup choices |
 | `setup_glacier_domain.py` | runs the glacier pipeline on a domain, `--steps` to pick some |
@@ -20,7 +20,7 @@ elsewhere.
 | `notebooks/glacier_plots.ipynb` | discharge, storage and glacier-surface plots of a glacier run |
 
 The pipeline's scripts: `glacier_rasters.py`, `glacier_extend.py`, `glacier_zonal_stats.py`,
-`correct_forcing_to_station.py`, `spechum_ratio_from_campaign.py` and `glacier_cold_state.py`; and
+`acquire_era5.py`, `remap_forcing.py`, `correct_forcing_to_station.py`, `spechum_ratio_from_campaign.py` and `glacier_cold_state.py`; and
 `acquire_glacier_mass_balance.py` for the mass-balance observations; `acquire_arcticdem.py` fetches the ArcticDEM
 strips the rasters step reads (into `GlacierDEM/`, not in git), before the rasters step. `acquire_balance_profile.py` writes the USGS
 yearly balance profiles as a `glacierMassBalFile`, which `runs/rerun_trials.py --massbal` gives the flow model in
@@ -41,7 +41,7 @@ wetland domain (a proglacial lake or wetted forefield) copied from the stream do
 ## Building
 
 ```bash
-./setup_glacier_domain.py domains/gulkana.yaml       # rasters extend hrus zonal forcing coldstate
+./setup_glacier_domain.py domains/gulkana.yaml       # rasters extend hrus zonal era5 forcing coldstate
 ./setup_glacier_domain.py domains/wolverine.yaml
 ./build_cases.py cases.yaml                          # every test and run, or name some
 ```
@@ -80,7 +80,12 @@ wetland domain (a proglacial lake or wetted forefield) copied from the stream do
    shapefile, from its polygon (in `utm_crs`) and the DEM.
 4. **zonal.** Per-HRU debris thickness, domain-type cell counts, and elevation, slope and aspect of each
    domain type; and the HRU of every DEM cell.
-5. **forcing.** The station correction:
+5. **era5.** `acquire_era5.py` fetches each month of `forcing_period` not yet in `forcing/raw_data` from the CDS:
+   temperature, humidity and wind at model level 137 and the surface pressure, shortwave, longwave and
+   precipitation rates, the fields of the 2008–2022 record. `remap_forcing.py` takes every month to the HRUs
+   by overlap area and lapses air temperature at 6.5 K km⁻¹ from the cells' elevation to the HRU's
+   (`forcing/SUMMA_input`); it reproduces SYMFLUENCE's Gulkana forcing to float precision.
+6. **forcing.** The station correction:
    - air temperature by an offset per HRU, month and wet or dry hour;
    - humidity by a ratio on the same split;
    - shortwave and pressure by one ratio per HRU;
@@ -92,7 +97,7 @@ wetland domain (a proglacial lake or wetted forefield) copied from the stream do
 
    Wolverine's HRUs without stakes take the SA-shielded gauge. Gulkana's April–August humidity comes from
    Wilson et al.'s 2024 Site B station. The output is `forcing/SUMMA_input/station_corrected`.
-6. **coldstate.** `attributes_glac.nc` and `coldstate_glac.nc`:
+7. **coldstate.** `attributes_glac.nc` and `coldstate_glac.nc`:
    - **Ice:** five layers, 0.15 to 23 m, starting at −5 °C, with ice fraction 0.90 to 0.98 down the column.
    - **Debris:** 2 to 5 soil layers over the ice, enough for the thickest debris cell in the HRU. The top
      layer is at most 5 cm and each layer below is a fixed ratio times the one above, as SUMMA re-splits
@@ -152,5 +157,6 @@ conda env create -f environment.yml    # the glacier environment: every script h
 conda activate glacier
 ```
 
-The pysheds fork still calls `np.in1d`, so numpy stays below 2.4. `spechum_ratio_from_campaign.py` pulls ERA5
+The pysheds fork still calls `np.in1d`, so numpy stays below 2.4. `acquire_era5.py` needs a free CDS account,
+the ERA5 licences accepted on the two dataset pages and the key in `~/.cdsapirc`. `spechum_ratio_from_campaign.py` pulls ERA5
 with gcsfs and zarr, unless its cached pulls (`forcing/spechum_ratios_*_era5_*.npz`) are present.

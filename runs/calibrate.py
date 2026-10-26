@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Calibrate a full glacier run, then score its Pareto front on the held-out years.
 
-  calibrate  NSGA-II over 2009-2015 after a spin-up over 2008, on discharge and the glacier-wide seasonal
-             mass balance, in <case>/<name> (default calibration)
-  evaluate   each front member rerun over 2009-2022 with its parameters pinned (both bounds set to its
-             value) and scored over 2016-2022, in <case>/<name>_evaluation/sample_<n>; a routed Wolverine run
-             adds its water temperature, which is only recorded from 2016; writes <case>/<name>_evaluation/evaluation.csv
+  calibrate  NSGA-II over the case's calibrate years of cases.yaml after a spin-up over the year before, on
+             discharge and the glacier-wide seasonal mass balance, in <case>/<name> (default calibration)
+  evaluate   each front member rerun from the calibration start to the end of its evaluate years with its
+             parameters pinned (both bounds set to its value) and scored over the evaluate years, in
+             <case>/<name>_evaluation/sample_<n>; a routed Wolverine run adds its water temperature, which is only
+             recorded from 2016; writes <case>/<name>_evaluation/evaluation.csv
 
 A run is routed through mizuRoute, and scored at its reach, when its folder holds a topology.nc (a stream case
 of cases.yaml); otherwise discharge is the GRU's own.
@@ -28,6 +29,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import netCDF4 as nc4
 import numpy as np
+import yaml
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GLACIER = os.path.dirname(HERE)
@@ -63,6 +65,13 @@ SEARCHES = {
 # fixed at their defaults on the station-corrected cases: the stakes set the snowfall with SUMMA's default phase split
 # (273.16 K, 2 K), and Site B sets the on-ice wind (glacierWindFactor 1) and cooling (1.3 K); raw ERA5 searches them
 STATION_FIXED = ["frozenPrecipMultip", "tempCritRain", "tempRangeTimestep", "glacierWindFactor", "glacierTempReduction"]
+
+
+def periods(case):
+    """(calibration start, calibration end, evaluation start, evaluation end) of a run in cases.yaml, YYYY-MM-DD."""
+    with open(os.path.join(GLACIER, "cases.yaml")) as f:
+        c = yaml.safe_load(f)[case]
+    return tuple(str(d) for d in c["calibrate"] + c["evaluate"])
 
 
 def search_for(case, name):
@@ -316,10 +325,11 @@ def main():
     a = p.parse_args()
     run_dir = os.path.join(HERE, a.case)
     settings = os.path.join(run_dir, "summa_inputs")
+    cal0, cal1, ev0, ev1 = periods(a.case)
 
     if a.mode == "calibrate":
         work = os.path.join(run_dir, a.name)
-        config = config_text(a.case, run_dir, settings, work, "2009-01-01", "2015-12-31", "2009-01-01", "2015-12-31",
+        config = config_text(a.case, run_dir, settings, work, cal0, cal1, cal0, cal1,
                              "nsga2", a.population * a.generations, a.population, temperature=False,
                              search=search_for(a.case, a.search))
         run_driver(work, config, settings, a.ranks)
@@ -339,7 +349,7 @@ def main():
         work = os.path.join(evaluation, f"sample_{i + 1}")
         pinned = os.path.join(work + "_settings")
         pin_settings(settings, pinned, values[i])
-        config = config_text(a.case, run_dir, pinned, work, "2009-01-01", "2022-12-31", "2016-01-01", "2022-12-31",
+        config = config_text(a.case, run_dir, pinned, work, cal0, ev1, ev0, ev1,
                              "dds", 1, 1, temperature=True, search=search, pinned=values[i])
         run_driver(work, config, pinned, a.ranks)
         with nc4.Dataset(os.path.join(work, "output", f"{a.case}_calibration.nc")) as d:

@@ -3,6 +3,7 @@ __pycache__/
 .ipynb_checkpoints/
 # bulky inputs, kept outside git (data/external: RGI 6, Herreid debris extent, Rounce debris and Millan ice thickness)
 data/*/forcing/SUMMA_input/
+data/*/forcing/raw_data/
 data/*/USGSweatherData/
 GlacierDEM/
 runs/*/forcing/

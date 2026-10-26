@@ -19,6 +19,7 @@ millan_reference: {date: 2015/08/13, dem: GlacierDEM/EasternKenai_20150813_DEM/E
 later_outline: {date: 2020/10/19, dems: GlacierDEM/ArcticDEM_Wolverine}  # the last survey; ArcticDEM strips after it give the bed where ice melted out
 usgs_datum: -14.0                               # m added to USGS heights (WGS84 ellipsoid) to give the model DEM's
 
+forcing_period: {first: 2004-10, last: 2026-09}
 cold_start: 2008-01
 soil_offset: 1.5
 ice_temp: -5.0

@@ -16,6 +16,7 @@ dependencies:
   - rasterstats
   - pyyaml
   - matplotlib
+  - cdsapi                 # acquire_era5.py
   - gcsfs                  # spechum_ratio_from_campaign.py's ERA5 pull
   - zarr
   - dask
