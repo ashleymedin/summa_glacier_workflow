@@ -10,7 +10,9 @@ From the global glacier products (each downloaded by hand, see README.md) writes
 and in attributes/elevation/dem domain_<name>_glacier_elv.tif, the glacier surface: the DEM, with the survey DEM
 of the USGS outline on that glacier where usgs_outline names one (levelled to the DEM on the ground around it, its
 change from the DEM carried smoothly over the glacier cells it does not cover);
-and domain_<name>_bedrock_elv.tif, that surface less the glacier thickness. Where later_outline names a later
+and domain_<name>_bedrock_elv.tif, Millan's reference surface (the survey DEM millan_reference names, else the
+glacier surface) less his thickness; both again as *_elv_utm.tif on the flow model's UTM grid, with Millan sampled
+straight onto it. Where later_outline names a later
 survey of that glacier, the bed under the ice lost between the two outlines is the surface of the ArcticDEM strips
 after it (acquire_arcticdem.py, each levelled to the DEM on the ground around the glacier), and that change of
 the bed is carried harmonically over the glacier within reach (250 m) of them, to nothing at the ice-free ground.
@@ -21,8 +23,8 @@ ablation zones (buffered 50 m, clipped to the glacier) set the ablation area; a 
 as its equilibrium line. Debris is their debris cover, never in the accumulation zone, and every glacier keeps
 at least its highest cells as accumulation. Debris thickness is Rounce et al. (2021), nearest neighbour, with
 thicknesses at or below --min-debris (0.04 m) raised to it (Herreid 2021; Rounce et al. 2018). Glacier
-thickness is Millan et al. (2022), zero off the outlines and filled from the nearest Millan cell where an
-outline reaches past it. It also prints each glacier's lateral moraine width, the mean thinnest width of its
+thickness is Millan et al. (2022), bilinear over his cells, zero off the outlines and filled from the nearest
+Millan cell where an outline reaches past it. It also prints each glacier's lateral moraine width, the mean thinnest width of its
 debris polygons, for latMoraineWidth.
 
     ./glacier_rasters.py domains/wolverine.yaml
@@ -171,6 +173,64 @@ def survey_surface(dem, glacier, src, outlines, path, buffer=1000.0, min_cover=0
     return np.where(glacier, dem + change, dem)
 
 
+def cell_size(grid, shape):
+    """A grid's cell width and height (m), geographic or projected."""
+    if not grid.crs.is_geographic:
+        return abs(grid.transform.a), abs(grid.transform.e)
+    lat = grid.transform.f + grid.transform.e * shape[0] / 2
+    return grid.transform.a * 111320.0 * np.cos(np.radians(lat)), abs(grid.transform.e) * 111320.0
+
+
+def thickness_on_grid(files, glacier, grid, shape):
+    """Millan's thickness sampled once onto a grid, bilinear over his own cells only, with glacier cells he leaves
+    bare taking the nearest value and zero off the glacier."""
+    ice = np.full(shape, np.nan)
+    for path in files:
+        with rasterio.open(path) as s:
+            out = np.full(shape, np.nan)
+            reproject(rasterio.band(s, 1), out, src_transform=s.transform, src_crs=s.crs, src_nodata=0,
+                      dst_transform=grid.transform, dst_crs=grid.crs, dst_nodata=np.nan, resampling=Resampling.bilinear)
+            ice = np.where(np.isfinite(out) & (out > 0), out, ice)
+    thick = np.isfinite(ice)
+    if np.any(glacier & ~thick):
+        _, (r, k) = distance_transform_edt(~thick, return_indices=True)
+        ice[glacier & ~thick] = ice[r, k][glacier & ~thick]
+    return np.where(glacier, ice, 0.0)
+
+
+def surface_and_bed(c, dem, glacier, grid, ice, outlines, surveys):
+    """The start glacier surface and the bed on one grid (outlines and surveys in the UTM CRS). The bed is
+    Millan's reference surface (millan_reference: a survey inside his 2010-2020 decade) less his thickness, so it
+    does not depend on the start; the start thickness is the start survey's surface less that bed. Where
+    later_outline names a later survey, the bed under ice lost by then is the ArcticDEM surface after it."""
+    usgs, ref, later = c.get("usgs_outline"), c.get("millan_reference"), c.get("later_outline")
+    start = surveys[surveys["Date"] == usgs["date"]].geometry.union_all() if usgs else None
+    surface = dem.astype(np.float64)
+    if usgs and usgs.get("dem"):
+        surface = survey_surface(surface, glacier, grid, outlines, os.path.join(HERE, usgs["dem"]))
+    reference = surface
+    if ref:
+        on_ref = outlines.copy()
+        on_ref.loc[outlines.geometry.intersection(start).area.idxmax(), "geometry"] = \
+            surveys[surveys["Date"] == ref["date"]].geometry.union_all()
+        reference = survey_surface(dem.astype(np.float64), glacier, grid, on_ref, os.path.join(HERE, ref["dem"]))
+    bed = np.where(glacier, reference - ice, surface)
+    if usgs and later:
+        bed = melt_out_bed(dem, surface, bed, glacier, grid, gpd.GeoSeries([start], crs=surveys.crs),
+                           surveys[surveys["Date"] == later["date"]].geometry, outlines.geometry,
+                           sorted(glob.glob(os.path.join(HERE, later["dems"], "*.tif"))), later.get("reach", 250.0))
+    dx, dy = cell_size(grid, dem.shape)
+    above = glacier & (bed > surface)
+    ground = np.where(glacier, -np.inf, surface)
+    high = np.max([np.roll(ground, s, a) for a in (0, 1) for s in (-1, 1)], axis=0)  # highest ice-free neighbour
+    perched = glacier & np.isfinite(high) & (bed > high)
+    print(f"bed above the start surface on {above.sum()} glacier cells ({above.sum() * dx * dy / 1e6:.3f} km2, median "
+          f"{np.median((bed - surface)[above]) if above.any() else 0:.1f} m), held at the surface; "
+          f"{perched.sum()} of {(glacier & np.isfinite(high)).sum()} edge cells have it above their highest ice-free "
+          f"neighbour (median {np.median((bed - high)[perched]) if perched.any() else 0:.1f} m)")
+    return surface, np.maximum(np.minimum(bed, surface), 0)
+
+
 def melt_out_bed(dem, surface, bed, glacier, src, start, later, outlines, paths, reach=250.0, buffer=1000.0,
                  min_cover=0.5):
     """The bed where the ice melted out between the start and later outlines (GeoSeries) set to the strips' surface,
@@ -201,8 +261,7 @@ def melt_out_bed(dem, surface, bed, glacier, src, start, later, outlines, paths,
     with np.errstate(all="ignore"):
         after = np.nanmedian(heights, axis=0) if heights else np.full(dem.shape, np.nan)
     known = glacier & np.isfinite(after)
-    dy = abs(src.transform.e) * 111320.0  # m per cell of the geographic grid
-    dx = src.transform.a * 111320.0 * np.cos(np.radians(src.transform.f + src.transform.e * dem.shape[0] / 2))
+    dx, dy = cell_size(src, dem.shape)
     near = distance_transform_edt(~known, sampling=(dy, dx)) <= reach
     change = harmonic_fill(np.where(known, np.minimum(after, surface) - bed, 0.0), known, glacier & near)
     moved = glacier & ~known & (np.abs(change) > 1)
@@ -328,30 +387,38 @@ def main():
     with rasterio.open(os.path.join(glacier_dir, f"domain_{name}_debris_thickness.tif"), "w", **meta) as dst:
         dst.write(debris, 1)
 
-    ice_files = sorted(f for f in os.listdir(os.path.join(c["data"]["ice_thickness"], f"RGI-{rn}"))
-                       if f.startswith(f"THICKNESS_RGI-{rn}.") and f.endswith("tif"))
-    ice = mosaic_to_dem([os.path.join(c["data"]["ice_thickness"], f"RGI-{rn}", f) for f in ice_files],
-                        crs, dem.shape, src.transform, os.path.join(glacier_dir, "tk_temp"))
-    ice = np.where(np.isfinite(ice) & (ice > 0) & (rgi_id > 0), ice, 0)
-    glacier, thick = rgi_id > 0, ice > 0
-    if np.any(glacier & ~thick):  # outline cells Millan leaves bare take the nearest Millan thickness
-        _, (r, k) = distance_transform_edt(~thick, return_indices=True)
-        ice[glacier & ~thick] = ice[r, k][glacier & ~thick]
+    tdir = os.path.join(c["data"]["ice_thickness"], f"RGI-{rn}")
+    ice_files = [os.path.join(tdir, f) for f in sorted(os.listdir(tdir)) if f.startswith(f"THICKNESS_RGI-{rn}.") and f.endswith("tif")]
+    rgi_utm = rgi.to_crs(c["utm_crs"])
+    surveys_utm = surveys.to_crs(c["utm_crs"]) if usgs else None
 
-    surface = dem.astype(np.float64)
-    if usgs and usgs.get("dem"):
-        surface = survey_surface(surface, glacier, src, rgi.to_crs(c["utm_crs"]), os.path.join(HERE, usgs["dem"]))
-    bed = np.maximum(surface - ice, 0)
-    later = c.get("later_outline")
-    if usgs and later:
-        start = gpd.GeoSeries([u], crs=crs).to_crs(c["utm_crs"])
-        bed = melt_out_bed(dem, surface, bed, glacier, src, start, surveys[surveys["Date"] == later["date"]].geometry,
-                           rgi.geometry, sorted(glob.glob(os.path.join(HERE, later["dems"], "*.tif"))),
-                           later.get("reach", 250.0))
-    with rasterio.open(os.path.join(bed_dir, f"domain_{name}_bedrock_elv.tif"), "w", **meta) as dst:
-        dst.write(bed.astype(np.float32), 1)
-    with rasterio.open(os.path.join(bed_dir, f"domain_{name}_glacier_elv.tif"), "w", **meta) as dst:
-        dst.write(surface.astype(np.float32), 1)
+    # the DEM grid's surface and bed, for the basin and HRUs; the flow model reads the UTM pair below
+    glacier = rgi_id > 0
+    print("DEM grid:")
+    surface, bed = surface_and_bed(c, dem, glacier, src, thickness_on_grid(ice_files, glacier, src, dem.shape),
+                                   rgi_utm, surveys_utm)
+    for key, values in (("bedrock", bed), ("glacier", surface)):
+        with rasterio.open(os.path.join(bed_dir, f"domain_{name}_{key}_elv.tif"), "w", **meta) as dst:
+            dst.write(values.astype(np.float32), 1)
+
+    # the same on the UTM grid read_glacier_grids reprojects to, so Millan is sampled once onto the flow grid
+    utm = rasterio.crs.CRS.from_string(c["utm_crs"])
+    tr, width, height = calculate_default_transform(crs, utm, src.width, src.height, *src.bounds)
+    grid = type("Grid", (), {"transform": tr, "crs": utm})
+    shape = (height, width)
+    dem_u, gid_u = np.full(shape, np.nan), np.zeros(shape, dtype=np.int32)
+    reproject(dem.astype(np.float64), dem_u, src_transform=src.transform, src_crs=crs, dst_transform=tr, dst_crs=utm,
+              resampling=Resampling.bilinear)
+    reproject(rgi_id, gid_u, src_transform=src.transform, src_crs=crs, dst_transform=tr, dst_crs=utm,
+              resampling=Resampling.nearest)
+    glacier_u = gid_u > 0
+    print("UTM grid:")
+    surface_u, bed_u = surface_and_bed(c, dem_u, glacier_u, grid, thickness_on_grid(ice_files, glacier_u, grid, shape),
+                                       rgi_utm, surveys_utm)
+    meta_u = {**meta, "crs": utm, "transform": tr, "width": width, "height": height, "dtype": "float32"}
+    for key, values in (("bedrock", bed_u), ("glacier", surface_u)):
+        with rasterio.open(os.path.join(bed_dir, f"domain_{name}_{key}_elv_utm.tif"), "w", **meta_u) as dst:
+            dst.write(values.astype(np.float32), 1)
     src.close()
     print(f"wrote the domain type, RGI id and debris rasters to {glacier_dir} and the bed to {bed_dir}")
 

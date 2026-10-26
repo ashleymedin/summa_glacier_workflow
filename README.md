@@ -50,8 +50,11 @@ wetland domain (a proglacial lake or wetted forefield) copied from the stream do
    one, and the benchmark glacier's by its last USGS survey outline before 2008 (`usgs_outline`: Gulkana
    11 August 2007, Wolverine 8 August 2006). Their ablation zones (buffered 50 m) and debris cover give the
    domain type: 1 upland, 2 accumulation, 3 clean ablation, 4 debris ablation. Debris thickness is Rounce
-   et al. (2021), raised to 4 cm where thinner. The bed is the glacier surface less the Millan et al. (2022)
-   thickness, filled from the nearest Millan cell where an outline reaches past it. The glacier surface is the DEM, or that survey's own DEM on the
+   et al. (2021), raised to 4 cm where thinner. The bed is Millan et al.'s (2022) reference surface less his
+   thickness: the survey DEM `millan_reference` names, inside his 2010–2020 decade, else the start surface.
+   His thickness is sampled once, bilinear, onto each grid, and outline cells he leaves bare take the nearest
+   value. The flow model reads the bed and surface built on its own UTM grid (`*_elv_utm.tif`), not regridded
+   from the DEM grid, which would move the margins' thin values inward. The glacier surface is the DEM, or that survey's own DEM on the
    glacier where `usgs_outline` names one (`dem`), levelled to the DEM on the ground around it. Where the survey
    covers less than half a cell, its change from the DEM is carried harmonically to zero at the ice-free ground.
    Where `later_outline` names a later survey, the bed under the ice lost between the two outlines is the surface

@@ -133,8 +133,8 @@ def read_glacier_grids(project_dir, domain, utm_epsg, hru_ids, gru_ids, hru2gru,
     glacier_dir = os.path.join(project_dir, "attributes", "glaciers")
     dem_dir = os.path.join(project_dir, "attributes", "elevation", "dem")
     sources = {
-        "bed": os.path.join(dem_dir, f"domain_{domain}_bedrock_elv.tif"),
-        "surf": os.path.join(dem_dir, f"domain_{domain}_glacier_elv.tif"),  # glacier_rasters.py's glacier surface
+        "bed": os.path.join(dem_dir, f"domain_{domain}_bedrock_elv_utm.tif"),  # glacier_rasters.py's, on this grid
+        "surf": os.path.join(dem_dir, f"domain_{domain}_glacier_elv_utm.tif"),
         "debris": os.path.join(glacier_dir, f"domain_{domain}_debris_thickness.tif"),
         "hru": os.path.join(glacier_dir, f"domain_{domain}_hru_id.tif"),
         "id": os.path.join(glacier_dir, f"domain_{domain}_rgi_id_extend.tif"),
@@ -145,13 +145,16 @@ def read_glacier_grids(project_dir, domain, utm_epsg, hru_ids, gru_ids, hru2gru,
     rasters = {}
     try:
         for key, path in sources.items():
-            utm_path = os.path.join(temp_dir, f"{key}_utm.tif")
-            reproject_to_utm(path, utm_path, utm_epsg)
+            utm_path = path if path.endswith("_utm.tif") else os.path.join(temp_dir, f"{key}_utm.tif")
+            if utm_path != path:
+                reproject_to_utm(path, utm_path, utm_epsg)
             with rasterio.open(utm_path) as src:
                 rasters[key] = src.read(1)
                 res = src.res
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
+    if len({r.shape for r in rasters.values()}) > 1:
+        raise ValueError(f"UTM grids differ: { {k: r.shape for k, r in rasters.items()} }; rerun glacier_rasters.py")
     bed, surf, debris, hru_cell, gid, dtype = (rasters[k] for k in ("bed", "surf", "debris", "hru", "id", "type"))
     cell_area = res[0] * res[1]
 
