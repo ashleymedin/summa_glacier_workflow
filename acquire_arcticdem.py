@@ -22,6 +22,7 @@ from rasterio.enums import Resampling
 from rasterio.windows import Window, from_bounds
 
 from domain_config import load_config
+from glacier_rasters import start_outline
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STAC = "https://stac.pgc.umn.edu/api/v1"
@@ -59,8 +60,8 @@ def main():
     out_dir = os.path.join(HERE, later["dems"])
     os.makedirs(out_dir, exist_ok=True)
 
-    u = gpd.read_file(c["data"]["usgs_outlines"])
-    start = u[(u["Glacier"] == usgs["glacier"]) & (u["Date"] == usgs["date"])].to_crs(c["utm_crs"])
+    u = gpd.read_file(c["data"]["usgs_outlines"]).to_crs(c["utm_crs"])
+    start = gpd.GeoSeries([start_outline(usgs, u[u["Glacier"] == usgs["glacier"]])], crs=c["utm_crs"])
     area = start.buffer(a.buffer).to_crs(3413).union_all()
     date = later["date"].replace("/", "-")
     footprint = gpd.GeoSeries([area], crs=3413).to_crs(4326).iloc[0]

@@ -54,9 +54,15 @@ wetland domain (a proglacial lake or wetted forefield) copied from the stream do
    thickness: the survey DEM `millan_reference` names, inside his 2010–2020 decade, else the start surface.
    His thickness is sampled once, bilinear, onto each grid, and outline cells he leaves bare take the nearest
    value. The flow model reads the bed and surface built on its own UTM grid (`*_elv_utm.tif`), not regridded
-   from the DEM grid, which would move the margins' thin values inward. The glacier surface is the DEM, or that survey's own DEM on the
-   glacier where `usgs_outline` names one (`dem`), levelled to the DEM on the ground around it. Where the survey
-   covers less than half a cell, its change from the DEM is carried harmonically to zero at the ice-free ground.
+   from the DEM grid, which would move the margins' thin values inward. The reference survey is levelled to the
+   DEM by `usgs_datum` (the DEM's offset from the surveys varies by tens of metres with slope), and where its
+   outline has no ice the bed is its surface. The glacier surface is the DEM, or the benchmark glacier's start
+   surface: one survey DEM (`dem`), or several (`dems`) interpolated linearly in time to `usgs_outline`'s date
+   between the nearest surveys before and after it that cover each cell. Every survey is levelled to the
+   reference by a plane and an elevation term fitted on ground under 20°. The start outline is that survey's,
+   or between the two `outlines` listed, as the zero contour of their blended signed distances, its area
+   linear in time. Where the surveys cover less than half a cell, the change from the DEM is carried
+   harmonically to zero at the ice-free ground.
    Where `later_outline` names a later survey, the bed under the ice lost between the two outlines is the surface
    of the ArcticDEM strips after it (`acquire_arcticdem.py`, each levelled to the DEM on the ground), and that change
    of the bed is carried harmonically over the glacier within 250 m (`reach`), to zero at the ice-free ground. Millan

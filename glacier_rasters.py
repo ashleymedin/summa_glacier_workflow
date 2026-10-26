@@ -7,12 +7,13 @@ From the global glacier products (each downloaded by hand, see README.md) writes
   domain_<name>_rgi_id.tif            RGI 6.0 id as region*100000 + number, 0 off glacier
   domain_<name>_debris_thickness.tif  debris thickness (m), non-zero only where the type is 4
 
-and in attributes/elevation/dem domain_<name>_glacier_elv.tif, the glacier surface: the DEM, with the survey DEM
-of the USGS outline on that glacier where usgs_outline names one (levelled to the DEM on the ground around it, its
-change from the DEM carried smoothly over the glacier cells it does not cover);
-and domain_<name>_bedrock_elv.tif, Millan's reference surface (the survey DEM millan_reference names, else the
-glacier surface) less his thickness; both again as *_elv_utm.tif on the flow model's UTM grid, with Millan sampled
-straight onto it. Where later_outline names a later
+and in attributes/elevation/dem domain_<name>_glacier_elv.tif, the glacier surface: the DEM, with the start
+surface of the glacier usgs_outline names (its survey DEM, or its survey DEMs interpolated in time to its date,
+each levelled to the millan_reference survey; the change from the DEM carried smoothly over cells none covers);
+and domain_<name>_bedrock_elv.tif, Millan's reference surface (the survey DEM millan_reference names, levelled
+by usgs_datum, else the glacier surface) less his thickness, and that surface itself where the reference outline
+has no ice; both again as *_elv_utm.tif on the flow model's UTM grid, with Millan sampled straight onto it. The
+start outline is that survey's, or between the two usgs_outline lists. Where later_outline names a later
 survey of that glacier, the bed under the ice lost between the two outlines is the surface of the ArcticDEM strips
 after it (acquire_arcticdem.py, each levelled to the DEM on the ground around the glacier), and that change of
 the bed is carried harmonically over the glacier within reach (250 m) of them, to nothing at the ice-free ground.
@@ -33,6 +34,7 @@ debris polygons, for latMoraineWidth.
 import argparse
 import glob
 import os
+import re
 import shutil
 
 import geopandas as gpd
@@ -150,36 +152,126 @@ def harmonic_fill(values, known, region):
     return out
 
 
-def survey_surface(dem, glacier, src, outlines, path, buffer=1000.0, min_cover=0.5, level=None):
-    """The DEM with a survey DEM's mean on the glacier cells it covers by at least min_cover, levelled to the DEM
-    by their median difference on the ground within buffer (m) of the outlines, or to another survey on the
-    ground both cover (level: that survey's ground means and offset). The survey's change from the DEM is
-    carried harmonically onto the glacier cells it leaves out, to nothing at the ice-free ground. Returns the
-    surface and this survey's (ground means, offset)."""
+def decimal_year(date):
+    """A YYYY/MM/DD or YYYYMMDD date as a decimal year."""
+    t = pd.Timestamp(str(date).replace("/", "-") if "/" in str(date) else f"{str(date)[:4]}-{str(date)[4:6]}-{str(date)[6:8]}")
+    return t.year + (t.dayofyear - 0.5) / (366 if t.is_leap_year else 365)
+
+
+def grid_xy(grid, shape):
+    """Cell-centre coordinates (km, about the grid's centre) of a geographic or projected grid."""
+    rows, cols = np.indices(shape)
+    x, y = grid.transform * (cols + 0.5, rows + 0.5)
+    x, y = x - x.mean(), y - y.mean()
+    if grid.crs.is_geographic:
+        lat = grid.transform.f + grid.transform.e * shape[0] / 2
+        return x * 111.32 * np.cos(np.radians(lat)), y * 111.32
+    return x / 1000.0, y / 1000.0
+
+
+def survey_on_grid(dem, grid, outlines, path, buffer=1000.0, anchor=None, around=None, offset=None):
+    """A survey DEM's mean on each grid cell inside the outlines, the fraction of each cell it covers, and its mean
+    on the ground within buffer (m) of them (of around, if given), all levelled: by offset (m) if given, else to
+    the DEM by their median difference on that ground,
+    or to anchor (another survey's levelled ground means) by a plane and an elevation term fitted on the ground
+    both cover where it slopes under 20 degrees (2 m read; outliers beyond 3 NMAD dropped)."""
     with rasterio.open(path) as s:
         f = max(1, int(2.0 / abs(s.res[0])))  # surveys finer than 2 m are read at 2 m
         z = s.read(1, masked=True, out_shape=(s.height // f, s.width // f),
                    resampling=Resampling.average).astype(np.float64).filled(np.nan)
         t = s.transform * s.transform.scale(s.width / z.shape[1], s.height / z.shape[0])
         on_ice = geometry_mask(list(outlines.to_crs(s.crs).geometry), transform=t, invert=True, out_shape=z.shape)
-        near = geometry_mask(list(outlines.to_crs(s.crs).buffer(buffer)), transform=t, invert=True, out_shape=z.shape)
+        near = geometry_mask(list((outlines if around is None else around).to_crs(s.crs).buffer(buffer)), transform=t,
+                             invert=True, out_shape=z.shape)
         means = {}
         for key, keep in (("ice", on_ice), ("ground", near & ~on_ice), ("cover", None)):
             out = np.full(dem.shape, np.nan)
             values = np.isfinite(z).astype(np.float64) if keep is None else np.where(keep, z, np.nan)
             reproject(values, out, src_transform=t, src_crs=s.crs, src_nodata=np.nan,
-                      dst_transform=src.transform, dst_crs=src.crs, dst_nodata=np.nan, resampling=Resampling.average)
+                      dst_transform=grid.transform, dst_crs=grid.crs, dst_nodata=np.nan, resampling=Resampling.average)
             means[key] = out
-    if level is None:
-        offset, n = np.nanmedian(dem - means["ground"]), np.isfinite(means["ground"]).sum()
+    ground = means["ground"]
+    if anchor is None and offset is not None:
+        both = np.isfinite(ground)
+        fit, how = np.full(dem.shape, float(offset)), "usgs_datum"
+    elif anchor is None:
+        both = np.isfinite(ground) & np.isfinite(dem)
+        fit, how = np.full(dem.shape, np.median((dem - ground)[both])), "median to the DEM"
     else:
-        both = np.isfinite(level[0]) & np.isfinite(means["ground"])
-        offset, n = level[1] + np.median((level[0] - means["ground"])[both]), both.sum()
-    known = glacier & np.isfinite(means["ice"]) & (np.nan_to_num(means["cover"]) >= min_cover)
-    print(f"{os.path.basename(path)}: {offset:+.1f} m to the DEM, levelled on {n} ground cells, "
-          f"covers {known.sum()} of {glacier.sum()} glacier cells")
-    change = harmonic_fill(np.where(known, means["ice"] + offset - dem, 0.0), known, glacier)
-    return np.where(glacier, dem + change, dem), (means["ground"], offset)
+        x, y = grid_xy(grid, dem.shape)
+        terms = lambda z: np.stack([np.ones(z.shape), x, y, (z - 1500.0) / 100.0], -1)  # (ny, nx, 4)
+        gy, gx = np.gradient(anchor, *cell_size(grid, dem.shape)[::-1])
+        both = np.isfinite(anchor) & np.isfinite(ground) & (np.degrees(np.arctan(np.hypot(gx, gy))) < 20)
+        d, keep = anchor - ground, both.copy()
+        for _ in range(3):
+            a, *_ = np.linalg.lstsq(terms(ground)[keep], d[keep], rcond=None)
+            res = d[both] - terms(ground)[both] @ a
+            nmad = 1.4826 * np.median(np.abs(res - np.median(res)))
+            keep[both] = np.abs(res) < 3 * nmad
+        fit = terms(np.where(np.isfinite(means["ice"]), means["ice"], np.where(np.isfinite(ground), ground, dem))) @ a
+        how = (f"plane {a[1]:+.2f} m/km E {a[2]:+.2f} m/km N, {a[3]:+.2f} m/100 m, residual NMAD {nmad:.1f} m, "
+               "to the anchor")
+    print(f"{os.path.basename(path)}: {np.nanmedian(fit[both]):+.1f} m ({how}) on {both.sum()} ground cells")
+    return means["ice"] + fit, np.nan_to_num(means["cover"]), ground + fit
+
+
+def survey_surface(dem, glacier, grid, outlines, paths, date=None, min_cover=0.5, anchor=None, around=None,
+                   offset=None):
+    """The DEM with the survey DEMs' surface on the glacier cells they cover by at least min_cover, linear in time
+    between the nearest surveys before and after date (decimal year) that cover each cell, or the nearer one
+    where only one side does. The change from the DEM is carried harmonically onto the glacier cells none covers,
+    to nothing at the ice-free ground. Every survey is levelled to anchor (levelled ground means), else the first
+    by offset or to the DEM and the rest to it. Returns the surface and the levelled ground of the first survey."""
+    zs, years = [], []
+    for path in paths:
+        z, cover, ground = survey_on_grid(dem, grid, outlines, path, anchor=anchor, around=around, offset=offset)
+        anchor = ground if anchor is None else anchor
+        zs.append(np.where(cover >= min_cover, z, np.nan))
+        years.append(decimal_year(re.search(r"(\d{8})", os.path.basename(path)).group(1)))
+    zs, years = np.array(zs), np.array(years)
+    date = years[0] if date is None else date
+    have = np.isfinite(zs)
+    before = np.where(have & (years[:, None, None] <= date), years[:, None, None], -np.inf).argmax(0)
+    after = np.where(have & (years[:, None, None] > date), years[:, None, None], np.inf).argmin(0)
+    hb = np.take_along_axis(have, before[None], 0)[0] & (years[before] <= date)
+    ha = np.take_along_axis(have, after[None], 0)[0] & (years[after] > date)
+    zb, za = (np.take_along_axis(zs, k[None], 0)[0] for k in (before, after))
+    w = np.where(hb & ha, (date - years[before]) / np.where(hb & ha, years[after] - years[before], 1), 0.0)
+    surf = np.where(hb & ha, zb + w * (za - zb), np.where(hb, zb, za))
+    known = glacier & np.isfinite(surf)
+    print(f"surface at {date:.2f}: {(known & hb & ha).sum()} of {glacier.sum()} glacier cells between two surveys, "
+          f"{(known & ~(hb & ha)).sum()} from one")
+    change = harmonic_fill(np.where(known, surf - dem, 0.0), known, glacier)
+    return np.where(glacier, dem + change, dem), anchor
+
+
+def start_outline(usgs, surveys):
+    """The benchmark glacier's outline at the start (usgs_outline date): that survey's, or between the two
+    outlines usgs_outline lists, as the zero contour of their signed distances (10 m grid) blended with the
+    weight that makes its area linear in time between theirs."""
+    if "outlines" not in usgs:
+        return surveys[surveys["Date"] == usgs["date"]].geometry.union_all()
+    (da, db), t = usgs["outlines"], decimal_year(usgs["date"])
+    a, b = (surveys[surveys["Date"] == d].geometry.union_all() for d in (da, db))
+    ta, tb = decimal_year(da), decimal_year(db)
+    minx, miny, maxx, maxy = a.union(b).buffer(100).bounds
+    size = (int((maxy - miny) / 10), int((maxx - minx) / 10))
+    tr = from_bounds(minx, miny, maxx, maxy, size[1], size[0])
+    signed = []
+    for g in (a, b):
+        m = geometry_mask([g], transform=tr, invert=True, out_shape=size)
+        signed.append(distance_transform_edt(m) - distance_transform_edt(~m))
+    target = (a.area + (t - ta) / (tb - ta) * (b.area - a.area)) / (abs(tr.a) * abs(tr.e))
+    lo, hi = 0.0, 1.0
+    for _ in range(30):
+        w = (lo + hi) / 2
+        n = (((1 - w) * signed[0] + w * signed[1]) > 0).sum()
+        lo, hi = (w, hi) if (n - target) * (b.area - a.area) < 0 else (lo, w)
+    m = ((1 - w) * signed[0] + w * signed[1]) > 0
+    g = unary_union([shape(p) for p, v in shapes(m.astype(np.uint8), mask=m, transform=tr) if v == 1])
+    print(f"start outline {usgs['date']}: {a.area / 1e6:.2f} km2 ({da}) to {b.area / 1e6:.2f} km2 ({db}), "
+          f"weight {w:.2f}, {g.area / 1e6:.2f} km2")
+    return g
 
 
 def cell_size(grid, shape):
@@ -207,31 +299,38 @@ def thickness_on_grid(files, glacier, grid, shape):
     return np.where(glacier, ice, 0.0)
 
 
-def surface_and_bed(c, dem, glacier, grid, ice, outlines, surveys):
-    """The start glacier surface and the bed on one grid (outlines and surveys in the UTM CRS). The bed is
-    Millan's reference surface (millan_reference: a survey inside his 2010-2020 decade) less his thickness, so it
-    does not depend on the start; the start thickness is the start survey's surface less that bed. Where
-    later_outline names a later survey, the bed under ice lost by then is the ArcticDEM surface after it."""
+def surface_and_bed(c, dem, glacier, grid, ice, outlines, surveys, start):
+    """The start glacier surface and the bed on one grid (outlines, surveys and the start outline in the UTM CRS).
+    The bed is Millan's reference surface (millan_reference: a survey inside his 2010-2020 decade, levelled to the
+    DEM by usgs_datum) less his thickness, and that surface itself where the reference outline has no ice, so it does not
+    depend on the start. The start surface is the usgs_outline survey (dem), or the surveys it lists (dems)
+    interpolated to its date, each levelled to the reference. Where later_outline names a later survey, the bed
+    under ice lost by then is the ArcticDEM surface after it."""
     usgs, ref, later = c.get("usgs_outline"), c.get("millan_reference"), c.get("later_outline")
-    start = surveys[surveys["Date"] == usgs["date"]].geometry.union_all() if usgs else None
-    surface, level = dem.astype(np.float64), None
-    if usgs and usgs.get("dem"):
-        surface, level = survey_surface(surface, glacier, grid, outlines, os.path.join(HERE, usgs["dem"]))
-    reference = surface
-    if ref:  # on the reference survey's own glacier only, levelled to the start survey
+    surface, anchor, reference = dem.astype(np.float64), None, None
+    if usgs:
         main = outlines.geometry.intersection(start).area.idxmax()
         own = glacier & geometry_mask(list(outlines.loc[[main]].to_crs(grid.crs).geometry), transform=grid.transform,
                                       invert=True, out_shape=dem.shape)
-        on_ref = outlines.copy()
-        on_ref.loc[main, "geometry"] = surveys[surveys["Date"] == ref["date"]].geometry.union_all()
-        ref_surface, _ = survey_surface(dem.astype(np.float64), own, grid, on_ref, os.path.join(HERE, ref["dem"]),
-                                        level=level)
-        reference = np.where(own, ref_surface, surface)
+        ever = outlines.copy()  # the survey values cover every cell the glacier held in any of its outlines
+        dates = [d for d in usgs.get("outlines", []) + [ref["date"] if ref else None] if d]
+        ever.loc[main, "geometry"] = unary_union([start] + [surveys[surveys["Date"] == d].geometry.union_all() for d in dates])
+    if ref:
+        reference, anchor = survey_surface(dem, own, grid, ever, [os.path.join(HERE, ref["dem"])],
+                                           offset=c.get("usgs_datum"))
+        in_ref = geometry_mask([surveys[surveys["Date"] == ref["date"]].to_crs(grid.crs).geometry.union_all()],
+                               transform=grid.transform, invert=True, out_shape=dem.shape)
+    if usgs and (usgs.get("dems") or usgs.get("dem")):
+        paths = [os.path.join(HERE, p) for p in usgs.get("dems", [usgs.get("dem")])]
+        surface, _ = survey_surface(dem, glacier, grid, ever, paths, decimal_year(usgs["date"]), anchor=anchor)
+    reference = surface if reference is None else np.where(own, reference, surface)
     bed = np.where(glacier, reference - ice, surface)
     if usgs and later:
         bed = melt_out_bed(dem, surface, bed, glacier, grid, gpd.GeoSeries([start], crs=surveys.crs),
                            surveys[surveys["Date"] == later["date"]].geometry, outlines.geometry,
                            sorted(glob.glob(os.path.join(HERE, later["dems"], "*.tif"))), later.get("reach", 250.0))
+    if ref:  # ice-free in the reference year: the bed is its surface (after melt_out_bed, which tapers Millan inward)
+        bed = np.where(own & ~in_ref & np.isfinite(reference), reference, bed)
     dx, dy = cell_size(grid, dem.shape)
     above = glacier & (bed > surface)
     ground = np.where(glacier, -np.inf, surface)
@@ -324,7 +423,8 @@ def main():
     if usgs:
         surveys = gpd.read_file(c["data"]["usgs_outlines"]).to_crs(crs)
         surveys = surveys[surveys["Glacier"] == usgs["glacier"]]
-        u = surveys[surveys["Date"] == usgs["date"]].geometry.union_all()
+        start = start_outline(usgs, surveys.to_crs(c["utm_crs"]))
+        u = gpd.GeoSeries([start], crs=c["utm_crs"]).to_crs(crs).iloc[0]
         i = rgi.geometry.intersection(u).area.idxmax()  # the RGI glacier it overlaps most
         print(f"{rgi.at[i, 'RGIId']}: USGS outline of {usgs['date']}")
         rgi.at[i, "geometry"] = u
@@ -410,7 +510,7 @@ def main():
     glacier = rgi_id > 0
     print("DEM grid:")
     surface, bed = surface_and_bed(c, dem, glacier, src, thickness_on_grid(ice_files, glacier, src, dem.shape),
-                                   rgi_utm, surveys_utm)
+                                   rgi_utm, surveys_utm, start if usgs else None)
     for key, values in (("bedrock", bed), ("glacier", surface)):
         with rasterio.open(os.path.join(bed_dir, f"domain_{name}_{key}_elv.tif"), "w", **meta) as dst:
             dst.write(values.astype(np.float32), 1)
@@ -421,14 +521,14 @@ def main():
     grid = type("Grid", (), {"transform": tr, "crs": utm})
     shape = (height, width)
     dem_u, gid_u = np.full(shape, np.nan), np.zeros(shape, dtype=np.int32)
-    reproject(dem.astype(np.float64), dem_u, src_transform=src.transform, src_crs=crs, dst_transform=tr, dst_crs=utm,
-              resampling=Resampling.bilinear)
+    reproject(dem.astype(np.float64), dem_u, src_transform=src.transform, src_crs=crs, src_nodata=src.nodata,
+              dst_transform=tr, dst_crs=utm, dst_nodata=np.nan, resampling=Resampling.bilinear)
     reproject(rgi_id, gid_u, src_transform=src.transform, src_crs=crs, dst_transform=tr, dst_crs=utm,
               resampling=Resampling.nearest)
     glacier_u = gid_u > 0
     print("UTM grid:")
     surface_u, bed_u = surface_and_bed(c, dem_u, glacier_u, grid, thickness_on_grid(ice_files, glacier_u, grid, shape),
-                                       rgi_utm, surveys_utm)
+                                       rgi_utm, surveys_utm, start if usgs else None)
     meta_u = {**meta, "crs": utm, "transform": tr, "width": width, "height": height, "dtype": "float32"}
     for key, values in (("bedrock", bed_u), ("glacier", surface_u)):
         with rasterio.open(os.path.join(bed_dir, f"domain_{name}_{key}_elv_utm.tif"), "w", **meta_u) as dst:
