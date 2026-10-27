@@ -1,0 +1,73 @@
+--- /private/tmp/claude-598/-Users-amedin-Research-SummaSundials-summa/e3ff6a0c-1fcc-4dc6-9389-e6e4a68d4f19/scratchpad/ssi_base.f90	2026-10-28 07:53:50
++++ /private/tmp/claude-598/-Users-amedin-Research-SummaSundials-summa/e3ff6a0c-1fcc-4dc6-9389-e6e4a68d4f19/scratchpad/summaSolv4ida_diag3.f90	2026-10-28 06:17:16
+@@ -214,6 +214,11 @@
+   ! --------------------------------------------------------------------------------------------------------------------------------
+   type(N_Vector),           pointer :: sunvec_y                     ! sundials solution vector
+   type(N_Vector),           pointer :: sunvec_yp                    ! sundials derivative vector
++  type(N_Vector),           pointer :: dbgEle, dbgEwt
++  real(rkind),allocatable,target :: dbgEleBuf(:), dbgEwtBuf(:)
++  integer(i4b) :: dbgI, dbgJ(1)
++  character(len=16) :: dbgRank
++  integer(i4b) :: dbgRoots, dbgWorst
+   type(SUNMatrix),          pointer :: sunmat_A                     ! sundials matrix
+   type(SUNLinearSolver),    pointer :: sunlinsol_LS                 ! sundials linear solver
+   type(c_ptr)                       :: ida_mem                      ! IDA memory
+@@ -485,6 +490,8 @@
+     tret(1) = t0 ! initial time
+     tretPrev = tret(1)
+     nSteps = 0 ! initialize number of time steps taken in solver
++    dbgRoots = 0
++    dbgWorst = 0
+ 
+     do while(tret(1) < dt_cur)
+       ! call this at beginning of step to reduce root bouncing (only looking in one direction)
+@@ -540,6 +547,24 @@
+       retval = FIDAGetLastStep(ida_mem, dt_last)
+       dt_diff = tret(1) - tretPrev
+       nSteps = nSteps + 1 ! number of time steps taken in solver
++      if(retvalr .eq. IDA_ROOT_RETURN) dbgRoots = dbgRoots + 1
++      if(dbgWorst>0 .and. mod(nSteps,20000)>0 .and. mod(nSteps,20000)<=14 .and. nSteps<=60000)then; print*,'YSEQ',nSteps,tret(1),dt_last(1),stateVec(dbgWorst),retvalr; flush(6); endif
++      if(mod(nSteps,20000)==0)then
++        allocate(dbgEleBuf(nState),dbgEwtBuf(nState))
++        dbgEle => FN_VMake_Serial(nState, dbgEleBuf, sunctx)
++        dbgEwt => FN_VMake_Serial(nState, dbgEwtBuf, sunctx)
++        retval = FIDAGetEstLocalErrors(ida_mem, dbgEle)
++        retval = FIDAGetErrWeights(ida_mem, dbgEwt)
++        dbgJ = maxloc(abs(dbgEleBuf*dbgEwtBuf)); dbgI = dbgJ(1)
++        retval = FIDAGetIntegratorStats(ida_mem, nStepsSun, nREvals, nLinSetups, netFails, qLast, qCur, hInitUsed, hLast, hCur, tCur)
++        call get_environment_variable('OMPI_COMM_WORLD_RANK',dbgRank)
++        print*,'IDADIAG',trim(dbgRank),nSteps,'roots',dbgRoots,'t',tret(1),'of',dt_cur,'h',hLast(1),'q',qLast(1),'worst',dbgI,'err',abs(dbgEleBuf(dbgI)*dbgEwtBuf(dbgI)),'y',stateVec(dbgI),&
++          'dom',indx_data%var(iLookINDEX%ixDomainType_subset)%dat(dbgI),'type',indx_data%var(iLookINDEX%ixStateType)%dat(indx_data%var(iLookINDEX%ixMapSubset2Full)%dat(dbgI)),&
++          'ctl',indx_data%var(iLookINDEX%ixControlVolume)%dat(indx_data%var(iLookINDEX%ixMapSubset2Full)%dat(dbgI)),'nSnow',nSnow,'nSoil',nSoil,'errF',netFails(1),'resEv',nREvals(1)
++        flush(6)
++        dbgWorst = dbgI
++        deallocate(dbgEleBuf,dbgEwtBuf)
++      endif
+ 
+       ! possible that vegetation water may go a bit negative because of discontinous canopy wetting derivatives, so check and correct
+       !  note, this only seems to be an issue for early steps if start in a dry cold state and temperature is the energy state variable (nrgConserv decision is closedForm)
+@@ -646,6 +671,7 @@
+         endif
+       endif
+     enddo ! while loop on one_step mode until time dt_cur
++    if(nSteps>5000)then; call get_environment_variable('OMPI_COMM_WORLD_RANK',dbgRank); print*,'IDAWIN',trim(dbgRank),nSteps,'roots',dbgRoots,tret(1),dt_cur; flush(6); endif
+     !****************************** End of Main Solver ***************************************
+     
+     if(idaSucceeds)then
+@@ -776,7 +802,15 @@
+     if (retval /= 0) return
+ 
+     ! Set coefficient in the nonlinear convergence test
+-    retval = FIDASetNonlinConvCoef(ida_mem, coef_nonlin)
++    block
++      character(len=32) :: dbgS
++      integer :: dbgSt
++      real(qp) :: dbgCoef
++      dbgCoef = coef_nonlin
++      call get_environment_variable('COEFNL',dbgS,status=dbgSt)
++      if(dbgSt==0) read(dbgS,*) dbgCoef
++      retval = FIDASetNonlinConvCoef(ida_mem, dbgCoef)
++    end block
+     if (retval /= 0) return
+ 
+     ! Set maximun number of nonliear iterations, maybe should just make 4 (instead of SUMMA parameter)
