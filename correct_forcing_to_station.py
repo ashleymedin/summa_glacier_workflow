@@ -40,6 +40,9 @@ A correction is applied only where the data exist; the others stay at 0 or 1.  S
 means of the 15-minute samples in the hour ending at each forcing time, precipitation the sum of all four.  The corrections are written to
 corrections.csv beside the corrected files.
 
+With --fit-years FIRST LAST every offset, ratio and gradient is fitted on those water years' station and stake data only and
+applied to all the forcing, so the other years test the fit.
+
     ./correct_forcing_to_station.py $S/domain_Wolverine/forcing/SUMMA_input $S/domain_Wolverine/observations/stations \\
         $S/domain_Wolverine/settings/SUMMA/attributes.nc $S/domain_Wolverine/forcing/SUMMA_input/station_corrected \\
         --stakes $S/domain_Wolverine/observations/storage/mass_balance/Input_Wolverine_Glaciological_Data.csv
@@ -59,6 +62,7 @@ EPOCH = datetime(1900, 1, 1, tzinfo=timezone.utc)   # forcing time is hours sinc
 LOCAL = ZoneInfo("America/Anchorage")
 G, R_DRY = 9.80665, 287.05                           # m s-2, J kg-1 K-1
 DEFAULT_LAPSE = -0.0065                              # K m-1
+FIT_HOURS = None                                     # (first, last) forcing hours the corrections are fitted on, from --fit-years
 SUMMA_LAPSE = 0.006871                               # K m-1, derivforce's lapse from the HRU to a domain
 COLUMNS = {"site_temp": "T", "RelHum": "RH", "Barom": "P", "ShortwaveIn": "SW", "WindSpeed": "U",
            "Precip_Weighing_Incremental": "PR"}
@@ -168,7 +172,7 @@ def stake_ratios(path, hours, z, snow, min_elev, window):
         h0 = (start.replace(tzinfo=timezone.utc) - EPOCH).total_seconds() / 3600.0
         h1 = (end.replace(tzinfo=timezone.utc) - EPOCH).total_seconds() / 3600.0
         sel = (hours > h0) & (hours <= h1)
-        if sel.sum() < 0.9 * (h1 - h0):
+        if sel.sum() < 0.9 * (h1 - h0) or (FIT_HOURS and not FIT_HOURS[0] < h1 <= FIT_HOURS[1]):
             continue
         ze = float(r["elevation"])
         stakes.append((ze, 1000.0 * float(r["bw"]), along_elevation(z, snow[sel], ze).sum()))
@@ -209,7 +213,7 @@ def stake_ratios_graded(path, hours, z, snow_at, min_elev, dom_elev=None):
         h0 = (start.replace(tzinfo=timezone.utc) - EPOCH).total_seconds() / 3600.0
         h1 = (end.replace(tzinfo=timezone.utc) - EPOCH).total_seconds() / 3600.0
         sel = (hours > h0) & (hours <= h1)
-        if sel.sum() < 0.9 * (h1 - h0):
+        if sel.sum() < 0.9 * (h1 - h0) or (FIT_HOURS and not FIT_HOURS[0] < h1 <= FIT_HOURS[1]):
             continue
         ze = float(r["elevation"])
         j = min(dom_elev, key=lambda d: abs(d[1] - ze))[0] if dom_elev else int(np.argmin(np.abs(z - ze)))
@@ -263,7 +267,12 @@ def main():
     p.add_argument("--gauge-rain", action="store_true",
                    help="scale the precipitation the stakes leave by every gauge's monthly catch (needs --gauge-shield)")
     p.add_argument("--spechum-ratios", help="CSV of hruId, month, ratio for the months the station has no humidity for")
+    p.add_argument("--fit-years", type=int, nargs=2, metavar=("FIRST", "LAST"),
+                   help="fit every correction on water years FIRST to LAST (1 Oct to 30 Sep) only; it is applied to all of the forcing")
     a = p.parse_args()
+    global FIT_HOURS
+    if a.fit_years:
+        FIT_HOURS = tuple((datetime(y, 10, 1, tzinfo=timezone.utc) - EPOCH).total_seconds() / 3600.0 for y in (a.fit_years[0] - 1, a.fit_years[1]))
 
     with Dataset(a.attributes) as d:
         hru_elev = dict(zip(np.array(d["hruId"][:]).astype(int), np.array(d["elevation"][:], float)))
@@ -292,11 +301,12 @@ def main():
     hours = np.concatenate(hours)
     frc = {v: np.concatenate(x) for v, x in frc.items()}
     month = np.array([(EPOCH + timedelta(hours=int(h))).month for h in hours])
+    in_fit = (hours >= FIT_HOURS[0]) & (hours < FIT_HOURS[1]) if FIT_HOURS else np.ones(len(hours), bool)
     z = np.array([hru_elev[h] for h in hru_ids])
     nh = len(hru_ids)
 
     def on_hours(series):
-        return np.array([series.get(h, np.nan) for h in hours])
+        return np.where(in_fit, np.array([series.get(h, np.nan) for h in hours]), np.nan)
 
     # monthly lapse rate between the two stations
     t_main = on_hours(st_main.get("T", {}))

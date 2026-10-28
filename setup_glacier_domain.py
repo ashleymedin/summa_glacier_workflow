@@ -67,6 +67,8 @@ def main():
             args += ["--gauge-shield", c["gauge_shield"]]
         if c.get("gauge_rain"):
             args += ["--gauge-rain"]
+        if c.get("fit_years"):
+            args += ["--fit-years", *c["fit_years"]]
         if c.get("precip_grad"):
             args += ["--precip-grad"]
             state = os.path.join(project, "settings", "SUMMA", "coldstate_glac.nc")  # the coldstate step's, from a previous setup
