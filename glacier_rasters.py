@@ -17,7 +17,7 @@ start outline is that survey's, or between the two usgs_outline lists. Where lat
 survey of that glacier, the bed under the ice lost between the two outlines is the surface of the ArcticDEM strips
 after it (acquire_arcticdem.py, each levelled to the DEM on the ground around the glacier), and that change of
 the bed is carried harmonically over the glacier within reach (250 m) of them, to nothing at the ice-free ground.
-Glaciers with no survey outline take the same correction from a small_meltout series of strips: where the median of the strips since
+Glaciers with no survey outline take the same correction from a small_meltout series of strips, for the glaciers it lists (the ones the model holds): where the median of the strips since
 recent (2019) lies within near (5 m) of the bed and the height has changed under stable (0.3 m yr-1) since 2014.
 
 Glacier outlines are RGI 6.0, replaced by the Herreid and Pellicciotti (2020) outline where it has one, and by a
@@ -379,9 +379,13 @@ def surface_and_bed(c, dem, glacier, grid, ice, outlines, surveys, start):
                            surveys[surveys["Date"] == later["date"]].geometry, outlines.geometry,
                            sorted(glob.glob(os.path.join(HERE, later["dems"], "*.tif"))), later.get("reach", 250.0))
     if c.get("small_meltout"):  # the glaciers without a survey outline: their melted-out cells from the strips' own series
+        sm = c["small_meltout"]
         other = glacier & ~own if usgs else glacier
-        bed = series_melt_out_bed(dem, surface, bed, other, grid, sorted(glob.glob(os.path.join(HERE, c["small_meltout"]["dems"], "*.tif"))),
-                                  **{k: v for k, v in c["small_meltout"].items() if k != "dems"})
+        if sm.get("glaciers"):  # only the glaciers the model holds (the extend step lists them)
+            held = outlines[outlines["RGIId"].isin(sm["glaciers"])].to_crs(grid.crs).geometry
+            other = other & geometry_mask(list(held), transform=grid.transform, invert=True, out_shape=dem.shape)
+        bed = series_melt_out_bed(dem, surface, bed, other, grid, sorted(glob.glob(os.path.join(HERE, sm["dems"], "*.tif"))),
+                                  **{k: v for k, v in sm.items() if k not in ("dems", "glaciers")})
     if ref:  # ice-free in the reference year: the bed is its surface (after melt_out_bed, which tapers Millan inward)
         bed = np.where(own & ~in_ref & np.isfinite(reference), reference, bed)
     dx, dy = cell_size(grid, dem.shape)

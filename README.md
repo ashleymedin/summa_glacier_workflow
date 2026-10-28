@@ -81,7 +81,7 @@ wetland domain (a proglacial lake or wetted forefield) copied from the stream do
    strips instead (`acquire_arcticdem.py --series`: August and September, 2011 on, over the domain's bounding box, levelled
    to the DEM on the ground): a cell has melted out where the median of the strips since 2019 lies within 5 m of the bed
    and its height has changed by under 0.3 m yr⁻¹ since 2014, and the bed there is that median, carried over the glacier
-   within 250 m. It changes 18 cells by under 1 m on Gulkana's four small glaciers.
+   within 250 m. It lists the glaciers the model holds (`glaciers`); on Gulkana's four it finds 3 melted-out cells on the 50 m flow grid and none on the DEM grid.
 2. **extend.** The basin is delineated on the bed above the gauge, and each glacier at least 80% inside
    it gets room to advance by dragging its terminus downstream.
 3. **hrus.** Each HRU's area, centre, elevation, slope and contour length in `attributes.nc` and the HRU
