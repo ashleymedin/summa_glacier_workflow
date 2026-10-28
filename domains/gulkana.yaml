@@ -21,6 +21,9 @@ later_outline: {date: 2021/09/19, dems: data/external/GlacierDEM/ArcticDEM_Gulka
 usgs_datum: -16.1                               # m added to USGS heights (WGS84 ellipsoid) to give the model DEM's
 small_meltout: {dems: data/external/GlacierDEM/ArcticDEM_Gulkana_series, glaciers: [RGI60-01.00332, RGI60-01.00333, RGI60-01.00334, RGI60-01.22903]}   # multi-year strips (acquire_arcticdem.py --series): bed of the glaciers without a survey where their ice has gone
 
+hru_bands: [1480, 1880]                          # elevation band edges, m, of the HRUs (make_hrus.py)
+basin_within: huc12                             # clip the basin to the USGS HUC12 of the gauge (acquire_nhd.py), US only
+
 forcing_period: {first: 2004-10, last: 2026-09}    # months of ERA5 the era5 step fetches; Jul-Sep 2026 are ERA5T
 
 # cold state of the domain itself (cases write their own, from their own first month)

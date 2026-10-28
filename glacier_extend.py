@@ -8,6 +8,11 @@ attributes/glaciers, the glacier-capable versions of the type and RGI id rasters
   domain_<name>_domain_type_extend.tif   glaciers less than --gru-threshold inside the basin made upland
   domain_<name>_rgi_id_extend.tif        each glacier's id extended over the cells it may advance into
 
+With basin_within: huc12 in the YAML the basin is clipped to the HUC12 holding the gauge (acquire_nhd.py), and a glacier is modelled when
+most of its area is in that watershed (the USGS decides where its runoff goes) and most of it drains to the gauge on the bed;
+the basin then holds every modelled glacier whole. Advance room not joined to its glacier is dropped, and glaciers whose advance room
+meets share one grid (under the id of the largest; --no-merge keeps them apart). Without it the glacier needs --gru-threshold of its cells inside the basin.
+
 Extension, largest glacier first, by --method:
   drag  the terminus (the glacier's highest-accumulation cells) is shifted cell by cell down the flow
         direction until it has added (glacier cells)^(2/3) cells or meets the basin edge or another glacier,
@@ -24,6 +29,7 @@ import sys
 
 import geopandas as gpd
 import numpy as np
+from scipy import ndimage
 import rasterio
 import rasterio.features
 from pysheds.grid import Grid
@@ -169,6 +175,7 @@ def main():
     p.add_argument("--method", choices=("drag", "fill"), default="drag")
     p.add_argument("--gru-threshold", type=float, default=0.8,
                    help="fraction of a glacier's cells inside the basin for it to be modelled")
+    p.add_argument("--no-merge", action="store_true", help="keep touching glaciers as separate grids")
     p.add_argument("--output-dir", help="write the rasters and basin here instead of the domain's folders")
     a = p.parse_args()
     sys.setrecursionlimit(max(sys.getrecursionlimit(), 100000))
@@ -183,14 +190,14 @@ def main():
 
     lat, lon = (float(v) for v in c["pour_point"].split("/"))
     grid, dem, fdir, acc, catch = delineate(os.path.join(dem_dir, f"domain_{name}_bedrock_elv.tif"), lat, lon)
-    polygons = [Polygon(s[0]["coordinates"][0]) for s in
-                rasterio.features.shapes(np.where(catch, 1, 0).astype(np.uint8), transform=grid.affine) if s[1] == 1]
-    basin = gpd.GeoDataFrame({"geometry": polygons}, crs=grid.crs).dissolve()
-    basin["GRU_ID"] = 1
-    basin["gru_to_seg"] = 1
-    basin["GRU_area"] = basin.to_crs(c["utm_crs"]).geometry.area  # m2
-    basin.to_crs("epsg:4326").to_file(os.path.join(out_basin, f"{name}_riverBasins_lumped.shp"))
-
+    if c.get("basin_within") == "huc12":  # the bed puts some divides in the wrong place; the USGS watershed of the gauge bounds the basin
+        huc = gpd.read_file(os.path.join(project, "shapefiles", "nhd.gpkg"), layer="huc12")
+        huc = huc[huc["gauge"] == 1].to_crs(grid.crs).geometry
+        inside = rasterio.features.geometry_mask(list(huc), out_shape=catch.shape, transform=grid.affine, invert=True)
+        print(f"basin clipped to the gauge's HUC12: {int(np.sum(catch))} to {int(np.sum(np.asarray(catch) & inside))} cells")
+        catch = np.asarray(catch) & inside
+    else:
+        inside = None
     with rasterio.open(os.path.join(glacier_dir, f"domain_{name}_rgi_id.tif")) as src:
         gid = src.read(1)
         meta = src.meta.copy()
@@ -204,23 +211,68 @@ def main():
     possible[((gid > 0) | dtype) != 1] = 0  # only into upland cells
     hand = grid.compute_hand(fdir, dem, acc > 100) if a.method == "fill" else None
 
-    glaciers = [g for g in np.unique(gid) if g != 0
-                and np.sum((gid == g) & catch) >= a.gru_threshold * np.sum(gid == g)]
+    def modelled(g):
+        """With the gauge's HUC12, a glacier is modelled if most of its area is in that watershed and most of it drains to the gauge on
+        the bed; otherwise (no watershed data) if --gru-threshold of its cells are inside the basin."""
+        cells = gid == g
+        if inside is not None:
+            return np.sum(cells & inside) > 0.5 * np.sum(cells) and np.sum(cells & catch) > 0.5 * np.sum(cells)
+        return np.sum(cells & catch) >= a.gru_threshold * np.sum(cells)
+
+    glaciers = [g for g in np.unique(gid) if g != 0 and modelled(g)]
+    for g in np.unique(gid[gid > 0]):
+        if g not in glaciers:
+            print(f"glacier {int(g)} not modelled: {np.sum((gid == g) & catch) / np.sum(gid == g):.0%} of its cells in the basin"
+                  + (f", {np.sum((gid == g) & inside) / np.sum(gid == g):.0%} in the gauge's HUC12" if inside is not None else ""))
     glaciers = np.array(glaciers)[np.argsort(np.bincount(gid.ravel())[glaciers])[::-1]] if glaciers else np.array([])
+    original = gid.copy()
+    eight = np.ones((3, 3))
     for g in glaciers:
         if a.method == "drag":
             extend = drag(grid, fdir, acc, gid, g, possible, dem_surf)
         else:
             extend = fill(grid, dem, dem_surf, fdir, acc, hand, gid, g, possible)
+        label, _ = ndimage.label((gid == g) | (extend == 1), structure=eight)
+        joined = np.isin(label, np.unique(label[gid == g]))  # room to advance has to join the glacier
+        if np.sum((extend == 1) & ~joined):
+            print(f"glacier {int(g)}: {int(np.sum((extend == 1) & ~joined))} cells of advance room not joined to the glacier dropped")
+        extend = np.where((extend == 1) & joined, 1, 0)
         gid[extend == 1] = g
         possible[extend == 1] = 0
 
     gid[~np.isin(gid, glaciers)] = 0
     dtype[~np.isin(gid, glaciers)] = 1
+    if not a.no_merge:  # glaciers whose advance room meets flow as one: one grid, under the id of the largest
+        room = {int(g): (gid == g) & (original != g) for g in glaciers}
+        group = {g: g for g in room}
+        def root(g):
+            while group[g] != g:
+                g = group[g]
+            return g
+        for g in room:
+            near = ndimage.binary_dilation(room[g], structure=eight)
+            for h in room:
+                if h > g and np.any(near & room[h]):
+                    group[root(h)] = root(g)
+        for r in sorted({root(g) for g in room}):
+            ids = [g for g in room if root(g) == r]
+            if len(ids) > 1:
+                largest = max(ids, key=lambda g: np.sum(original == g))
+                print(f"advance room of glaciers {ids} meets: one grid, {largest}")
+                for g in ids:
+                    gid[gid == g] = largest
+    catch = np.asarray(catch) | (gid > 0)  # the basin holds every modelled glacier whole
     with rasterio.open(os.path.join(out_glacier, f"domain_{name}_domain_type_extend.tif"), "w", **meta) as dst:
         dst.write(dtype, 1)
     with rasterio.open(os.path.join(out_glacier, f"domain_{name}_rgi_id_extend.tif"), "w", **meta) as dst:
         dst.write(gid, 1)
+    polygons = [Polygon(s[0]["coordinates"][0]) for s in
+                rasterio.features.shapes(np.where(catch, 1, 0).astype(np.uint8), transform=grid.affine) if s[1] == 1]
+    basin = gpd.GeoDataFrame({"geometry": polygons}, crs=grid.crs).dissolve()
+    basin["GRU_ID"] = 1
+    basin["gru_to_seg"] = 1
+    basin["GRU_area"] = basin.to_crs(c["utm_crs"]).geometry.area  # m2
+    basin.to_crs("epsg:4326").to_file(os.path.join(out_basin, f"{name}_riverBasins_lumped.shp"))
     print(f"wrote the basin to {out_basin} and the extended rasters to {out_glacier}")
 
 

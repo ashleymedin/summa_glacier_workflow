@@ -10,8 +10,8 @@ One panel per basin (rows) and setup (columns), in the domain's UTM grid. Layers
   basin, HRUs, gauge     shapefiles/river_basins, shapefiles/catchment, and the YAML's pour_point
 
 and, with the flags, --grids (the extent of each glacier's flow-model grid), --stations (the USGS weather stations in
-observations/stations) and --streams (the channels of the surface's flow accumulation above --stream-cells cells, outside the
-glaciers, and the YAML's lake_area boxes: lakes solid, reach windows dashed).
+observations/stations; the added-data panels only) and --streams (the NHD streams and lakes of shapefiles/nhd.gpkg, acquire_nhd.py,
+and the YAML's terminus-to-gauge windows, dashed).
 
     ./plot_basin_setup.py figs/setups.pdf
     ./plot_basin_setup.py figs/setups_streams.pdf --basins wolverine --setups added --streams --stations
@@ -39,7 +39,7 @@ from shapely.geometry import Point, box
 from domain_config import load_config
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PURPLE, PINK, RED, BLUE = "#7b2d8e", "#e8629c", "#c0392b", "#1f78b4"
+PURPLE, PINK, RED, BLUE, GREEN, ORANGE = "#7b2d8e", "#e8629c", "#c0392b", "#1f78b4", "#1a9850", "#e08214"
 
 
 def on_grid(path, like):
@@ -50,20 +50,7 @@ def on_grid(path, like):
     return out
 
 
-def channels(project, name, basin, crs, cells):
-    """Stream lines (GeoSeries in crs) of the surface's flow accumulation above `cells` cells, inside the basin."""
-    from pysheds.grid import Grid
-    path = os.path.join(project, "attributes", "elevation", "dem", f"domain_{name}_glacier_elv.tif")
-    grid = Grid.from_raster(path)
-    dem = grid.read_raster(path)
-    fdir = grid.flowdir(grid.resolve_flats(grid.fill_depressions(grid.fill_pits(dem))))
-    acc = grid.accumulation(fdir)
-    net = grid.extract_river_network(fdir, acc > cells)
-    lines = gpd.GeoDataFrame.from_features(net["features"], crs=4326).to_crs(crs)
-    return lines[lines.intersects(basin)]
-
-
-def panel(ax, config, a):
+def panel(ax, config, a, setup):
     c = load_config(config)
     project, name = c["project_dir"], c["domain"]
     with rasterio.open(os.path.join(project, "attributes", "elevation", "dem", f"domain_{name}_glacier_elv_utm.tif")) as r:
@@ -89,16 +76,18 @@ def panel(ax, config, a):
     levels = np.arange(np.floor(np.nanmin(dem) / a.contour) * a.contour, np.nanmax(dem) + a.contour, a.contour)
     index = levels % (5 * a.contour) == 0
     ax.contour(xs, ys, dem, levels=levels[~index], colors="#3a3a3a", linewidths=0.4, zorder=1)
-    ax.clabel(ax.contour(xs, ys, dem, levels=levels[index], colors="#1a1a1a", linewidths=0.9, zorder=1), fontsize=5, fmt="%d")
+    labelled = ax.contour(xs, ys, dem, levels=levels[index], colors="#1a1a1a", linewidths=0.9, zorder=1)
+    for text in ax.clabel(labelled, fontsize=6, fmt="%d", inline=True, inline_spacing=4):
+        text.set_zorder(12)
     ax.imshow(np.where(outside, 1.0, np.nan), cmap="gray_r", vmin=0, vmax=1.3, alpha=0.55, extent=extent, zorder=2)
     ax.contourf(xs, ys, (ext & ~glc).astype(float), levels=[0.5, 1.5], colors=[PINK], alpha=0.45, zorder=3)
     ax.contour(xs, ys, (ext & ~glc).astype(float), levels=[0.5], colors=[PINK], linewidths=1.0, zorder=4)
     ax.contour(xs, ys, (glc & ~outside).astype(float), levels=[0.5], colors=[PURPLE], linewidths=1.3, zorder=5)
-    hrus.boundary.plot(ax=ax, color=RED, linewidth=0.8, zorder=6)
+    hrus.boundary.plot(ax=ax, color=GREEN, linewidth=1.8, zorder=6)
     basin.boundary.plot(ax=ax, color="black", linewidth=1.8, zorder=7)
     lat, lon = (float(v) for v in c["pour_point"].split("/"))
     gx, gy = gpd.GeoSeries([Point(lon, lat)], crs=4326).to_crs(crs).iloc[0].coords[0]
-    ax.plot(gx, gy, marker="^", ms=9, mfc=RED, mec="white", mew=1.2, ls="none", zorder=10)
+    ax.plot(gx, gy, marker="^", ms=15, mfc=RED, mec="white", mew=1.5, ls="none", zorder=13)
     if a.grids:
         from glacier_cold_state import grid_transforms
         tf, _ = grid_transforms(project, name, c["utm_epsg"])
@@ -106,25 +95,31 @@ def panel(ax, config, a):
             nx, ny, ids = (np.asarray(d[v][:, 0]).astype(int) for v in ("nx", "ny", "gridId"))
         for k, g in enumerate(ids):
             t = tf[int(g)]
-            ax.add_patch(Rectangle((t.c, t.f + t.e * ny[k]), abs(t.a) * nx[k], abs(t.e) * ny[k], fill=False, ec="#1b7837", lw=1.0, ls="-", zorder=8))
-    if a.stations:
+            ax.add_patch(Rectangle((t.c, t.f + t.e * ny[k]), abs(t.a) * nx[k], abs(t.e) * ny[k], fill=False, ec=ORANGE, lw=1.2, ls="-", zorder=8))
+    if a.stations and setup == "added":  # the stations belong to the added-data setup
         source = os.path.join(HERE, c["seed_from"]) if c.get("seed_from") else project  # the stations belong to the added-data domain
         st = pd.read_csv(os.path.join(source, "observations", "stations", "weatherStationLocations.csv"))
         st = st[st["Location"] == name]
         for _, s in st.iterrows():
             px, py = gpd.GeoSeries([Point(s["Longitude"], s["Latitude"])], crs=4326).to_crs(crs).iloc[0].coords[0]
-            ax.plot(px, py, marker="s", ms=6, mfc="#f1c40f", mec="black", mew=0.8, ls="none", zorder=10)
+            ax.plot(px, py, marker="s", ms=6, mfc="#f1c40f", mec="black", mew=0.8, ls="none", zorder=11)
             ax.annotate(f"{int(s['Elevation'])} m", (px, py), xytext=(5, 3), textcoords="offset points", fontsize=6, zorder=10)
     if a.streams:
-        union = basin.geometry.union_all()
-        net = channels(project, name, union, crs, a.stream_cells)
-        net = gpd.clip(net, union)
-        net.plot(ax=ax, color=BLUE, linewidth=1.2, zorder=9)
+        nhd = os.path.join(project, "shapefiles", "nhd.gpkg")
+        if os.path.exists(nhd):
+            window = gpd.GeoSeries([box(left, bottom, right, top)], crs=crs).iloc[0]
+            for layer, keep, kw in (("waterbodies", (390, 436), dict(color="#a6cee3", edgecolor=BLUE, linewidth=0.6)),  # lakes, ponds, reservoirs; not NHD's ice masses
+                                    ("flowlines", (460,), dict(color=BLUE, linewidth=1.4)),
+                                    ("flowlines", (558,), dict(color=BLUE, linewidth=0.7, linestyle=":"))):  # artificial paths, through lakes and ice
+                gdf = gpd.read_file(nhd, layer=layer).to_crs(crs).rename(columns=str.lower)
+                gdf = gdf[gdf["ftype"].isin(keep) & gdf.intersects(window)]
+                if len(gdf):
+                    gdf.plot(ax=ax, zorder=9, **kw)
         for lake in (c.get("observations") or {}).get("lake_area", []):
-            w, s, e, n = lake["box"]
-            bx = gpd.GeoSeries([box(w, s, e, n)], crs=4326).to_crs(crs).iloc[0].bounds
-            ax.add_patch(Rectangle((bx[0], bx[1]), bx[2] - bx[0], bx[3] - bx[1], fill=lake["name"].endswith("lake"),
-                                   fc="#a6cee3", ec=BLUE, lw=1.0, ls="-" if lake["name"].endswith("lake") else "--", alpha=0.8, zorder=9))
+            w, s0, e, n = lake["box"]
+            bx = gpd.GeoSeries([box(w, s0, e, n)], crs=4326).to_crs(crs).iloc[0].bounds
+            if lake["name"].endswith("reach"):
+                ax.add_patch(Rectangle((bx[0], bx[1]), bx[2] - bx[0], bx[3] - bx[1], fill=False, ec=ORANGE, lw=1.3, ls="--", zorder=9))
     ax.set_xlim(left, right)
     ax.set_ylim(bottom, top)
     ax.set_aspect("equal")
@@ -135,8 +130,10 @@ def panel(ax, config, a):
     # scale bar and north arrow
     length = 1000 if (right - left) < 9000 else 2000
     bx0, by0 = left + 0.05 * (right - left), bottom + 0.05 * (top - bottom)
-    ax.plot([bx0, bx0 + length], [by0, by0], color="black", lw=3, zorder=11, solid_capstyle="butt")
-    ax.text(bx0 + length / 2, by0 + 0.012 * (top - bottom), f"{length // 1000} km", ha="center", fontsize=7, zorder=11)
+    ax.add_patch(Rectangle((bx0 - 0.015 * (right - left), by0 - 0.012 * (top - bottom)), length + 0.03 * (right - left), 0.06 * (top - bottom),
+                           fc="white", alpha=0.75, ec="none", zorder=11))
+    ax.plot([bx0, bx0 + length], [by0, by0], color="black", lw=3, zorder=12, solid_capstyle="butt")
+    ax.text(bx0 + length / 2, by0 + 0.014 * (top - bottom), f"{length // 1000} km", ha="center", fontsize=7, zorder=12)
     nx0, ny0 = right - 0.07 * (right - left), top - 0.13 * (top - bottom)
     ax.annotate("N", (nx0, ny0 + 0.09 * (top - bottom)), (nx0, ny0), ha="center", va="bottom", fontsize=8,
                 arrowprops=dict(arrowstyle="-|>", color="black"), zorder=11)
@@ -150,30 +147,29 @@ def main():
     p.add_argument("--contour", type=float, default=100.0, help="contour interval, m")
     p.add_argument("--grids", action="store_true", help="the extent of each glacier's flow-model grid")
     p.add_argument("--stations", action="store_true", help="the USGS weather stations")
-    p.add_argument("--streams", action="store_true", help="the channels, and the lake and reach windows of the YAML")
-    p.add_argument("--stream-cells", type=int, default=600, help="flow-accumulation cells that make a channel, with --streams")
+    p.add_argument("--streams", action="store_true", help="the NHD streams and lakes, and the terminus-to-gauge windows of the YAML")
     a = p.parse_args()
-    fig, axes = plt.subplots(len(a.basins), len(a.setups), figsize=(max(4.6 * len(a.setups), 6.6), 5.0 * len(a.basins)), squeeze=False)
+    fig, axes = plt.subplots(len(a.basins), len(a.setups), figsize=(max(4.6 * len(a.setups), 6.6), 5.6 * len(a.basins)), squeeze=False)
     for i, basin in enumerate(a.basins):
         for j, setup in enumerate(a.setups):
             config = os.path.join(HERE, "domains", f"{basin}{'_general' if setup == 'general' else ''}.yaml")
-            panel(axes[i, j], config, a)
+            panel(axes[i, j], config, a, setup)
             label = "general setup" if setup == "general" else "added-data setup"
             axes[i, j].set_title(f"{basin.capitalize()}, {label}", fontsize=10)
     handles = [Line2D([], [], color="#3a3a3a", lw=0.5, label=f"{a.contour:g} m contours (labelled every {5 * a.contour:g} m)"),
                Line2D([], [], color=PURPLE, lw=1.3, label="glacier outline at the start"),
                Patch(fc=PINK, ec=PINK, alpha=0.5, label="room to advance"),
-               Line2D([], [], color="black", lw=1.8, label="basin"), Line2D([], [], color=RED, lw=0.8, label="HRUs"),
+               Line2D([], [], color="black", lw=1.8, label="basin"), Line2D([], [], color=GREEN, lw=1.8, label="HRUs"),
                Line2D([], [], marker="^", ls="none", mfc=RED, mec="white", ms=8, label="gauge")]
     if a.grids:
-        handles.append(Line2D([], [], color="#1b7837", lw=1.0, label="flow-model grid"))
-    if a.stations:
+        handles.append(Line2D([], [], color=ORANGE, lw=1.2, label="flow-model grid"))
+    if a.stations and setup == "added":  # the stations belong to the added-data setup
         handles.append(Line2D([], [], marker="s", ls="none", mfc="#f1c40f", mec="black", ms=6, label="weather station"))
     if a.streams:
-        handles += [Line2D([], [], color=BLUE, lw=1.2, label="channel"), Patch(fc="#a6cee3", ec=BLUE, label="lake"),
-                    Patch(fill=False, ec=BLUE, ls="--", label="terminus-to-gauge window")]
+        handles += [Line2D([], [], color=BLUE, lw=1.4, label="stream (NHD; dotted: through lakes and ice)"), Patch(fc="#a6cee3", ec=BLUE, label="lake (NHD)"),
+                    Line2D([], [], color=ORANGE, lw=1.3, ls="--", label="terminus-to-gauge window")]
     fig.legend(handles=handles, loc="lower center", ncol=min(len(handles), 2 if len(a.setups) == 1 else 5), fontsize=8, frameon=False)
-    fig.tight_layout(rect=(0, 0.1, 1, 1))
+    fig.tight_layout(rect=(0, 0.07, 1, 1), h_pad=3.0)
     os.makedirs(os.path.dirname(os.path.abspath(a.output)), exist_ok=True)
     fig.savefig(a.output, dpi=250)
     print("wrote", a.output)

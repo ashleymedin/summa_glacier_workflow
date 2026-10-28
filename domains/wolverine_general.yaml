@@ -17,7 +17,10 @@ data:
   debris_thickness: data/external/Debris_thick
   ice_thickness: data/external/Thickness_data
 
-small_meltout: {dems: data/external/GlacierDEM/ArcticDEM_Wolverine_series, glaciers: [RGI60-01.09162, RGI60-01.09092]}
+small_meltout: {dems: data/external/GlacierDEM/ArcticDEM_Wolverine_series, glaciers: [RGI60-01.09162]}
+
+hru_bands: [950, 1315]                          # elevation band edges, m, of the HRUs (make_hrus.py)
+basin_within: huc12                             # clip the basin to the USGS HUC12 of the gauge (acquire_nhd.py), US only
 
 forcing_period: {first: 2004-10, last: 2026-09}
 cold_start: 2008-01

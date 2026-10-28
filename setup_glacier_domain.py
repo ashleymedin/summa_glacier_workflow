@@ -4,9 +4,11 @@
 Steps, in order (--steps picks some; the default is all of them):
 
   seed      seed_domain.py: a domain with seed_from (the general setup) starts from its source's static files
+  nhd       acquire_nhd.py: the USGS watershed (HUC12), flowlines and lakes around the domain, for basin_within and the plots
   rasters   glacier_rasters.py: domain type, RGI id, debris thickness and bed rasters
   extend    glacier_extend.py: basin on the bed, glacier-capable cells downstream (needs pysheds)
             -- then, in SYMFLUENCE: elevation-band HRUs, upland attributes.nc and coldState.nc --
+  bands     make_hrus.py: the HRUs, elevation bands of the surface cut to the basin and the glaciers in it
   hrus      hru_attributes.py: HRU area, centre, elevation, slope and contour length from the polygons and DEM
   zonal     glacier_zonal_stats.py: per-HRU debris, domain-type, elevation, slope and aspect statistics
   era5      acquire_era5.py over the YAML's forcing_period (months not yet in forcing/raw_data), then
@@ -28,8 +30,8 @@ import sys
 from domain_config import load_config
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-STEPS = ("seed", "rasters", "extend", "hrus", "zonal", "era5", "forcing", "coldstate")
-SEEDED = ("seed", "rasters", "extend", "hrus", "zonal", "coldstate")  # the forcing is linked to the source domain's
+STEPS = ("seed", "nhd", "rasters", "extend", "bands", "hrus", "zonal", "era5", "forcing", "coldstate")
+SEEDED = ("seed", "rasters", "extend", "bands", "hrus", "zonal", "era5", "coldstate")  # raw ERA5 is read from the source domain; no station correction
 
 
 def run(*args):
@@ -50,16 +52,21 @@ def main():
 
     if "seed" in a.steps:
         run(py, os.path.join(HERE, "seed_domain.py"), a.config)
+    if "nhd" in a.steps and c.get("basin_within") and not c.get("seed_from"):
+        run(py, os.path.join(HERE, "acquire_nhd.py"), a.config)
     if "rasters" in a.steps:
         run(py, os.path.join(HERE, "glacier_rasters.py"), a.config)
     if "extend" in a.steps:
         run(py, os.path.join(HERE, "glacier_extend.py"), a.config)
+    if "bands" in a.steps:
+        run(py, os.path.join(HERE, "make_hrus.py"), a.config)
     if "hrus" in a.steps:
         run(py, os.path.join(HERE, "hru_attributes.py"), a.config)
     if "zonal" in a.steps:
         run(py, os.path.join(HERE, "glacier_zonal_stats.py"), a.config)
     if "era5" in a.steps:
-        run(py, os.path.join(HERE, "acquire_era5.py"), a.config, c["forcing_period"]["first"], c["forcing_period"]["last"])
+        if not c.get("seed_from"):  # a seeded domain reads the source domain's raw_data
+            run(py, os.path.join(HERE, "acquire_era5.py"), a.config, c["forcing_period"]["first"], c["forcing_period"]["last"])
         run(py, os.path.join(HERE, "remap_forcing.py"), a.config)
     if "forcing" in a.steps:
         forcing = os.path.join(project, "forcing", "SUMMA_input")

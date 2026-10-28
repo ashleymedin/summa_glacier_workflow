@@ -3,7 +3,7 @@
 
 The general setup of a glacier basin (global data only) has its own project folder, built by setup_glacier_domain.py, but starts
 from the pieces the SYMFLUENCE domain holds that do not depend on the glacier data: the HRU and catchment shapefiles, the land and
-soil classes, the MERIT surface DEM, the SUMMA settings, and the ERA5 forcing, which is linked, not copied. The domain YAML's
+soil classes, the MERIT surface DEM, the SUMMA settings, and the raw ERA5, which is linked, not copied (the forcing step remaps it to this domain's own HRUs). The domain YAML's
 seed_from names the source project folder.
 
     ./seed_domain.py domains/gulkana_general.yaml
@@ -18,7 +18,7 @@ from domain_config import load_config
 HERE = os.path.dirname(os.path.abspath(__file__))
 COPY = ("shapefiles", "attributes/landclass", "attributes/soilclass", "attributes/radiation", "settings")
 GENERATED = ("attributes_glac.nc", "coldstate_glac.nc")  # written by the setup steps
-LINK = ("forcing/raw_data", "forcing/SUMMA_input")
+LINK = ("forcing/raw_data",)  # the HRUs differ, so each domain remaps its own SUMMA_input
 
 
 def seed(src, dst, domain):
