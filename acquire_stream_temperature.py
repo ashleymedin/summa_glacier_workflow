@@ -13,10 +13,18 @@ Sagehen Creek near Truckee, the outlet of the bundled Sagehen domains, whose for
 
 The file holds `t_obs`, the daily mean in degC, which a target scores against T_reach at the reach the
 site sits on.  A day with no value is written as NaN rather than dropped.
+
+A site with no published daily mean can be read from an AQUARIUS time-series export (.csv or .xlsx, the
+hourly values the USGS water-data site hands out on request) with --aquarius: each site day is the mean of its
+hourly values, and a day with fewer than --min-hours is left NaN.  Phelan Creek (Gulkana), Feb-Aug 2006:
+
+    ./acquire_stream_temperature.py 15478040 2006-02-23 2006-08-12 USGS_15478040_daily_temperature.nc \
+        --model-utc-offset 0 --aquarius data/domain_Gulkana/observations/stream_temperature/raw_data/<export>.xlsx
 """
 
 import argparse
 import datetime as dt
+import os
 import sys
 
 import numpy as np
@@ -46,6 +54,18 @@ def fetch_usgs_temperature(site, start, end):
     return temps
 
 
+def read_aquarius(path, min_hours):
+    """Daily mean (degC) by site-standard-time date from an AQUARIUS export's hourly values."""
+    import pandas as pd
+    raw = pd.read_excel(path, header=None) if path.lower().endswith(".xlsx") else pd.read_csv(path, header=None, comment="#", skip_blank_lines=False)
+    head = raw.index[raw.iloc[:, 0].astype(str).str.startswith("ISO 8601")][0]
+    table = raw.iloc[head + 1:, :3]
+    local = pd.to_datetime(table.iloc[:, 1])
+    values = pd.Series(pd.to_numeric(table.iloc[:, 2]).to_numpy(), index=local)
+    daily = values.groupby(values.index.date).agg(["mean", "count"])
+    return {day: float(row["mean"]) for day, row in daily.iterrows() if row["count"] >= min_hours}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("site", help="USGS site number")
@@ -56,6 +76,8 @@ def main():
                         help="UTC offset, hours, of the clock the SUMMA forcing is on (0 for UTC)")
     parser.add_argument("--gauge-utc-offset", type=float,
                         help="standard-time UTC offset, hours, of the site's days, when it cannot be looked up")
+    parser.add_argument("--aquarius", help="AQUARIUS export of hourly values to read in place of the USGS daily means")
+    parser.add_argument("--min-hours", type=int, default=20, help="hourly values a day needs, with --aquarius")
     args = parser.parse_args()
 
     gauge_offset = args.gauge_utc_offset
@@ -64,7 +86,7 @@ def main():
     if gauge_offset is None:
         sys.exit(f"the time zone of {args.site} could not be looked up; give it with --gauge-utc-offset")
 
-    temps = fetch_usgs_temperature(args.site, args.start, args.end)
+    temps = read_aquarius(args.aquarius, args.min_hours) if args.aquarius else fetch_usgs_temperature(args.site, args.start, args.end)
     if not temps:
         sys.exit(f"no daily mean water temperature for {args.site} between {args.start} and {args.end}")
 
@@ -82,7 +104,8 @@ def main():
         long_name="observed stream water temperature",
         attrs={
             "title": f"Daily mean water temperature at USGS {args.site}, for SUMMA calibration",
-            "source": SOURCES["usgs"]["name"],
+            "source": f"AQUARIUS export {os.path.basename(args.aquarius)}, hourly values, approval level Working"
+                      if args.aquarius else SOURCES["usgs"]["name"],
             "comment": f"Daily means over the site's standard-time days (UTC{gauge_offset:+g}), "
                        f"on a clock at UTC{args.model_utc_offset:+g}, each stamped at the end of its day.",
             "history": f"created {dt.date.today()} by acquire_stream_temperature.py",

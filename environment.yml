@@ -19,6 +19,7 @@ dependencies:
   - cdsapi                 # acquire_era5.py
   - gcsfs                  # spechum_ratio_from_campaign.py's ERA5 pull
   - zarr
+  - openpyxl               # acquire_stream_temperature.py --aquarius, .xlsx exports
   - dask
   - pystac-client          # satellite imagery from Microsoft Planetary Computer
   - planetary-computer
