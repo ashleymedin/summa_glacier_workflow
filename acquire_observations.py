@@ -32,6 +32,7 @@ KINDS = ("streamflow", "stream_temperature", "grace", "mass_balance", "velocity"
 
 
 DRY = False
+REDO = False
 
 
 def run(*args):
@@ -53,15 +54,23 @@ def lake_area(c, spec, obs, jobs):
     os.makedirs(os.path.join(obs, "lake_area"), exist_ok=True)
     for source, label, years in (("landsat", "landsat", range(first, last + 1)),
                                  ("sentinel2", "sentinel2", range(max(first, 2015), last + 1))):
+        out = os.path.join(obs, "lake_area", f"{spec['name']}_{label}.csv")
+        if os.path.exists(out) and not REDO:
+            print(f"{out} exists, skipped (--redo scans it again)")
+            continue
         parts = {}
         for y in years:
             parts[y] = os.path.join(obs, "lake_area", f".{spec['name']}_{label}_{y}.csv")
         def scan(y):
+            if os.path.exists(parts[y] + ".done"):  # finished in an earlier, stopped run
+                return
             lo, hi = max(f"{y}-01-01", start), min(f"{y}-12-31", end)
             args = [sys.executable, os.path.join(HERE, "acquire_lake_area.py"), *map(str, spec["box"]), lo, hi, parts[y], "--source", source]
             if spec.get("usgs_site"):
                 args += ["--usgs-site", str(spec["usgs_site"])]
             run(*args)
+            if not DRY:
+                open(parts[y] + ".done", "w").close()
         with ThreadPoolExecutor(jobs) as pool:
             list(pool.map(scan, years))
         if DRY:
@@ -72,7 +81,7 @@ def lake_area(c, spec, obs, jobs):
                 for r in csv.DictReader(fh):
                     rows[(r["date"], r["scene"])] = r
             os.remove(f)
-        out = os.path.join(obs, "lake_area", f"{spec['name']}_{label}.csv")
+            os.remove(f + ".done")
         with open(out, "w", newline="") as fh:
             w = csv.DictWriter(fh, ["date", "scene", "water_km2", "bad", "snow", "q_cms"])
             w.writeheader()
@@ -86,10 +95,11 @@ def main():
     p.add_argument("--only", nargs="+", choices=KINDS, help="kinds to fetch; default every kind the YAML names")
     p.add_argument("--lakes", nargs="+", help="lake_area entries to scan, by name; default all")
     p.add_argument("--jobs", type=int, default=6, help="lake-area scans at once")
+    p.add_argument("--redo", action="store_true", help="scan lake areas again where their CSV exists")
     p.add_argument("--dry-run", action="store_true", help="print the commands without running them")
     a = p.parse_args()
-    global DRY
-    DRY = a.dry_run
+    global DRY, REDO
+    DRY, REDO = a.dry_run, a.redo
     c = load_config(a.config)
     spec = c.get("observations") or {}
     obs = os.path.join(c["project_dir"], "observations")

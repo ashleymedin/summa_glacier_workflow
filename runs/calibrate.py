@@ -21,6 +21,7 @@ calibration driver does. Needs summa's MPI calibration executable (bin/summa_sun
 
 import argparse
 import csv
+import datetime
 import os
 import shutil
 import subprocess
@@ -67,26 +68,32 @@ SEARCHES = {
 STATION_FIXED = ["frozenPrecipMultip", "tempCritRain", "tempRangeTimestep", "glacierWindFactor", "glacierTempReduction"]
 
 
+def case_spec(case):
+    """A run's entry in cases.yaml."""
+    with open(os.path.join(GLACIER, "cases.yaml")) as f:
+        return yaml.safe_load(f)[case]
+
+
 def periods(case):
     """(calibration start, calibration end, evaluation start, evaluation end) of a run in cases.yaml, YYYY-MM-DD."""
-    with open(os.path.join(GLACIER, "cases.yaml")) as f:
-        c = yaml.safe_load(f)[case]
+    c = case_spec(case)
     return tuple(str(d) for d in c["calibrate"] + c["evaluate"])
 
 
 def search_for(case, name):
     """The named search, without the STATION_FIXED parameters on a station-corrected case."""
     search = dict(SEARCHES[name])
-    if "corrected" in case:
+    if case_spec(case).get("forcing") == "station_corrected":
         search["params"] = [q for q in search["params"] if q.split("@")[0] not in STATION_FIXED]
     return search
 
 
 CASES = {  # domain, observation files and gauge of each run
     "gulkana": {"obs": "data/domain_Gulkana/observations/calibration", "flow": "USGS_15478040_daily_flow.nc",
-                "mb": "gulkana_mass_balance_seasonal.nc"},
+                "mb": "gulkana_mass_balance_seasonal.nc", "grace": "gulkana_grace_tws.nc"},
     "wolverine": {"obs": "data/domain_Wolverine/observations/calibration", "flow": "USGS_15236900_daily_flow.nc",
-                  "mb": "wolverine_mass_balance_seasonal.nc", "temp": "USGS_15236900_daily_temperature.nc"},
+                  "mb": "wolverine_mass_balance_seasonal.nc", "temp": "USGS_15236900_daily_temperature.nc",
+                  "grace": "wolverine_grace_tws.nc"},
 }
 
 
@@ -108,6 +115,7 @@ def config_text(case, run_dir, settings, work, start, end, score_start, score_en
     bounds = dict(search["bounds"])
     bounds.update({k: (v, v) for k, v in (pinned or {}).items() if "@" in k})
     c = CASES[case.split("_")[0]]
+    targets = case_spec(case).get("targets", ["discharge", "mass_balance", "stream_temperature"])
     routed = os.path.exists(os.path.join(run_dir, "topology.nc"))
     forcing_file = os.path.join(run_dir, "forcing_path.txt")
     forcing = open(forcing_file).read().strip() if os.path.exists(forcing_file) else os.path.join(run_dir, "forcing") + "/"
@@ -227,7 +235,7 @@ obs_file  = "{c["flow"]}"
 vname_obs = "q_obs"
 metric    = "kge"
 ''')
-    if temperature and routed and "temp" in c:
+    if temperature and routed and "temp" in c and "stream_temperature" in targets:
         lines.append(f'''
 
 [[calibration.target]]
@@ -240,7 +248,25 @@ obs_file  = "{c["temp"]}"
 vname_obs = "t_obs"
 metric    = "rmse"
 ''')
-    lines.append(f'''
+    if "grace" in targets:
+        base = datetime.date.fromisoformat(start)  # both series are departures from their mean over the first year
+        lines.append(f'''
+
+[[calibration.target]]
+
+name           = "grace_tws"
+variable       = "basin__StorageChange"
+gru            = 1
+obs_path       = "{obs}"
+obs_file       = "{c["grace"]}"
+vname_obs      = "tws_obs"
+accumulate     = true
+baseline_start = "{base}"
+baseline_end   = "{base + datetime.timedelta(days=364)}"
+metric         = "rmse"
+''')
+    if "mass_balance" in targets:
+        lines.append(f'''
 
 [[calibration.target]]
 

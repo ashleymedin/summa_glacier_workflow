@@ -12,8 +12,9 @@ elsewhere.
 | `data/domain_{Gulkana,Wolverine}/` | each domain: the SYMFLUENCE upland domain, gridded ERA5 (`forcing/raw_data`, 2008–2022 from SYMFLUENCE, the rest from `acquire_era5.py`), the USGS station records, stakes and observations, copied in; and everything the pipeline writes |
 | `data/domain_*/observations/` | `calibration` (the NetCDF targets `runs/calibrate.py` reads), `stations` (USGS weather stations, for the forcing correction), `storage/{mass_balance,grace,velocity}`, `streamflow`, `stream_temperature`, `lake_area`, `imagery`, `firn` and `campaigns` |
 | `data/external/` | RGI 6.0, Herreid and Pellicciotti debris extent, Rounce debris thickness, Millan ice thickness, the USGS survey DEMs and outlines (`GlacierDEM`) and Hugonnet dh/dt (the domain YAMLs' `data:` paths); not in git |
-| `domains/{gulkana,wolverine}.yaml` | each domain's bounding box, gauge, data paths and setup choices |
-| `run_study.py` | the whole study of a domain, `--steps observations domain cases calibrate evaluate checks`; calls the scripts below |
+| `domains/{gulkana,wolverine}.yaml` | each basin's added-data setup: bounding box, gauge, data paths, the USGS surveys, stations and stakes |
+| `run_study.py` | the whole study of a basin, both setups: `./run_study.py gulkana`, with `--steps observations domain cases calibrate evaluate checks` and `--setups general added`; calls the scripts below |
+| `domains/{gulkana,wolverine}_general.yaml`, `seed_domain.py` | the general setup of each basin: global data only, in its own `data/domain_<Name>_general`, seeded from the added-data domain |
 | `acquire_observations.py` | fetches the domain YAML's `observations:` block over `forcing_period` |
 | `setup_glacier_domain.py` | runs the glacier pipeline on a domain, `--steps` to pick some |
 | `cases.yaml`, `build_cases.py` | builds the tests and runs from the domains |
@@ -45,6 +46,8 @@ wetland domain (a proglacial lake or wetted forefield) copied from the stream do
 
 ```bash
 ./setup_glacier_domain.py domains/gulkana.yaml       # rasters extend hrus zonal era5 forcing coldstate
+./setup_glacier_domain.py domains/gulkana_general.yaml # seed rasters extend hrus zonal coldstate (the forcing is linked)
+./run_study.py gulkana                               # all of it, both setups: observations domain cases calibrate evaluate checks
 ./setup_glacier_domain.py domains/wolverine.yaml
 ./build_cases.py cases.yaml                          # every test and run, or name some
 ```
@@ -121,7 +124,9 @@ first month, the year the calibration spins up over:
 | `gulkana_test` | `tests/gulkana` | raw, 2008–2012 | 2009–2012, discharge + mass balance |
 | `wolverine_test` | `tests/wolverine` | raw, 2016–2019, stream HRU | 2017–2019, discharge + temperature + mass balance |
 | `gulkana_wolverine` | summa `utils/test/test_calibration/gulkana_wolverine` | raw, Oct 2008 – Dec 2011, 2 GRUs | Oct 2009 – Dec 2011, each glacier's mass balance |
-| `{gulkana,wolverine}_{raw,corrected}` | `runs/` | raw or station-corrected, 2008–2022 | calibrated 2009–2015, evaluated 2016–2022 |
+| `{gulkana,wolverine}_general` | `runs/` | raw ERA5, general domain, Oct 2004 – Sep 2026 | calibrated WY2006–2015 and evaluated WY2016–2026 on discharge and the GRACE storage anomaly |
+| `{gulkana,wolverine}_added` | `runs/` | station-corrected ERA5, added-data domain, Oct 2004 – Sep 2026 | calibrated WY2006–2015 and evaluated WY2016–2026 on discharge and the seasonal mass balance (Wolverine's water temperature in the evaluation) |
+| `{gulkana,wolverine}_{raw,corrected}` | `runs/` | raw or station-corrected, 2008–2022 | the earlier runs: calibrated 2009–2015, evaluated 2016–2022 |
 
 ## The full runs
 

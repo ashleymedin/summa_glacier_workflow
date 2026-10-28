@@ -1,0 +1,26 @@
+# Gulkana Glacier, general setup: global data only (RGI and Herreid outlines, MERIT surface, Millan thickness, ArcticDEM), raw ERA5.
+# The run of this basin without the USGS surveys, stations and stakes; the added-data setup is gulkana.yaml.
+project_dir: data/domain_Gulkana_general        # seeded from seed_from, then built here (seed_domain.py)
+domain: Gulkana                                 # file names inside the folder keep the basin's name
+seed_from: data/domain_Gulkana
+bounding_box: 63.31/-145.54/63.23/-145.32       # lat_max/lon_min/lat_min/lon_max
+pour_point: 63.24027778/-145.4680556            # lat/lon of the gauge
+utm_crs: EPSG:32606
+utm_epsg: 32606
+rgi6_region: 01Alaska
+min_glacier_size_km2: 1
+min_debris_thickness: 0.04
+
+data:
+  rgi: data/external/RGI_data
+  debris_extent: data/external/Debris_data
+  debris_thickness: data/external/Debris_thick
+  ice_thickness: data/external/Thickness_data
+
+# the glaciers the model holds (glacier_extend.py lists them): their melted-out cells from the multi-year strips
+small_meltout: {dems: data/external/GlacierDEM/ArcticDEM_Gulkana_series, glaciers: [RGI60-01.00570, RGI60-01.00332, RGI60-01.00333, RGI60-01.00334, RGI60-01.22903]}
+
+forcing_period: {first: 2004-10, last: 2026-09}
+cold_start: 2008-01                             # first forcing month; its 12 months of raw ERA5 set the start (2004-10 once the forcing exists)
+soil_offset: 1.5
+ice_temp: -5.0

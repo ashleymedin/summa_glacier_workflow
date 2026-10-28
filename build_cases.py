@@ -59,7 +59,7 @@ def domain_cold_state(config, start, out_dir):
     """attributes_glac.nc and coldstate_glac.nc of a domain, the cold state started at start, in out_dir."""
     c = load_config(os.path.join(HERE, "domains", f"{config}.yaml"))
     subprocess.run([sys.executable, os.path.join(HERE, "glacier_cold_state.py"), c["project_dir"],
-                    "--utm-epsg", str(c["utm_epsg"]), "--start", start, "--soil-offset", str(c.get("soil_offset", 1.5)),
+                    "--domain", c["domain"], "--utm-epsg", str(c["utm_epsg"]), "--start", start, "--soil-offset", str(c.get("soil_offset", 1.5)),
                     "--ice-temp", str(c.get("ice_temp", -5.0)), "--output-dir", out_dir], check=True)
     return c
 

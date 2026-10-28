@@ -35,7 +35,59 @@ gulkana_wolverine:
   forcing: raw
   forcing_name: "GulkanaWolverine_{Y}-{M}-01-00-00-00.nc"
 
-# the full runs of glacier.tex: spin-up 2008, calibrated 2009-2015, evaluated 2016-2022
+# the two runs of each basin in glacier.tex, Oct 2004 - Sep 2026: spin-up WY2005, calibrated WY2006-2015, evaluated WY2016-2026
+# general: the global data only (domains/<basin>_general.yaml), raw ERA5, scored on discharge and the GRACE storage anomaly
+# added:   the USGS surveys, stations and stakes (domains/<basin>.yaml), station-corrected ERA5, discharge and the seasonal mass balance
+# `./run_study.py <basin>` builds and calibrates both; first_month needs the ERA5 of 2004-2008 (acquire_era5.py)
+gulkana_general:
+  domain: gulkana_general
+  dest: runs/gulkana_general
+  template: tests/gulkana/summa_inputs
+  first_month: 2004-10
+  last_month: 2026-09
+  forcing: raw
+  copy_forcing: false
+  calibrate: [2005-10-01, 2015-09-30]
+  evaluate: [2015-10-01, 2026-09-30]
+  targets: [discharge, grace]
+
+gulkana_added:
+  domain: gulkana
+  dest: runs/gulkana_added
+  template: tests/gulkana/summa_inputs
+  first_month: 2004-10
+  last_month: 2026-09
+  forcing: station_corrected
+  copy_forcing: false
+  calibrate: [2005-10-01, 2015-09-30]
+  evaluate: [2015-10-01, 2026-09-30]
+  targets: [discharge, mass_balance]
+
+wolverine_general:
+  domain: wolverine_general
+  dest: runs/wolverine_general
+  template: tests/wolverine/summa_inputs
+  first_month: 2004-10
+  last_month: 2026-09
+  forcing: raw
+  copy_forcing: false
+  calibrate: [2005-10-01, 2015-09-30]
+  evaluate: [2015-10-01, 2026-09-30]
+  targets: [discharge, grace]
+
+wolverine_added:
+  domain: wolverine
+  dest: runs/wolverine_added
+  template: tests/wolverine/summa_inputs
+  first_month: 2004-10
+  last_month: 2026-09
+  forcing: station_corrected
+  copy_forcing: false
+  calibrate: [2005-10-01, 2015-09-30]
+  evaluate: [2015-10-01, 2026-09-30]
+  targets: [discharge, mass_balance, stream_temperature]
+
+# the earlier full runs of glacier.tex: spin-up 2008, calibrated 2009-2015, evaluated 2016-2022
 gulkana_raw:
   calibrate: [2009-01-01, 2015-12-31]
   evaluate: [2016-01-01, 2022-12-31]

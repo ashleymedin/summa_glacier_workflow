@@ -3,6 +3,7 @@
 
 Steps, in order (--steps picks some; the default is all of them):
 
+  seed      seed_domain.py: a domain with seed_from (the general setup) starts from its source's static files
   rasters   glacier_rasters.py: domain type, RGI id, debris thickness and bed rasters
   extend    glacier_extend.py: basin on the bed, glacier-capable cells downstream (needs pysheds)
             -- then, in SYMFLUENCE: elevation-band HRUs, upland attributes.nc and coldState.nc --
@@ -27,7 +28,8 @@ import sys
 from domain_config import load_config
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-STEPS = ("rasters", "extend", "hrus", "zonal", "era5", "forcing", "coldstate")
+STEPS = ("seed", "rasters", "extend", "hrus", "zonal", "era5", "forcing", "coldstate")
+SEEDED = ("seed", "rasters", "extend", "hrus", "zonal", "coldstate")  # the forcing is linked to the source domain's
 
 
 def run(*args):
@@ -39,12 +41,15 @@ def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
     p.add_argument("config", help="domain YAML in domains/")
-    p.add_argument("--steps", nargs="+", choices=STEPS, default=list(STEPS))
+    p.add_argument("--steps", nargs="+", choices=STEPS)
     a = p.parse_args()
     c = load_config(a.config)
+    a.steps = a.steps or list(SEEDED if c.get("seed_from") else [s for s in STEPS if s != "seed"])
     project = c["project_dir"]
     py = sys.executable
 
+    if "seed" in a.steps:
+        run(py, os.path.join(HERE, "seed_domain.py"), a.config)
     if "rasters" in a.steps:
         run(py, os.path.join(HERE, "glacier_rasters.py"), a.config)
     if "extend" in a.steps:
@@ -82,7 +87,7 @@ def main():
             args += ["--spechum-ratios", ratios]
         run(*args)
     if "coldstate" in a.steps:
-        run(py, os.path.join(HERE, "glacier_cold_state.py"), project, "--utm-epsg", c["utm_epsg"],
+        run(py, os.path.join(HERE, "glacier_cold_state.py"), project, "--domain", c["domain"], "--utm-epsg", c["utm_epsg"],
             "--start", c.get("cold_start", "2008-01"), "--soil-offset", c.get("soil_offset", 1.5),
             "--ice-temp", c.get("ice_temp", -5.0))
 

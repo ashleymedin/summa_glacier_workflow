@@ -1,0 +1,25 @@
+# Wolverine Glacier, general setup: global data only (RGI and Herreid outlines, MERIT surface, Millan thickness, ArcticDEM), raw ERA5.
+# The run of this basin without the USGS surveys, stations and stakes; the added-data setup is wolverine.yaml.
+project_dir: data/domain_Wolverine_general
+domain: Wolverine
+seed_from: data/domain_Wolverine
+bounding_box: 60.44/-148.97/60.36/-148.85
+pour_point: 60.36999097/-148.8988085
+utm_crs: EPSG:32606
+utm_epsg: 32606
+rgi6_region: 01Alaska
+min_glacier_size_km2: 1
+min_debris_thickness: 0.04
+
+data:
+  rgi: data/external/RGI_data
+  debris_extent: data/external/Debris_data
+  debris_thickness: data/external/Debris_thick
+  ice_thickness: data/external/Thickness_data
+
+small_meltout: {dems: data/external/GlacierDEM/ArcticDEM_Wolverine_series, glaciers: [RGI60-01.09162]}
+
+forcing_period: {first: 2004-10, last: 2026-09}
+cold_start: 2008-01
+soil_offset: 1.5
+ice_temp: -5.0

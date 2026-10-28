@@ -1,19 +1,25 @@
 #!/usr/bin/env python3
-"""Run a glacier study end to end from a domain YAML: observations, domain, cases, calibration, evaluation, checks.
+"""Run a glacier basin's study end to end: the general setup and the added-data setup, each built and calibrated.
 
-Steps, in order (--steps picks some; the default is all of them):
+  general  the global data only (domains/<basin>_general.yaml), raw ERA5, scored on discharge and the GRACE storage anomaly
+  added    the USGS surveys, stations and stakes (domains/<basin>.yaml), station-corrected ERA5, scored on discharge and the
+           seasonal mass balance (and water temperature on Wolverine's evaluation)
 
-  observations  acquire_observations.py: the YAML's `observations:` block, over forcing_period
-  domain        setup_glacier_domain.py: rasters extend hrus zonal era5 forcing coldstate (--domain-steps picks some)
-  cases         build_cases.py: the cases.yaml full runs of this domain (--cases names others)
-  calibrate     runs/calibrate.py calibrate, for each case; arguments after -- go to it
-  evaluate      runs/calibrate.py evaluate, for each case
-  checks        check_glacier_imagery.py for the YAML's `imagery:` years
+Steps, in order (--steps picks some; the default is all of them), each for the setups --setups names (default both):
 
-The observation and domain steps need the by-hand downloads of README.md first.  Calibration is long and needs MPI SUMMA.
+  observations  acquire_observations.py: the added YAML's `observations:` block, over forcing_period (once; both setups read it)
+  domain        setup_glacier_domain.py: the general domain is seeded from the added one (seed_domain.py), then built;
+                --domain-steps picks some of rasters extend hrus zonal era5 forcing coldstate
+  cases         build_cases.py: the cases <basin>_general and <basin>_added of cases.yaml (--cases names others)
+  calibrate     runs/calibrate.py calibrate for each case; arguments after -- go to it
+  evaluate      runs/calibrate.py evaluate for each case
+  checks        check_glacier_imagery.py for each domain YAML's `imagery:` years
 
-    ./run_study.py domains/gulkana.yaml --steps observations domain cases
-    ./run_study.py domains/gulkana.yaml --steps calibrate -- --population 32 --generations 15 --ranks 9
+The observation and domain steps need the by-hand downloads of README.md first, and the cases the ERA5 of forcing_period.
+A path to one domain YAML (domains/gulkana.yaml) runs that setup alone, with the cases whose domain it is.
+
+    ./run_study.py gulkana --steps observations domain cases
+    ./run_study.py gulkana --setups general --steps calibrate -- --population 32 --generations 15 --ranks 9
 """
 
 import argparse
@@ -36,35 +42,45 @@ def run(*args, cwd=None):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
-    p.add_argument("config", help="domain YAML in domains/")
+    p.add_argument("study", help="a basin (gulkana, wolverine), or a domain YAML for one setup")
     p.add_argument("--cases-file", default=os.path.join(HERE, "cases.yaml"))
     p.add_argument("--steps", nargs="+", choices=STEPS, default=list(STEPS))
+    p.add_argument("--setups", nargs="+", choices=("general", "added"), default=["general", "added"])
     p.add_argument("--domain-steps", nargs="+", help="steps of setup_glacier_domain.py")
-    p.add_argument("--cases", nargs="+", help="cases to build, calibrate and evaluate; default the full runs of this domain")
+    p.add_argument("--cases", nargs="+", help="cases to build, calibrate and evaluate; default those of the setups")
     a, extra = p.parse_known_args()
     extra = [x for x in extra if x != "--"]
-    c = load_config(a.config)
-    stem = os.path.splitext(os.path.basename(a.config))[0]
     py = sys.executable
 
-    with open(a.cases_file) as f:
-        every = yaml.safe_load(f)
-    cases = a.cases or [k for k, v in every.items() if v.get("domain") == stem and "calibrate" in v]
+    if a.study.endswith(".yaml"):
+        yamls = {"": a.study}
+        stem = os.path.splitext(os.path.basename(a.study))[0]
+        with open(a.cases_file) as f:
+            every = yaml.safe_load(f)
+        cases = a.cases or [k for k, v in every.items() if v.get("domain") == stem and "calibrate" in v]
+        added = a.study
+    else:
+        yamls = {s: os.path.join(HERE, "domains", f"{a.study}{'_general' if s == 'general' else ''}.yaml") for s in a.setups}
+        cases = a.cases or [f"{a.study}_{s}" for s in a.setups]
+        added = os.path.join(HERE, "domains", f"{a.study}.yaml")
 
     if "observations" in a.steps:
-        run(py, os.path.join(HERE, "acquire_observations.py"), a.config)
+        run(py, os.path.join(HERE, "acquire_observations.py"), added)
     if "domain" in a.steps:
-        run(py, os.path.join(HERE, "setup_glacier_domain.py"), a.config, *(["--steps", *a.domain_steps] if a.domain_steps else []))
+        for config in yamls.values():
+            run(py, os.path.join(HERE, "setup_glacier_domain.py"), config, *(["--steps", *a.domain_steps] if a.domain_steps else []))
     if "cases" in a.steps:
         run(py, os.path.join(HERE, "build_cases.py"), a.cases_file, *cases)
     for mode in ("calibrate", "evaluate"):
         if mode in a.steps:
             for case in cases:
                 run(py, os.path.join(HERE, "runs", "calibrate.py"), mode, case, *extra, cwd=os.path.join(HERE, "runs"))
-    if "checks" in a.steps and c.get("imagery"):
-        im = c["imagery"]
-        run(py, os.path.join(HERE, "check_glacier_imagery.py"), a.config, "--landsat", *im.get("landsat", []),
-            "--sentinel", *im.get("sentinel", []))
+    if "checks" in a.steps:
+        for config in yamls.values():
+            im = load_config(config).get("imagery")
+            if im:
+                run(py, os.path.join(HERE, "check_glacier_imagery.py"), config, "--landsat", *im.get("landsat", []),
+                    "--sentinel", *im.get("sentinel", []))
 
 
 if __name__ == "__main__":
