@@ -16,6 +16,7 @@ elsewhere.
 | `run_study.py` | the whole study of a basin, both setups: `./run_study.py gulkana`, with `--steps observations domain cases calibrate evaluate checks` and `--setups general added`; calls the scripts below |
 | `domains/{gulkana,wolverine}_general.yaml`, `seed_domain.py` | the general setup of each basin: global data only, in its own `data/domain_<Name>_general`, seeded from the added-data domain |
 | `acquire_observations.py` | fetches the domain YAML's `observations:` block over `forcing_period` |
+| `plot_basin_setup.py` | the setup figure: contours, glacier outlines, advance room, basin, HRUs and gauge for each basin and setup; `--grids`, `--stations`, `--streams` add layers |
 | `setup_glacier_domain.py` | runs the glacier pipeline on a domain, `--steps` to pick some |
 | `cases.yaml`, `build_cases.py` | builds the tests and runs from the domains |
 | `tests/` | short calibrations of each glacier (`test_calibration_{gulkana,wolverine}.sh`) |
