@@ -16,3 +16,18 @@ data/external/
 scratch/2026-10-22/arcticdem/
 data/*/observations/stream_temperature/nellie_juan_*/
 runs/logs/
+# generated run output kept out of git: pilot, calibration_*, flow-model input and smoke folders (runs/*/summa_inputs stays)
+runs/*/calibration_*/
+runs/*/pilot*/
+runs/*/summa_inputs_*/
+runs/*_dom/smoke*
+# diagnosis folders keep their scripts, figures and notes; the experiment runs and pickles go
+runs/*_diagnosis/*
+!runs/*_diagnosis/scripts/
+!runs/*_diagnosis/*.png
+!runs/*_diagnosis/*.diff
+# scans in progress and scratch data
+data/*/observations/lake_area/.*
+scratch/**/*.npz
+scratch/**/*.log
+scratch/**/verify/
