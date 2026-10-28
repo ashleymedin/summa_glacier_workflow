@@ -89,11 +89,11 @@ def search_for(case, name):
 
 
 CASES = {  # domain, observation files and gauge of each run
-    "gulkana": {"obs": "data/domain_Gulkana/observations/calibration", "flow": "USGS_15478040_daily_flow.nc",
-                "mb": "gulkana_mass_balance_seasonal.nc", "grace": "gulkana_grace_tws.nc"},
     "wolverine": {"obs": "data/domain_Wolverine/observations/calibration", "flow": "USGS_15236900_daily_flow.nc",
                   "mb": "wolverine_mass_balance_seasonal.nc", "temp": "USGS_15236900_daily_temperature.nc",
                   "grace": "wolverine_grace_tws.nc"},
+    "gulkana": {"obs": "data/domain_Gulkana/observations/calibration", "flow": "USGS_15478040_daily_flow.nc",
+                "mb": "gulkana_mass_balance_seasonal.nc", "grace": "gulkana_grace_tws.nc"},
 }
 
 

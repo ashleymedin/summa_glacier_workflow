@@ -51,7 +51,7 @@ precip_grad: true                               # SUMMA precipElevGrad fitted wi
 stream_hru:
   first_month: 2016-01
   last_month: 2019-12
-  length: 2000
+  length: 2100
   slope: 0.03
   width: 5
   elevation: 390

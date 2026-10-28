@@ -42,7 +42,7 @@ def run(*args, cwd=None):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
-    p.add_argument("study", help="a basin (gulkana, wolverine), or a domain YAML for one setup")
+    p.add_argument("study", help="a basin (wolverine, gulkana), or a domain YAML for one setup")
     p.add_argument("--cases-file", default=os.path.join(HERE, "cases.yaml"))
     p.add_argument("--steps", nargs="+", choices=STEPS, default=list(STEPS))
     p.add_argument("--setups", nargs="+", choices=("general", "added"), default=["general", "added"])

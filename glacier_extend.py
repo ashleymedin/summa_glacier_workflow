@@ -12,7 +12,7 @@ With basin_within: huc12 in the YAML the basin is clipped to the HUC12 holding t
 most of its area is in that watershed (the USGS decides where its runoff goes) and most of it drains to the gauge on the bed;
 the basin then holds every modelled glacier whole. Advance room not joined to its glacier is dropped, and glaciers whose advance room
 meets share one grid (under the id of the largest). --merge body also joins a glacier whose room reaches another glacier's body, as
-the Root glacier's would the Kennicott's; the YAML's merge_glaciers sets it, and the default (room) leaves the Gulkana and Wolverine setups as they are. Without it the glacier needs --gru-threshold of its cells inside the basin.
+the Root glacier's would the Kennicott's; the YAML's merge_glaciers sets it, and the default (room) leaves the Wolverine and Gulkana setups as they are. Without it the glacier needs --gru-threshold of its cells inside the basin.
 
 Extension, largest glacier first, by --method:
   drag  the terminus (the glacier's highest-accumulation cells) is shifted cell by cell down the flow

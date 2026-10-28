@@ -1,6 +1,6 @@
 # summa_glacier_workflow
 
-The glacier setup and runs of SUMMA on Gulkana and Wolverine glaciers, Alaska: from global glacier
+The glacier setup and runs of SUMMA on Wolverine and Gulkana glaciers, Alaska: from global glacier
 products and on-site observations to the domains, the tests and the full 2008–2022 calibrations of the
 glacier paper. It sits beside the `summa` checkout and uses its executables; set `SUMMA_DIR` if summa is
 elsewhere.
@@ -12,15 +12,15 @@ elsewhere.
 | `data/domain_{Gulkana,Wolverine}/` | each domain: the SYMFLUENCE upland domain, gridded ERA5 (`forcing/raw_data`, 2008–2022 from SYMFLUENCE, the rest from `acquire_era5.py`), the USGS station records, stakes and observations, copied in; and everything the pipeline writes |
 | `data/domain_*/observations/` | `calibration` (the NetCDF targets `runs/calibrate.py` reads), `stations` (USGS weather stations, for the forcing correction), `storage/{mass_balance,grace,velocity}`, `streamflow`, `stream_temperature`, `lake_area`, `imagery`, `firn` and `campaigns` |
 | `data/external/` | RGI 6.0, Herreid and Pellicciotti debris extent, Rounce debris thickness, Millan ice thickness, the USGS survey DEMs and outlines (`GlacierDEM`) and Hugonnet dh/dt (the domain YAMLs' `data:` paths); not in git |
-| `domains/{gulkana,wolverine}.yaml` | each basin's added-data setup: bounding box, gauge, data paths, the USGS surveys, stations and stakes |
+| `domains/{wolverine,gulkana}.yaml` | each basin's added-data setup: bounding box, gauge, data paths, the USGS surveys, stations and stakes |
 | `run_study.py` | the whole study of a basin, both setups: `./run_study.py gulkana`, with `--steps observations domain cases calibrate evaluate checks` and `--setups general added`; calls the scripts below |
-| `domains/{gulkana,wolverine}_general.yaml`, `seed_domain.py` | the general setup of each basin: global data only, in its own `data/domain_<Name>_general`, seeded from the added-data domain |
+| `domains/{wolverine,gulkana}_general.yaml`, `seed_domain.py` | the general setup of each basin: global data only, in its own `data/domain_<Name>_general`, seeded from the added-data domain |
 | `acquire_observations.py` | fetches the domain YAML's `observations:` block over `forcing_period` |
 | `plot_proglacial.py`, `nhd_reach.py` | the terminus-and-gauge imagery figure, and the NHD stream length from the late-imagery terminus (the YAML's `terminus`) to the gauge, which the model's `stream: length` should match |
 | `plot_basin_setup.py` | the setup figure: contours, glacier outlines, advance room, basin, HRUs and gauge for each basin and setup; `--grids`, `--stations`, `--streams`, `--reaches` add layers; panels are lettered a, b (Wolverine) and c, d (Gulkana) |
 | `setup_glacier_domain.py` | runs the glacier pipeline on a domain, `--steps` to pick some |
 | `cases.yaml`, `build_cases.py` | builds the tests and runs from the domains |
-| `tests/` | short calibrations of each glacier (`test_calibration_{gulkana,wolverine}.sh`) |
+| `tests/` | short calibrations of each glacier (`test_calibration_{wolverine,gulkana}.sh`) |
 | `runs/` | the four full runs and `calibrate.py`, which calibrates them and evaluates their fronts |
 | `notebooks/glacier_setup.ipynb` | the pipeline step by step, with plots |
 | `notebooks/glacier_plots.ipynb` | discharge, storage and glacier-surface plots of a glacier run |
@@ -123,12 +123,12 @@ first month, the year the calibration spins up over:
 
 | Case | Where | Forcing | Scored |
 | --- | --- | --- | --- |
-| `gulkana_test` | `tests/gulkana` | raw, 2008–2012 | 2009–2012, discharge + mass balance |
 | `wolverine_test` | `tests/wolverine` | raw, 2016–2019, stream HRU | 2017–2019, discharge + temperature + mass balance |
+| `gulkana_test` | `tests/gulkana` | raw, 2008–2012 | 2009–2012, discharge + mass balance |
 | `gulkana_wolverine` | summa `utils/test/test_calibration/gulkana_wolverine` | raw, Oct 2008 – Dec 2011, 2 GRUs | Oct 2009 – Dec 2011, each glacier's mass balance |
-| `{gulkana,wolverine}_general` | `runs/` | raw ERA5, general domain, Oct 2004 – Sep 2026 | calibrated WY2006–2015 and evaluated WY2016–2026 on discharge and the GRACE storage anomaly |
-| `{gulkana,wolverine}_added` | `runs/` | station-corrected ERA5, added-data domain, Oct 2004 – Sep 2026 | calibrated WY2006–2015 and evaluated WY2016–2026 on discharge and the seasonal mass balance (Wolverine's water temperature in the evaluation) |
-| `{gulkana,wolverine}_{raw,corrected}` | `runs/` | raw or station-corrected, 2008–2022 | the earlier runs: calibrated 2009–2015, evaluated 2016–2022 |
+| `{wolverine,gulkana}_general` | `runs/` | raw ERA5, general domain, Oct 2004 – Sep 2026 | calibrated WY2006–2015 and evaluated WY2016–2026 on discharge and the GRACE storage anomaly |
+| `{wolverine,gulkana}_added` | `runs/` | station-corrected ERA5, added-data domain, Oct 2004 – Sep 2026 | calibrated WY2006–2015 and evaluated WY2016–2026 on discharge and the seasonal mass balance (Wolverine's water temperature in the evaluation) |
+| `{wolverine,gulkana}_{raw,corrected}` | `runs/` | raw or station-corrected, 2008–2022 | the earlier runs: calibrated 2009–2015, evaluated 2016–2022 |
 
 ## The full runs
 
@@ -199,4 +199,4 @@ setup has to name its own, and a basin without them has the general setup only.
 
 **Glaciers that join.** `glacier_extend.py` gives glaciers whose advance room meets advance room one flow grid. A glacier whose room
 reaches another glacier's body, as the Root glacier's would the Kennicott's, is the case `--merge body` (YAML `merge_glaciers: body`)
-joins as well. The default, `room`, leaves Gulkana and Wolverine as they are; `body` changes neither.
+joins as well. The default, `room`, leaves Wolverine and Gulkana as they are; `body` changes neither.
