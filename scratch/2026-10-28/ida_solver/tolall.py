@@ -15,7 +15,10 @@ if val != "be":
     s = re.sub(r"^num_method\s+homegrown", "num_method                      ida      ", s, count=1, flags=re.M)
     open(p, "w").write(s)
     names = [] if val == "dflt" else [f"{k}Tol{v}" for v in ("TempCas", "TempVeg", "WatVeg", "TempSoilSnow", "WatSnow", "Matric", "Aquifr") for k in ("rel", "abs")]
-    rows = "\n".join(n.ljust(25) + " | " + val.rjust(12) + " | " + "0.0".rjust(12) + " | " + "0.1".rjust(12) for n in names)
+    def fmt(n):  # SCALED=1: temperature/energy absolute tolerances keep the absEnergyFac of 1e7 (enthalpyForm), as the defaults do
+        if os.environ.get("SCALED") and n.startswith("absTolTemp"): return ("%.3e" % (float(val.replace("d", "e")) * 1e7)).replace("e", "d"), "1.0d+15"
+        return val, "0.1"
+    rows = "\n".join(n.ljust(25) + " | " + fmt(n)[0].rjust(12) + " | " + "0.0".rjust(12) + " | " + fmt(n)[1].rjust(12) for n in names)
     p = f"{R}/inputs/localParamInfo.txt"; s = open(p).read()
     if names: s = re.sub(r"^(lowerBoundHead [^\n]*)(?=\n)", lambda m: m.group(1) + "\n" + rows, s, count=1, flags=re.M)
     open(p, "w").write(s)
