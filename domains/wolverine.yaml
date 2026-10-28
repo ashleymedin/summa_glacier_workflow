@@ -29,6 +29,7 @@ observations:
   velocity: true
   lake_area:
     - {name: wolverine_lake, box: [-148.918, 60.3720, -148.905, 60.3775], usgs_site: "15236900"}
+    - {name: wolverine_reach, box: [-148.9215, 60.3684, -148.8922, 60.3828], usgs_site: "15236900"}   # terminus to gauge, 250 m beyond
 
 # late-summer scenes check_glacier_imagery.py compares with the starting and final glacier
 imagery: {landsat: [2004, 2005, 2009, 2010], sentinel: [2019, 2021, 2025, 2026]}

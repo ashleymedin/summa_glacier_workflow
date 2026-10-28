@@ -30,6 +30,8 @@ observations:
   grace: true
   mass_balance: {release: storage/mass_balance/Output_Gulkana_Glacier_Wide_solutions_calibrated.csv, balance: seasonal}
   velocity: true
+  lake_area:
+    - {name: gulkana_reach, box: [-145.4731, 63.2381, -145.4210, 63.2609], usgs_site: "15478040"}   # terminus to gauge, 250 m beyond
 
 # late-summer scenes check_glacier_imagery.py compares with the starting and final glacier
 imagery: {landsat: [2004, 2005, 2009], sentinel: [2019, 2020, 2021, 2025, 2026]}

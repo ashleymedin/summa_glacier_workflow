@@ -84,6 +84,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
     p.add_argument("config", help="domain YAML in domains/")
     p.add_argument("--only", nargs="+", choices=KINDS, help="kinds to fetch; default every kind the YAML names")
+    p.add_argument("--lakes", nargs="+", help="lake_area entries to scan, by name; default all")
     p.add_argument("--jobs", type=int, default=6, help="lake-area scans at once")
     p.add_argument("--dry-run", action="store_true", help="print the commands without running them")
     a = p.parse_args()
@@ -121,6 +122,8 @@ def main():
             run(py, os.path.join(HERE, "acquire_velocity.py"), a.config, "--first", start[:4])
         elif kind == "lake_area":
             for lake in s:
+                if a.lakes and lake["name"] not in a.lakes:
+                    continue
                 lake_area(c, lake, obs, a.jobs)
 
 
