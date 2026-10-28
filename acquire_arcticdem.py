@@ -7,7 +7,12 @@ the strips go to (dems). Each strip is read at its 8 m overview, clipped to the 
 --buffer, and written there as <date>_<strip id>.tif in its own CRS (EPSG:3413, WGS84 ellipsoid heights, NaN
 no-data), with the cells the strip's bitmask flags (edge, water, cloud) left out. Strips covering less than --min-cover of the clip are skipped.
 
+With --series the strips are instead those of August and September from --first-year on, over the domain's bounding box, into the
+folder of the YAML's small_meltout (dems): the time series glacier_rasters.py reads to find where the ice of the glaciers without
+a survey outline has melted out.
+
     ./acquire_arcticdem.py domains/gulkana.yaml
+    ./acquire_arcticdem.py domains/gulkana.yaml --series
 """
 
 import argparse
@@ -19,6 +24,7 @@ import numpy as np
 import pystac_client
 import rasterio
 from rasterio.enums import Resampling
+from shapely.geometry import box
 from rasterio.windows import Window, from_bounds
 
 from domain_config import load_config
@@ -47,6 +53,37 @@ def read_clip(href, bounds, step, resampling=Resampling.average):
         return z, t, s.crs
 
 
+def write_strips(items, bounds, out_dir, step, min_cover):
+    """Each strip over bounds (EPSG:3413) at step times its resolution, its bitmask-flagged cells NaN, to out_dir as
+    <date>_<id>.tif unless it covers less than min_cover of the clip."""
+    for it in sorted(items, key=lambda i: i.datetime):
+        z, t, crs = read_clip(it.assets["dem"].href, bounds, step)
+        bits, _, _ = read_clip(it.assets["mask"].href, bounds, step, Resampling.nearest)
+        z[bits != 0] = np.nan  # edge, water or cloud
+        cover = np.isfinite(z).mean()
+        if cover < min_cover:
+            print(f"  {it.id}: covers {cover:.0%}, skipped")
+            continue
+        path = os.path.join(out_dir, f"{it.datetime:%Y%m%d}_{it.id}.tif")
+        with rasterio.open(path, "w", driver="GTiff", height=z.shape[0], width=z.shape[1], count=1, dtype="float32",
+                           crs=crs, transform=t, nodata=np.nan, compress="deflate") as dst:
+            dst.write(z, 1)
+        print(f"  {os.path.basename(path)}: covers {cover:.0%}")
+
+
+def series(c, a):
+    """The August and September strips from a.first_year on over the domain's bounding box."""
+    out_dir = os.path.join(HERE, c["small_meltout"]["dems"])
+    os.makedirs(out_dir, exist_ok=True)
+    lat1, lon0, lat0, lon1 = (float(v) for v in c["bounding_box"].split("/"))
+    area = gpd.GeoSeries([box(lon0, lat0, lon1, lat1)], crs=4326).to_crs(3413).iloc[0]
+    items = pystac_client.Client.open(STAC).search(collections=[COLLECTION], bbox=[lon0, lat0, lon1, lat1],
+                                                   datetime=f"{a.first_year}-01-01T00:00:00Z/..").item_collection()
+    items = [i for i in items if 8 <= i.datetime.month <= 9]
+    print(f"{len(items)} {COLLECTION} strips from August and September {a.first_year} on")
+    write_strips(items, tuple(8 * round(b / 8) for b in area.bounds), out_dir, a.step, a.min_cover)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
@@ -54,8 +91,12 @@ def main():
     p.add_argument("--buffer", type=float, default=1000.0, help="m around the starting outline, for stable ground")
     p.add_argument("--min-cover", type=float, default=0.3, help="least valid share of the clip a strip keeps")
     p.add_argument("--step", type=int, default=4, help="strip pixels per output pixel (4: the 8 m overview)")
+    p.add_argument("--series", action="store_true", help="the multi-year strips of small_meltout, not those after later_outline")
+    p.add_argument("--first-year", type=int, default=2011, help="first year of --series")
     a = p.parse_args()
     c = load_config(a.config)
+    if a.series:
+        return series(c, a)
     later, usgs = c["later_outline"], c["usgs_outline"]
     out_dir = os.path.join(HERE, later["dems"])
     os.makedirs(out_dir, exist_ok=True)
@@ -69,20 +110,7 @@ def main():
                                                    datetime=f"{date}T00:00:00Z/..").item_collection()
     items = [i for i in items if 7 <= i.datetime.month <= 10]
     print(f"{len(items)} {COLLECTION} strips from July to October after {date}")
-    bounds = tuple(8 * round(b / 8) for b in area.bounds)
-    for it in sorted(items, key=lambda i: i.datetime):
-        z, t, crs = read_clip(it.assets["dem"].href, bounds, a.step)
-        bits, _, _ = read_clip(it.assets["mask"].href, bounds, a.step, Resampling.nearest)
-        z[bits != 0] = np.nan  # edge, water or cloud
-        cover = np.isfinite(z).mean()
-        if cover < a.min_cover:
-            print(f"  {it.id}: covers {cover:.0%}, skipped")
-            continue
-        path = os.path.join(out_dir, f"{it.datetime:%Y%m%d}_{it.id}.tif")
-        with rasterio.open(path, "w", driver="GTiff", height=z.shape[0], width=z.shape[1], count=1, dtype="float32",
-                           crs=crs, transform=t, nodata=np.nan, compress="deflate") as dst:
-            dst.write(z, 1)
-        print(f"  {os.path.basename(path)}: covers {cover:.0%}")
+    write_strips(items, tuple(8 * round(b / 8) for b in area.bounds), out_dir, a.step, a.min_cover)
 
 
 if __name__ == "__main__":

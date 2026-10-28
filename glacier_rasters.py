@@ -17,6 +17,8 @@ start outline is that survey's, or between the two usgs_outline lists. Where lat
 survey of that glacier, the bed under the ice lost between the two outlines is the surface of the ArcticDEM strips
 after it (acquire_arcticdem.py, each levelled to the DEM on the ground around the glacier), and that change of
 the bed is carried harmonically over the glacier within reach (250 m) of them, to nothing at the ice-free ground.
+Glaciers with no survey outline take the same correction from a small_meltout series of strips: where the median of the strips since
+recent (2019) lies within near (5 m) of the bed and the height has changed under stable (0.3 m yr-1) since 2014.
 
 Glacier outlines are RGI 6.0, replaced by the Herreid and Pellicciotti (2020) outline where it has one, and by a
 USGS survey outline (McNeil et al. 2019, doi:10.5066/P9R8BP3K) where the YAML's usgs_outline names one. Their
@@ -376,6 +378,10 @@ def surface_and_bed(c, dem, glacier, grid, ice, outlines, surveys, start):
         bed = melt_out_bed(dem, surface, bed, glacier, grid, gpd.GeoSeries([start], crs=surveys.crs),
                            surveys[surveys["Date"] == later["date"]].geometry, outlines.geometry,
                            sorted(glob.glob(os.path.join(HERE, later["dems"], "*.tif"))), later.get("reach", 250.0))
+    if c.get("small_meltout"):  # the glaciers without a survey outline: their melted-out cells from the strips' own series
+        other = glacier & ~own if usgs else glacier
+        bed = series_melt_out_bed(dem, surface, bed, other, grid, sorted(glob.glob(os.path.join(HERE, c["small_meltout"]["dems"], "*.tif"))),
+                                  **{k: v for k, v in c["small_meltout"].items() if k != "dems"})
     if ref:  # ice-free in the reference year: the bed is its surface (after melt_out_bed, which tapers Millan inward)
         bed = np.where(own & ~in_ref & np.isfinite(reference), reference, bed)
     dx, dy = cell_size(grid, dem.shape)
@@ -427,6 +433,51 @@ def melt_out_bed(dem, surface, bed, glacier, src, start, later, outlines, paths,
     moved = glacier & ~known & (np.abs(change) > 1)
     print(f"bed under lost ice on {known.sum()} cells: median change {np.median(change[known]) if known.any() else 0:+.0f} m, "
           f"carried over {moved.sum()} more by over 1 m")
+    return np.where(glacier, np.minimum(bed + change, surface), bed)
+
+
+def series_melt_out_bed(dem, surface, bed, glacier, src, paths, near=5.0, stable=0.3, since=2014.0, recent=2019.0,
+                        reach=250.0, buffer=1500.0):
+    """The bed where the ice of the glaciers in the mask has gone, from a series of ArcticDEM strips (acquire_arcticdem.py
+    --series) when no outline says so: a cell has melted out where the median of its strips from recent (decimal year) on lies
+    within near (m) of the bed, above or below, and its height has changed by under stable (m yr-1) since since. Each strip is levelled to
+    the DEM by their median difference on the ground (off all glaciers) within buffer (m) of the glaciers. The bed there is the
+    strips' median, held at or below the surface, and its change is carried harmonically over the glaciers within reach (m)
+    of those cells, to nothing beyond."""
+    years, heights = [], []
+    for path in paths:
+        with rasterio.open(path) as s:
+            z = s.read(1, masked=True).astype(np.float64).filled(np.nan)
+            out = np.full(dem.shape, np.nan)
+            reproject(z, out, src_transform=s.transform, src_crs=s.crs, src_nodata=np.nan, dst_transform=src.transform,
+                      dst_crs=src.crs, dst_nodata=np.nan, resampling=Resampling.average)
+        dx, dy = cell_size(src, dem.shape)
+        ground = (distance_transform_edt(~glacier, sampling=(dy, dx)) <= buffer) & ~glacier & np.isfinite(out) & np.isfinite(dem)
+        if ground.sum() < 100 or np.isfinite(out[glacier]).mean() < 0.5:
+            continue
+        heights.append(out + np.median((dem - out)[ground]))
+        years.append(decimal_year(os.path.basename(path)[:8]))
+    years, heights = np.array(years), np.array(heights)
+    if not len(years):
+        print("small glaciers: no strip covers them")
+        return bed
+    use = years >= recent
+    with np.errstate(all="ignore"):
+        after = np.nanmedian(heights[use], axis=0) if use.any() else np.full(dem.shape, np.nan)
+        old = years >= since
+        ok = np.isfinite(heights[old])
+        n = ok.sum(0)
+        x = np.where(ok, years[old][:, None, None], np.nan)
+        xm, hm = np.nanmean(x, 0), np.nanmean(np.where(ok, heights[old], np.nan), 0)
+        slope = np.nansum((x - xm) * (np.where(ok, heights[old], np.nan) - hm), 0) / np.nansum((x - xm) ** 2, 0)
+    slope[n < 4] = np.nan
+    known = glacier & np.isfinite(after) & np.isfinite(slope) & (np.abs(after - bed) <= near) & (np.abs(slope) < stable)
+    dx, dy = cell_size(src, dem.shape)
+    close = distance_transform_edt(~known, sampling=(dy, dx)) <= reach
+    change = harmonic_fill(np.where(known, np.minimum(after, surface) - bed, 0.0), known, glacier & close)
+    moved = glacier & ~known & (np.abs(change) > 1)
+    print(f"small glaciers: {len(years)} strips ({years.min():.0f}-{years.max():.0f}); {known.sum()} of {glacier.sum()} cells "
+          f"have melted out (median bed change {np.median(change[known]) if known.any() else 0:+.1f} m), carried over {moved.sum()} more by over 1 m")
     return np.where(glacier, np.minimum(bed + change, surface), bed)
 
 

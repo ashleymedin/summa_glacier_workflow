@@ -31,3 +31,4 @@ data/*/observations/lake_area/.*
 scratch/**/*.npz
 scratch/**/*.log
 scratch/**/verify/
+scratch/**/rasters_*/

@@ -77,6 +77,11 @@ wetland domain (a proglacial lake or wetted forefield) copied from the stream do
    of the bed is carried harmonically over the glacier within 250 m (`reach`), to zero at the ice-free ground. Millan
    is about three times too thick on Gulkana's debris-covered tongue; 250 m leaves the bed under Gulkana's 2024
    radar, which matches Millan, unchanged.
+   The other glaciers of the basin have no survey outline, so `small_meltout` finds their melted-out cells from a series of
+   strips instead (`acquire_arcticdem.py --series`: August and September, 2011 on, over the domain's bounding box, levelled
+   to the DEM on the ground): a cell has melted out where the median of the strips since 2019 lies within 5 m of the bed
+   and its height has changed by under 0.3 m yr⁻¹ since 2014, and the bed there is that median, carried over the glacier
+   within 250 m. It changes 18 cells by under 1 m on Gulkana's four small glaciers.
 2. **extend.** The basin is delineated on the bed above the gauge, and each glacier at least 80% inside
    it gets room to advance by dragging its terminus downstream.
 3. **hrus.** Each HRU's area, centre, elevation, slope and contour length in `attributes.nc` and the HRU
