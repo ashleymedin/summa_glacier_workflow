@@ -39,7 +39,7 @@ from shapely.geometry import Point, box
 from domain_config import load_config
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PURPLE, PINK, RED, BLUE, GREEN, ORANGE = "#7b2d8e", "#e8629c", "#c0392b", "#1f78b4", "#1a9850", "#e08214"
+PURPLE, PINK, RED, BLUE, GREEN, ORANGE, BROWN = "#7b2d8e", "#e8629c", "#c0392b", "#1f78b4", "#1a9850", "#e08214", "#8c5a2b"
 
 
 def on_grid(path, like):
@@ -59,6 +59,7 @@ def panel(ax, config, a, setup, keep_out, letter):
         like = r
         glc = on_grid(os.path.join(project, "attributes", "glaciers", f"domain_{name}_rgi_id.tif"), like) > 0
         ext = on_grid(os.path.join(project, "attributes", "glaciers", f"domain_{name}_rgi_id_extend.tif"), like) > 0
+        debris = on_grid(os.path.join(project, "attributes", "glaciers", f"domain_{name}_domain_type.tif"), like) == 4
     basin = gpd.read_file(glob.glob(os.path.join(project, "shapefiles", "river_basins", "*.shp"))[0]).to_crs(crs)
     hrus = gpd.read_file(os.path.join(project, "shapefiles", "catchment", f"{name}_HRUs_elevation.shp")).to_crs(crs)
     outside = ~geometry_mask(list(basin.geometry), transform=tr, invert=True, out_shape=shape)
@@ -93,6 +94,8 @@ def panel(ax, config, a, setup, keep_out, letter):
             for text in ax.clabel(labelled, levels=[labelled.levels[k]], fontsize=6.5, fmt="%d", manual=[best], inline=True, inline_spacing=3):
                 text.set_zorder(12)
     ax.imshow(np.where(outside, 1.0, np.nan), cmap="gray_r", vmin=0, vmax=1.3, alpha=0.55, extent=extent, zorder=2)
+    if debris.any():
+        ax.contourf(xs, ys, (debris & ~outside).astype(float), levels=[0.5, 1.5], colors=[BROWN], alpha=0.65, zorder=3)
     ax.contourf(xs, ys, (ext & ~glc).astype(float), levels=[0.5, 1.5], colors=[PINK], alpha=0.45, zorder=3)
     ax.contour(xs, ys, (ext & ~glc).astype(float), levels=[0.5], colors=[PINK], linewidths=1.0, zorder=4)
     ax.contour(xs, ys, (glc & ~outside).astype(float), levels=[0.5], colors=[PURPLE], linewidths=1.3, zorder=5)
@@ -118,18 +121,30 @@ def panel(ax, config, a, setup, keep_out, letter):
             ax.plot(px, py, marker="s", ms=7, mfc="#f1c40f", mec="black", mew=1.0, ls="none", zorder=14)
             ax.annotate(f"{int(s['Elevation'])} m", (px, py), xytext=(8, 6), textcoords="offset points", fontsize=6, zorder=14)
     if a.reaches:
-        from nhd_reach import model_reach_length, terminus
+        from nhd_reach import cut_from_gauge, model_reach_length
         nhd = os.path.join(project, "shapefiles", "nhd.gpkg")
         if os.path.exists(nhd):
-            reach = gpd.read_file(nhd, layer="reach").to_crs(crs)
-            reach.plot(ax=ax, color="#08306b", linewidth=2.6, zorder=15)
-            term = terminus(c, crs)
+            full = gpd.read_file(nhd, layer="reach").to_crs(crs).geometry.iloc[0]
+            mapped = gpd.read_file(nhd, layer="reach_mapped").to_crs(crs)
             length = model_reach_length(c)
-            if length:
-                gauge_pt = gpd.GeoSeries([Point(lon, lat)], crs=4326).to_crs(crs).iloc[0]
-                d = np.array([term.x - gauge_pt.x, term.y - gauge_pt.y])
-                d = d / np.hypot(*d)
-                ax.plot([gauge_pt.x, gauge_pt.x + d[0] * length], [gauge_pt.y, gauge_pt.y + d[1] * length], color=RED, lw=2.4, ls="--", zorder=15)
+            if length:  # the model's reach follows the stream from the gauge, straight on beyond the front when it is longer
+                model = cut_from_gauge(full, length)
+                ax.plot(*model.xy, color=RED, lw=7, alpha=0.45, solid_capstyle="round", zorder=14)
+            ax.plot(*full.xy, color="#08306b", lw=1.6, ls=":", zorder=15)
+            mapped.plot(ax=ax, color="#08306b", linewidth=2.8, zorder=15)
+            tf = gpd.read_file(nhd, layer="terminus").to_crs(crs).geometry.iloc[0]
+            ax.plot(tf.x, tf.y, marker="o", ms=9, mfc="none", mec="#f1c40f", mew=2.2, ls="none", zorder=16)
+    if a.network and c.get("stream_network"):
+        import json
+        net = json.load(open(os.path.join(HERE, c["stream_network"])))
+        for rid, r in net["reaches"].items():
+            px, py = gpd.GeoSeries([Point(r["longitude"], r["latitude"])], crs=4326).to_crs(crs).iloc[0].coords[0]
+            ax.plot(px, py, marker="o", ms=11, mfc="white", mec="#08306b", mew=1.4, ls="none", zorder=17)
+            ax.annotate(f"R{rid}", (px, py), ha="center", va="center", fontsize=6, zorder=18)
+        for g in net["grus"]:
+            px, py = gpd.GeoSeries([Point(g["longitude"], g["latitude"])], crs=4326).to_crs(crs).iloc[0].coords[0]
+            ax.plot(px, py, marker="*", ms=11, mfc="#b2df8a", mec="black", mew=0.8, ls="none", zorder=17)
+            ax.annotate(f"G{g['id']}", (px, py), xytext=(6, 4), textcoords="offset points", fontsize=6, zorder=18)
     if a.streams:
         nhd = os.path.join(project, "shapefiles", "nhd.gpkg")
         if os.path.exists(nhd):
@@ -175,6 +190,7 @@ def main():
     p.add_argument("--contour", type=float, default=100.0, help="contour interval, m")
     p.add_argument("--grids", action="store_true", help="the extent of each glacier's flow-model grid")
     p.add_argument("--stations", action="store_true", help="the USGS weather stations")
+    p.add_argument("--network", action="store_true", help="the YAML's stream_network: its reaches (R) and tributary GRUs (G) at their positions")
     p.add_argument("--reaches", action="store_true", help="the NHD reach from the terminus to the gauge (dark blue) and the model's, from its stream length (red dashed)")
     p.add_argument("--streams", action="store_true", help="the NHD streams and lakes, and the terminus-to-gauge windows of the YAML")
     a = p.parse_args()
@@ -190,7 +206,7 @@ def main():
             axes[i, j].set_title(f"{basin.capitalize()}, {label}", fontsize=10)
     handles = [Line2D([], [], color="#3a3a3a", lw=0.5, label=f"{a.contour:g} m contours (labelled every {5 * a.contour:g} m)"),
                Line2D([], [], color=PURPLE, lw=1.3, label="glacier outline at the start"),
-               Patch(fc=PINK, ec=PINK, alpha=0.5, label="room to advance"),
+               Patch(fc=BROWN, ec=BROWN, alpha=0.7, label="debris-covered ice"), Patch(fc=PINK, ec=PINK, alpha=0.5, label="room to advance"),
                Line2D([], [], color="black", lw=1.8, label="basin"), Line2D([], [], color=GREEN, lw=1.8, label="HRUs"),
                Line2D([], [], marker="^", ls="none", mfc=RED, mec="white", ms=8, label="gauge")]
     if a.grids:
@@ -198,8 +214,12 @@ def main():
     if a.stations and setup == "added":  # the stations belong to the added-data setup
         handles.append(Line2D([], [], marker="s", ls="none", mfc="#f1c40f", mec="black", ms=6, label="weather station"))
     if a.reaches:
-        handles += [Line2D([], [], color="#08306b", lw=2.6, label="NHD reach, terminus to gauge"),
-                    Line2D([], [], color=RED, lw=2.4, ls="--", label="model reach (its stream length from the gauge)")]
+        handles += [Line2D([], [], color="#08306b", lw=2.8, label="NHD stream, ice front to gauge (dotted: unmapped)"),
+                    Line2D([], [], color=RED, lw=7, alpha=0.45, label="model reach, its stream length from the gauge"),
+                    Line2D([], [], marker="o", ls="none", mfc="none", mec="#f1c40f", mew=2.2, ms=9, label="ice front, from the strips")]
+    if a.network:
+        handles += [Line2D([], [], marker="o", ls="none", mfc="white", mec="#08306b", ms=9, label="network reach (R)"),
+                    Line2D([], [], marker="*", ls="none", mfc="#b2df8a", mec="black", ms=11, label="tributary GRU (G)")]
     if a.streams:
         handles += [Line2D([], [], color=BLUE, lw=1.4, label="stream (NHD; dotted: through lakes and ice)"), Patch(fc="#a6cee3", ec=BLUE, label="lake (NHD)"),
                     Line2D([], [], color=ORANGE, lw=1.3, ls="--", label="terminus-to-gauge window")]

@@ -2,8 +2,9 @@
 """Satellite images of each glacier's terminus and gauge, with the stream reach from the NHD and the model's: plot_proglacial.py <out.pdf>
 
 Esri World Imagery (WorldView-2: Wolverine 29 Sep 2025, Gulkana 22 Jul 2024), fetched in Alaska Albers (EPSG:3338) so the axes are in
-metres; Wolverine in (a), Gulkana in (b). Drawn over them, in each panel, the NHD path from the terminus to the gauge (dark blue,
-nhd_reach.py) and the reach the model's stream HRU has, its stream length (cases.yaml) from the gauge toward the terminus (red dashed).
+metres; Wolverine in (a), Gulkana in (b). Drawn over them, in each panel, the ice front found from the ArcticDEM strips (nhd_reach.py), the NHD stream from it to the gauge (dark blue,
+dotted where NHD does not map it) and the reach the model's stream HRU has, its stream length (cases.yaml) from the gauge along that
+stream (red).
 Gauges from the USGS monitoring-location service.
 """
 import io
@@ -20,7 +21,7 @@ from PIL import Image
 from pyproj import Transformer
 
 from domain_config import load_config
-from nhd_reach import model_reach_length
+from nhd_reach import cut_from_gauge, model_reach_length
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 T = Transformer.from_crs(4326, 3338, always_xy=True)
@@ -44,21 +45,22 @@ def main():
         ext = [-half / 1000, half / 1000, -half / 1000, half / 1000]
         ax.imshow(np.asarray(img.convert("RGB")), extent=ext)
         km = lambda lon, lat: ((T.transform(lon, lat)[0] - cx) / 1000, (T.transform(lon, lat)[1] - cy) / 1000)
-        gx, gy = km(*gauge)
-        tx, ty = km(*term)
-        reach = gpd.read_file(os.path.join(c["project_dir"], "shapefiles", "nhd.gpkg"), layer="reach").to_crs(3338)
-        for geom in reach.geometry:
-            xs, ys = geom.xy
-            ax.plot((np.array(xs) - cx) / 1000, (np.array(ys) - cy) / 1000, color="#08306b", lw=3.0, zorder=4, label="NHD reach, terminus to gauge")
+        glat, glon = (float(v) for v in c["pour_point"].split("/"))
+        gx, gy = km(glon, glat)  # the pour point, where the NHD path ends
+        nhd = os.path.join(c["project_dir"], "shapefiles", "nhd.gpkg")
+        full = gpd.read_file(nhd, layer="reach").to_crs(3338).geometry.iloc[0]
+        mapped = gpd.read_file(nhd, layer="reach_mapped").to_crs(3338).geometry.iloc[0]
+        front = gpd.read_file(nhd, layer="terminus").to_crs(3338).geometry.iloc[0]
+        local = lambda g: ((np.array(g.xy[0]) - cx) / 1000, (np.array(g.xy[1]) - cy) / 1000)
         length = model_reach_length(c)
-        d = np.array([tx - gx, ty - gy])
-        d = d / np.hypot(*d)
-        ax.plot([gx, gx + d[0] * length / 1000], [gy, gy + d[1] * length / 1000], color="#ff4d4d", lw=2.6, ls="--", zorder=5,
-                label=f"model reach, {length:g} m")
+        ax.plot(*local(cut_from_gauge(full, length)), color="#ff4d4d", lw=9, alpha=0.5, solid_capstyle="round", zorder=3, label=f"model reach, {length:g} m")
+        ax.plot(*local(full), color="#08306b", lw=1.8, ls=":", zorder=4)
+        ax.plot(*local(mapped), color="#08306b", lw=3.0, zorder=4, label=f"NHD stream, ice front to gauge ({full.length:.0f} m; dotted: unmapped)")
+        tx, ty = (front.x - cx) / 1000, (front.y - cy) / 1000
         ax.plot(gx, gy, marker="^", ms=12, mfc="red", mec="white", mew=1.5, ls="none", zorder=6)
         ax.annotate("gauge", (gx, gy), xytext=(8, -14), textcoords="offset points", color="white", fontsize=10, weight="bold")
         ax.plot(tx, ty, marker="o", ms=9, mfc="none", mec="yellow", mew=2, ls="none", zorder=6)
-        ax.annotate("terminus", (tx, ty), xytext=(8, 6), textcoords="offset points", color="yellow", fontsize=10, weight="bold")
+        ax.annotate("ice front", (tx, ty), xytext=(8, 6), textcoords="offset points", color="yellow", fontsize=10, weight="bold")
         for lab, lon, lat in feats:
             fx, fy = km(lon, lat)
             ax.annotate(lab, (fx, fy), color="white", fontsize=9, ha="center", va="center",

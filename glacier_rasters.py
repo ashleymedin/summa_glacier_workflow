@@ -440,14 +440,9 @@ def melt_out_bed(dem, surface, bed, glacier, src, start, later, outlines, paths,
     return np.where(glacier, np.minimum(bed + change, surface), bed)
 
 
-def series_melt_out_bed(dem, surface, bed, glacier, src, paths, near=5.0, stable=0.3, since=2014.0, recent=2019.0,
-                        reach=250.0, buffer=1500.0):
-    """The bed where the ice of the glaciers in the mask has gone, from a series of ArcticDEM strips (acquire_arcticdem.py
-    --series) when no outline says so: a cell has melted out where the median of its strips from recent (decimal year) on lies
-    within near (m) of the bed, above or below, and its height has changed by under stable (m yr-1) since since. Each strip is levelled to
-    the DEM by their median difference on the ground (off all glaciers) within buffer (m) of the glaciers. The bed there is the
-    strips' median, held at or below the surface, and its change is carried harmonically over the glaciers within reach (m)
-    of those cells, to nothing beyond."""
+def strip_heights(dem, glacier, src, paths, buffer=1500.0):
+    """The ArcticDEM strips in paths on the DEM grid (src), each levelled to the DEM by their median difference on the ground (off the
+    glacier mask) within buffer (m) of it: (decimal years, heights of shape (strip, row, col)), strips that cover under half the mask left out."""
     years, heights = [], []
     for path in paths:
         with rasterio.open(path) as s:
@@ -461,20 +456,39 @@ def series_melt_out_bed(dem, surface, bed, glacier, src, paths, near=5.0, stable
             continue
         heights.append(out + np.median((dem - out)[ground]))
         years.append(decimal_year(os.path.basename(path)[:8]))
-    years, heights = np.array(years), np.array(heights)
+    return np.array(years), np.array(heights)
+
+
+def height_trend(years, heights, since=2014.0, least=4):
+    """The per-cell slope (m yr-1) of the strips' heights from `since` on, NaN where fewer than `least` strips cover the cell."""
+    old = years >= since
+    with np.errstate(all="ignore"):
+        ok = np.isfinite(heights[old])
+        n = ok.sum(0)
+        x = np.where(ok, years[old][:, None, None], np.nan)
+        h = np.where(ok, heights[old], np.nan)
+        xm, hm = np.nanmean(x, 0), np.nanmean(h, 0)
+        slope = np.nansum((x - xm) * (h - hm), 0) / np.nansum((x - xm) ** 2, 0)
+    slope[n < least] = np.nan
+    return slope
+
+
+def series_melt_out_bed(dem, surface, bed, glacier, src, paths, near=5.0, stable=0.3, since=2014.0, recent=2019.0,
+                        reach=250.0, buffer=1500.0):
+    """The bed where the ice of the glaciers in the mask has gone, from a series of ArcticDEM strips (acquire_arcticdem.py
+    --series) when no outline says so: a cell has melted out where the median of its strips from recent (decimal year) on lies
+    within near (m) of the bed, above or below, and its height has changed by under stable (m yr-1) since since. Each strip is levelled
+    to the DEM by their median difference on the ground (off all glaciers) within buffer (m) of the glaciers. The bed there is the
+    strips' median, held at or below the surface, and its change is carried harmonically over the glaciers within reach (m)
+    of those cells, to nothing beyond."""
+    years, heights = strip_heights(dem, glacier, src, paths, buffer)
     if not len(years):
         print("small glaciers: no strip covers them")
         return bed
     use = years >= recent
     with np.errstate(all="ignore"):
         after = np.nanmedian(heights[use], axis=0) if use.any() else np.full(dem.shape, np.nan)
-        old = years >= since
-        ok = np.isfinite(heights[old])
-        n = ok.sum(0)
-        x = np.where(ok, years[old][:, None, None], np.nan)
-        xm, hm = np.nanmean(x, 0), np.nanmean(np.where(ok, heights[old], np.nan), 0)
-        slope = np.nansum((x - xm) * (np.where(ok, heights[old], np.nan) - hm), 0) / np.nansum((x - xm) ** 2, 0)
-    slope[n < 4] = np.nan
+    slope = height_trend(years, heights, since)
     known = glacier & np.isfinite(after) & np.isfinite(slope) & (np.abs(after - bed) <= near) & (np.abs(slope) < stable)
     dx, dy = cell_size(src, dem.shape)
     close = distance_transform_edt(~known, sampling=(dy, dx)) <= reach
@@ -483,7 +497,6 @@ def series_melt_out_bed(dem, surface, bed, glacier, src, paths, near=5.0, stable
     print(f"small glaciers: {len(years)} strips ({years.min():.0f}-{years.max():.0f}); {known.sum()} of {glacier.sum()} cells "
           f"have melted out (median bed change {np.median(change[known]) if known.any() else 0:+.1f} m), carried over {moved.sum()} more by over 1 m")
     return np.where(glacier, np.minimum(bed + change, surface), bed)
-
 
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],

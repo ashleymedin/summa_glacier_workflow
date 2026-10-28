@@ -20,10 +20,10 @@ gulkana_test:
   last_month: 2012-12
   forcing: raw
 
-# stream reaches: length is the NHD path from the late-imagery terminus to the gauge plus the unmapped stretch above it (nhd_reach.py:
-# Wolverine 1782 + 333 m, Gulkana 2139 + 1093 m), width the mean wet width read from the 1 m image (Gulkana 3.5 m over 1.2 km of moraine,
-# 40 m over the 1.4 km fan, 60 m over the rest: 30 m; Wolverine's creek, not its lake, 5 m, to be measured); the reach should follow the
-# terminus as it retreats, which the model does not do yet
+# stream reaches: length is the NHD path from the ice front to the gauge, the front found from the ArcticDEM strips (nhd_reach.py; added
+# setup: Wolverine 2058 m, Gulkana 2562 m; general setup 2158 and 1950 m), width the mean wet width read from the 1 m image (Gulkana 3.5 m
+# over 1.2 km of moraine, 40 m over the 1.4 km fan, 60 m over the rest: 30 m; Wolverine's creek, not its lake, 5 m, to be measured); the
+# reach should follow the terminus as it retreats, which the model does not do yet
 # summa's calibration test domain: both glaciers as one domain of 2 GRUs, each with a stream HRU and a reach,
 # Oct 2015 - Jul 2018: a spin-up year, then the shortest span that holds two seasonal balances (Oct 2017 and
 # May 2018), each with a year before it and 60 days after. The Gulkana reach, from the glacier to USGS 15478040, is
@@ -31,7 +31,7 @@ gulkana_test:
 gulkana_wolverine:
   merge:
     - domain: gulkana
-      stream: {length: 3200, slope: 0.03, width: 30, elevation: 1200, latitude: 63.247, longitude: -145.455}
+      stream: {length: 2600, slope: 0.03, width: 30, elevation: 1200, latitude: 63.247, longitude: -145.455}
     - domain: wolverine
       stream: {length: 2100, slope: 0.03, width: 5, elevation: 390, latitude: 60.374, longitude: -148.912}
   dest: ../summa/utils/test/test_calibration/gulkana_wolverine
