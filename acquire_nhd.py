@@ -11,7 +11,8 @@ one layer each of shapefiles/nhd.gpkg.
 
 glacier_extend.py clips the basin it delineates on the bed to the gauge's HUC12 when the YAML sets `basin_within: huc12`, so a
 glacier on the far side of a divide the bed puts in the wrong place is not taken into the basin, and plot_basin_setup.py draws
-the streams and lakes. Elsewhere in the world these files are absent and the basin is the delineated one.
+the streams and lakes. Outside the US these files are absent and the basin is the delineated one, with glaciers held by --gru-threshold of their cells in
+it; README.md lists the national and global sources to use there (HydroBASINS, HydroRIVERS, HydroLAKES, Canada, Chile, Iceland).
 
     ./acquire_nhd.py domains/wolverine.yaml
 """

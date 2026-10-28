@@ -11,7 +11,8 @@ attributes/glaciers, the glacier-capable versions of the type and RGI id rasters
 With basin_within: huc12 in the YAML the basin is clipped to the HUC12 holding the gauge (acquire_nhd.py), and a glacier is modelled when
 most of its area is in that watershed (the USGS decides where its runoff goes) and most of it drains to the gauge on the bed;
 the basin then holds every modelled glacier whole. Advance room not joined to its glacier is dropped, and glaciers whose advance room
-meets share one grid (under the id of the largest; --no-merge keeps them apart). Without it the glacier needs --gru-threshold of its cells inside the basin.
+meets share one grid (under the id of the largest). --merge body also joins a glacier whose room reaches another glacier's body, as
+the Root glacier's would the Kennicott's; the YAML's merge_glaciers sets it, and the default (room) leaves the Gulkana and Wolverine setups as they are. Without it the glacier needs --gru-threshold of its cells inside the basin.
 
 Extension, largest glacier first, by --method:
   drag  the terminus (the glacier's highest-accumulation cells) is shifted cell by cell down the flow
@@ -175,7 +176,10 @@ def main():
     p.add_argument("--method", choices=("drag", "fill"), default="drag")
     p.add_argument("--gru-threshold", type=float, default=0.8,
                    help="fraction of a glacier's cells inside the basin for it to be modelled")
-    p.add_argument("--no-merge", action="store_true", help="keep touching glaciers as separate grids")
+    p.add_argument("--merge", choices=("room", "body", "none"),
+                   help="glaciers that share one grid: room (advance room meets advance room, the default), body (also advance room that "
+                        "reaches another glacier's body, as the Root glacier into the Kennicott), or none; the YAML's merge_glaciers is the default")
+    p.add_argument("--no-merge", action="store_true", help="same as --merge none")
     p.add_argument("--output-dir", help="write the rasters and basin here instead of the domain's folders")
     a = p.parse_args()
     sys.setrecursionlimit(max(sys.getrecursionlimit(), 100000))
@@ -190,7 +194,11 @@ def main():
 
     lat, lon = (float(v) for v in c["pour_point"].split("/"))
     grid, dem, fdir, acc, catch = delineate(os.path.join(dem_dir, f"domain_{name}_bedrock_elv.tif"), lat, lon)
-    if c.get("basin_within") == "huc12":  # the bed puts some divides in the wrong place; the USGS watershed of the gauge bounds the basin
+    watershed = os.path.join(project, "shapefiles", "nhd.gpkg")
+    if c.get("basin_within") == "huc12" and not os.path.exists(watershed):
+        print(f"basin_within is set but {watershed} is missing (acquire_nhd.py is US only): the basin is the delineated one, "
+              f"glaciers need --gru-threshold of their cells in it")
+    if c.get("basin_within") == "huc12" and os.path.exists(watershed):  # the bed puts some divides in the wrong place; the USGS watershed of the gauge bounds the basin
         huc = gpd.read_file(os.path.join(project, "shapefiles", "nhd.gpkg"), layer="huc12")
         huc = huc[huc["gauge"] == 1].to_crs(grid.crs).geometry
         inside = rasterio.features.geometry_mask(list(huc), out_shape=catch.shape, transform=grid.affine, invert=True)
@@ -242,7 +250,8 @@ def main():
 
     gid[~np.isin(gid, glaciers)] = 0
     dtype[~np.isin(gid, glaciers)] = 1
-    if not a.no_merge:  # glaciers whose advance room meets flow as one: one grid, under the id of the largest
+    mode = "none" if a.no_merge else (a.merge or c.get("merge_glaciers", "room"))
+    if mode != "none":  # glaciers whose advance room meets flow as one: one grid, under the id of the largest
         room = {int(g): (gid == g) & (original != g) for g in glaciers}
         group = {g: g for g in room}
         def root(g):
@@ -252,7 +261,10 @@ def main():
         for g in room:
             near = ndimage.binary_dilation(room[g], structure=eight)
             for h in room:
-                if h > g and np.any(near & room[h]):
+                meet = near & room[h] if h > g else None
+                if mode == "body":  # advance room that reaches the other glacier's own body, either way
+                    meet = (near & ((original == h) | room[h])) | (ndimage.binary_dilation(room[h], structure=eight) & (original == g)) if h != g else None
+                if meet is not None and np.any(meet) and root(g) != root(h):
                     group[root(h)] = root(g)
         for r in sorted({root(g) for g in room}):
             ids = [g for g in room if root(g) == r]

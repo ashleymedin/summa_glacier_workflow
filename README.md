@@ -174,3 +174,28 @@ conda activate glacier
 The pysheds fork still calls `np.in1d`, so numpy stays below 2.4. `acquire_era5.py` needs a free CDS account,
 the ERA5 licences accepted on the two dataset pages and the key in `~/.cdsapirc`. `spechum_ratio_from_campaign.py` pulls ERA5
 with gcsfs and zarr, unless its cached pulls (`forcing/spechum_ratios_*_era5_*.npz`) are present.
+
+## Other regions
+
+The setup uses global products except in three places, which are US-only or have a choice to make for a new basin.
+
+**Watersheds, streams and lakes.** `acquire_nhd.py` reads the USGS Watershed Boundary Dataset (12-digit HUC) and the National
+Hydrography Dataset, and `basin_within: huc12` in a domain YAML then clips the basin to the gauge's watershed and holds a glacier only if most of
+its area is in it. Without `shapefiles/nhd.gpkg` the basin is the one delineated on the bed and a glacier needs `--gru-threshold` (0.8)
+of its cells in it, which can keep a glacier across a divide the bed puts in the wrong place. For Canada, Chile and Iceland, to write
+as `acquire_*` scripts that make a `huc12`, `flowlines` and `waterbodies` layer of the same names (not done yet; sources to check before use):
+
+| Region | Watershed of the gauge | Streams | Lakes |
+| --- | --- | --- | --- |
+| global fallback | HydroBASINS (Lehner and Grill, 2013), the sub-basin level nearest HUC12 | HydroRIVERS | HydroLAKES (Messager et al., 2016) |
+| Canada | Water Survey of Canada station basins, or the national and provincial hydrometric basin layers | National Hydrographic Network (NRCan) | National Hydrographic Network |
+| Chile | Dirección General de Aguas basin and sub-basin layers | national hydrography layer of the DGA, if published | HydroLAKES |
+| Iceland | to find: the national land survey or the Icelandic Met Office basin layers, else HydroBASINS | national hydrography, else HydroRIVERS | HydroLAKES |
+
+Gauge discharge and water temperature are fetched by `acquire_streamflow.py` (WSC, USGS; a DGA or Icelandic source needs a function in it).
+The stakes, weather stations and survey outlines of the added-data setup are USGS Benchmark Glacier data; elsewhere the added-data
+setup has to name its own, and a basin without them has the general setup only.
+
+**Glaciers that join.** `glacier_extend.py` gives glaciers whose advance room meets advance room one flow grid. A glacier whose room
+reaches another glacier's body, as the Root glacier's would the Kennicott's, is the case `--merge body` (YAML `merge_glaciers: body`)
+joins as well. The default, `room`, leaves Gulkana and Wolverine as they are; `body` changes neither.
