@@ -259,6 +259,11 @@ def build_inputs(name, spec, cases_dir):
         set_precip_grad(inputs, source)
         shutil.copy(os.path.join(tmp, "attributes_glac.nc"), os.path.join(inputs, "attributes.nc"))
         shutil.copy(os.path.join(tmp, "coldstate_glac.nc"), os.path.join(inputs, "coldState.nc"))
+        trial, attributes = os.path.join(inputs, "trialParams.nc"), os.path.join(inputs, "attributes.nc")
+        with nc4.Dataset(trial) as t, nc4.Dataset(attributes) as a:
+            stale = len(t.dimensions["hru"]) != len(a.dimensions["hru"])
+        if stale:  # the template is a case with another number of HRUs, as with a stream HRU
+            write_trial_params(trial, attributes)
         write_file_list(os.path.join(inputs, "forcingFileList.txt"), [os.path.basename(f) for f in files])
         if copy_forcing:
             forcing = os.path.join(dest, "forcing")
