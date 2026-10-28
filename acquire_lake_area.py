@@ -25,6 +25,8 @@ Columns: date, scene, water_km2, bad, snow, q_cms.
 import argparse
 import csv
 import json
+import time
+import urllib.error
 import urllib.request
 
 import numpy as np
@@ -95,6 +97,18 @@ def scene_water(item, src, box, test, token):
     return water.sum() * px / 1e6, bad.mean(), snow.mean()
 
 
+def fetch_token(url, tries=8):
+    """The Planetary Computer's anonymous token, retried with a growing wait when the service says too many requests."""
+    for n in range(tries):
+        try:
+            with urllib.request.urlopen(url, timeout=60) as r:
+                return json.load(r)['token']
+        except urllib.error.HTTPError as e:
+            if e.code != 429 or n == tries - 1:
+                raise
+            time.sleep(15 * 2 ** n)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('west', type=float); p.add_argument('south', type=float)
@@ -121,8 +135,7 @@ def main():
         w = csv.writer(f); w.writerow(['date', 'scene', 'water_km2', 'bad', 'snow', 'q_cms'])
         for n, it in enumerate(items):
             if src['token'] and n % 50 == 0:          # tokens last about an hour
-                with urllib.request.urlopen(src['token'], timeout=60) as r:
-                    token = json.load(r)['token']
+                token = fetch_token(src['token'])
             try:
                 r = scene_water(it, src, box, (a.ndwi, a.mndwi, a.max_blue), token)
             except rasterio.errors.RasterioIOError as e:
