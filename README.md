@@ -10,8 +10,11 @@ elsewhere.
 | Path | What |
 | --- | --- |
 | `data/domain_{Gulkana,Wolverine}/` | each domain: the SYMFLUENCE upland domain, gridded ERA5 (`forcing/raw_data`, 2008–2022 from SYMFLUENCE, the rest from `acquire_era5.py`), the USGS station records, stakes and observations, copied in; and everything the pipeline writes |
-| `data/external/` | RGI 6.0, Herreid and Pellicciotti debris extent, Rounce debris thickness and Millan ice thickness (the domain YAMLs' `data:` paths); not in git |
+| `data/domain_*/observations/` | `calibration` (the NetCDF targets `runs/calibrate.py` reads), `stations` (USGS weather stations, for the forcing correction), `storage/{mass_balance,grace,velocity}`, `streamflow`, `stream_temperature`, `lake_area`, `imagery`, `firn` and `campaigns` |
+| `data/external/` | RGI 6.0, Herreid and Pellicciotti debris extent, Rounce debris thickness, Millan ice thickness, the USGS survey DEMs and outlines (`GlacierDEM`) and Hugonnet dh/dt (the domain YAMLs' `data:` paths); not in git |
 | `domains/{gulkana,wolverine}.yaml` | each domain's bounding box, gauge, data paths and setup choices |
+| `run_study.py` | the whole study of a domain, `--steps observations domain cases calibrate evaluate checks`; calls the scripts below |
+| `acquire_observations.py` | fetches the domain YAML's `observations:` block over `forcing_period` |
 | `setup_glacier_domain.py` | runs the glacier pipeline on a domain, `--steps` to pick some |
 | `cases.yaml`, `build_cases.py` | builds the tests and runs from the domains |
 | `tests/` | short calibrations of each glacier (`test_calibration_{gulkana,wolverine}.sh`) |
@@ -22,7 +25,7 @@ elsewhere.
 The pipeline's scripts: `glacier_rasters.py`, `glacier_extend.py`, `glacier_zonal_stats.py`,
 `acquire_era5.py`, `remap_forcing.py`, `correct_forcing_to_station.py`, `spechum_ratio_from_campaign.py` and `glacier_cold_state.py`; and
 `acquire_glacier_mass_balance.py` for the mass-balance observations; `acquire_arcticdem.py` fetches the ArcticDEM
-strips the rasters step reads (into `GlacierDEM/`, not in git), before the rasters step. `acquire_balance_profile.py` writes the USGS
+strips the rasters step reads (into `data/external/GlacierDEM/`, not in git), before the rasters step. `acquire_balance_profile.py` writes the USGS
 yearly balance profiles as a `glacierMassBalFile`, which `runs/rerun_trials.py --massbal` gives the flow model in
 place of the simulated balance (USGS heights are ellipsoidal, 16.1 m above the model's at Gulkana, 14.0 at Wolverine).
 
@@ -36,7 +39,7 @@ form a SUMMA calibration target reads. `add_stream_hru.py` gives a one-GRU domai
 mizuRoute topology; `add_stream_network.py` splits tributary GRUs off it, each with its own reach, from a JSON
 spec such as `wolverine_network.json`, Wolverine Creek's tributary network. `add_wetland.py` gives an HRU a
 wetland domain (a proglacial lake or wetted forefield) copied from the stream domain's column, and
-`acquire_lake_area.py` measures open water in a box on every Sentinel-2 scene, beside the gauged flow, to size it.
+`acquire_lake_area.py` measures open water in a box on every Sentinel-2 or Landsat scene, beside the gauged flow, to size it, and `acquire_velocity.py` puts ITS_LIVE annual speeds on the flow grid. `acquire_observations.py` runs all of them from the YAML.
 
 ## Building
 
@@ -142,10 +145,10 @@ Downloaded by hand to the paths in the domain YAMLs:
 | RGI 6.0 outlines, region 01 | https://daacdata.apps.nsidc.org/pub/DATASETS/nsidc0770_rgi_v6/ |
 | Debris cover, ablation zones and outlines (Herreid and Pellicciotti, 2020), S1 | https://zenodo.org/records/3866466/files/SupplementaryInformation.zip |
 | Debris thickness (Rounce et al., 2021) | https://n5eil01u.ecs.nsidc.org/HMA/HMA_DTE.001/2000.01.01/ |
-| USGS benchmark-glacier survey outlines (McNeil et al., 2019, ver. 3.0), to `GlacierDEM/` | https://doi.org/10.5066/P9R8BP3K |
+| USGS benchmark-glacier survey outlines (McNeil et al., 2019, ver. 3.0), to `data/external/GlacierDEM/` | https://doi.org/10.5066/P9R8BP3K |
 | Glacier thickness (Millan et al., 2022) | https://www.sedoo.fr/theia-publication-products/?uuid=55acbdd5-3982-4eac-89b2-46703557938c |
 | USGS benchmark-glacier stations, stakes and glacier-wide balances | https://www.sciencebase.gov/catalog/item/6441de03d34ee8d4ade7d2a5 |
-| Gulkana 2024 Site B station (Wilson et al.) | `data/domain_Gulkana/Wilson_gulkana_2024_data` |
+| Gulkana 2024 Site B station (Wilson et al.) | `data/domain_Gulkana/observations/campaigns/wilson_2024` |
 
 The forcing, station records and built forcing are git-ignored (about 1 GB). Discharge and water
 temperature come from `acquire_streamflow.py` and `acquire_stream_temperature.py`.

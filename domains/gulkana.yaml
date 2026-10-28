@@ -23,6 +23,17 @@ usgs_datum: -16.1                               # m added to USGS heights (WGS84
 forcing_period: {first: 2004-10, last: 2026-09}    # months of ERA5 the era5 step fetches; Jul-Sep 2026 are ERA5T
 
 # cold state of the domain itself (cases write their own, from their own first month)
+# observations over forcing_period (acquire_observations.py); each key optional, the mass balance is the USGS benchmark glaciers' only
+observations:
+  streamflow: {source: usgs, gauge: "15478040"}
+  stream_temperature: {site: "15478040", aquarius: "stream_temperature/raw_data/Temperature,_water.degC.Work@15478040.20060223.xlsx"}
+  grace: true
+  mass_balance: {release: storage/mass_balance/Output_Gulkana_Glacier_Wide_solutions_calibrated.csv, balance: seasonal}
+  velocity: true
+
+# late-summer scenes check_glacier_imagery.py compares with the starting and final glacier
+imagery: {landsat: [2004, 2005, 2009], sentinel: [2019, 2020, 2021, 2025, 2026]}
+
 cold_start: 2008-01                             # first forcing month; its 12 months of raw ERA5 set the start
 soil_offset: 1.5                                # deg C, soil and debris above the mean annual air temperature
 ice_temp: -5.0                                  # deg C

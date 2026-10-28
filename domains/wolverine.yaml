@@ -20,6 +20,19 @@ later_outline: {date: 2020/10/19, dems: data/external/GlacierDEM/ArcticDEM_Wolve
 usgs_datum: -14.0                               # m added to USGS heights (WGS84 ellipsoid) to give the model DEM's
 
 forcing_period: {first: 2004-10, last: 2026-09}
+# observations over forcing_period (acquire_observations.py); each key optional, the mass balance is the USGS benchmark glaciers' only
+observations:
+  streamflow: {source: usgs, gauge: "15236900"}
+  stream_temperature: {site: "15236900"}
+  grace: true
+  mass_balance: {release: storage/mass_balance/Output_Wolverine_Glacier_Wide_solutions_calibrated.csv, balance: seasonal}
+  velocity: true
+  lake_area:
+    - {name: wolverine_lake, box: [-148.918, 60.3720, -148.905, 60.3775], usgs_site: "15236900"}
+
+# late-summer scenes check_glacier_imagery.py compares with the starting and final glacier
+imagery: {landsat: [2004, 2005, 2009, 2010], sentinel: [2019, 2021, 2025, 2026]}
+
 cold_start: 2008-01
 soil_offset: 1.5
 ice_temp: -5.0
