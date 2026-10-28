@@ -8,3 +8,4 @@ IDA solver slowdown tests (summa plan "SUMMA solver slowdown plan"), 28 Oct 2026
 - fd_iceimpede.py  60-digit check of the ice-impedance derivative
 - diag3.patch   temporary diagnostics for build/source/engine/summaSolv4ida.f90 (IDADIAG, IDAWIN, YSEQ, COEFNL); apply to a copy, never commit
 Paths inside refer to the session scratchpad and need editing before reuse. The Mac suspends idle jobs: use caffeinate -i and judge cost by CPU time or step counts.
+- tolall.py, queue.sh  all IDA tolerances moved together vs BE on the bundled gulkana_wolverine test (8 trials, 3 ranks); CPU time from /usr/bin/time
