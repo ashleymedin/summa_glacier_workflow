@@ -1,0 +1,111 @@
+diff --git a/build/source/dshare/type4ida.f90 b/build/source/dshare/type4ida.f90
+index 0546ce25..a349bf8e 100644
+--- a/build/source/dshare/type4ida.f90
++++ b/build/source/dshare/type4ida.f90
+@@ -48,6 +48,7 @@ type data4ida
+   real(qp), allocatable           :: resSink(:)                      ! additional (sink) terms on the RHS of the state equation
+   real(rkind), allocatable        :: atol(:)                         ! vector of absolute tolerances
+   real(rkind), allocatable        :: rtol(:)                         ! vector of relative tolerances
++  integer(i4b), allocatable       :: rootdir(:)                      ! side of each event threshold the solution is on (+1 below, -1 above)
+   integer(i4b)                    :: ixSaturation                    ! index of the lowest saturated layer
+   real(rkind), allocatable        :: dBaseflow_dWat(:,:)             ! derivative in baseflow w.r.t. soil water characteristic
+   real(rkind), allocatable        :: dBaseflow_dTk(:,:)              ! derivative in baseflow w.r.t. temperature (m s-1 K-1)
+diff --git a/build/source/engine/summaSolv4ida.f90 b/build/source/engine/summaSolv4ida.f90
+index a90275e9..22a27fda 100644
+--- a/build/source/engine/summaSolv4ida.f90
++++ b/build/source/engine/summaSolv4ida.f90
+@@ -420,6 +420,7 @@ subroutine summaSolv4ida(&
+       allocate( rootsfound(nRoot) )
+       allocate( rootdir(nRoot) )
+       rootdir = 0
++      allocate( eqns_data%rootdir(nRoot) ); eqns_data%rootdir = 0
+       retval = FIDARootInit(ida_mem, nRoot, c_funloc(layerDisCont4ida))
+       if (retval /= 0) then; err=20; message=trim(message)//'error in FIDARootInit'; return; endif
+     else ! will not use, allocate at something
+@@ -490,6 +491,7 @@ subroutine summaSolv4ida(&
+       ! call this at beginning of step to reduce root bouncing (only looking in one direction)
+       if(detect_events .and. .not.tinystep)then
+         call find_rootdir(eqns_data, rootdir)
++        eqns_data%rootdir = rootdir
+         retval = FIDASetRootDirection(ida_mem, rootdir)
+         if (retval /= 0) then; err=20; message=trim(message)//'error in FIDASetRootDirection'; return; endif
+       endif
+@@ -678,6 +680,7 @@ subroutine summaSolv4ida(&
+     deallocate( eqns_data%resSink )
+     deallocate( rootsfound )
+     deallocate( rootdir )
++    if(allocated(eqns_data%rootdir)) deallocate( eqns_data%rootdir )
+ 
+     ! Get Stats from IDA
+     retval = FIDAGetIntegratorStats(ida_mem, nStepsSun, nREvals, nLinSetups, &
+@@ -760,7 +763,7 @@ subroutine setSolverParams(dt_cur,mpar_data,ida_mem,retval)
+ 
+   !======= Internals ============
+   integer,parameter           :: nonlin_iter = 4    ! maximum number of nonlinear iterations before reducing step size, default = 4
+-  real(qp),parameter          :: coef_nonlin = 0.03 ! coefficient in the nonlinear convergence test, default = 0.33, tighter so a nearly saturated layer does not alternate between steps
++  real(qp),parameter          :: coef_nonlin = 0.33 ! coefficient in the nonlinear convergence test, default = 0.33
+   integer,parameter           :: fail_iter = 50     ! maximum number of error test and convergence test failures, default 10
+   
+   associate(&
+@@ -960,9 +963,9 @@ integer(c_int) function layerDisCont4ida(t, sunvec_u, sunvec_up, gout, user_data
+   if(eqns_data%indx_data%var(iLookINDEX%ixVegNrg)%dat(1)/=integerMissing)then
+     ind = ind+1
+     if(enthalpyStateVec)then
+-      gout(ind) = uu(eqns_data%indx_data%var(iLookINDEX%ixVegNrg)%dat(1))
++      gout(ind) = event(eqns_data%indx_data%var(iLookINDEX%ixVegNrg)%dat(1), 0._rkind)
+     else
+-      gout(ind) = uu(eqns_data%indx_data%var(iLookINDEX%ixVegNrg)%dat(1)) - Tfreeze
++      gout(ind) = event(eqns_data%indx_data%var(iLookINDEX%ixVegNrg)%dat(1), Tfreeze)
+     end if
+   endif
+ 
+@@ -976,9 +979,9 @@ integer(c_int) function layerDisCont4ida(t, sunvec_u, sunvec_up, gout, user_data
+     if(eqns_data%indx_data%var(iLookINDEX%ixSnLaSoGlNrg)%dat(i)/=integerMissing)then
+       ind = ind+1
+       if(enthalpyStateVec)then
+-        gout(ind) = uu(eqns_data%indx_data%var(iLookINDEX%ixSnLaSoGlNrg)%dat(i))
++        gout(ind) = event(eqns_data%indx_data%var(iLookINDEX%ixSnLaSoGlNrg)%dat(i), 0._rkind)
+       else
+-        gout(ind) = uu(eqns_data%indx_data%var(iLookINDEX%ixSnLaSoGlNrg)%dat(i)) - Tfreeze
++        gout(ind) = event(eqns_data%indx_data%var(iLookINDEX%ixSnLaSoGlNrg)%dat(i), Tfreeze)
+       end if
+     endif
+   end do
+@@ -988,7 +991,7 @@ integer(c_int) function layerDisCont4ida(t, sunvec_u, sunvec_up, gout, user_data
+     if (eqns_data%indx_data%var(iLookINDEX%ixSoilOnlyHyd)%dat(i)/=integerMissing)then
+       ind = ind+1
+       xPsi = uu(eqns_data%indx_data%var(iLookINDEX%ixSoilOnlyHyd)%dat(i))
+-      gout(ind) = uu(eqns_data%indx_data%var(iLookINDEX%ixSoilOnlyHyd)%dat(i))
++      gout(ind) = event(eqns_data%indx_data%var(iLookINDEX%ixSoilOnlyHyd)%dat(i), 0._rkind)
+     else
+       xPsi = eqns_data%prog_data%var(iLookPROG%mLayerMatricHead)%dat(i)
+     endif
+@@ -996,10 +999,10 @@ integer(c_int) function layerDisCont4ida(t, sunvec_u, sunvec_up, gout, user_data
+     if(eqns_data%indx_data%var(iLookINDEX%ixSoilOnlyNrg)%dat(i)/=integerMissing)then
+       ind = ind+1
+       if(enthalpyStateVec)then
+-        gout(ind) = uu(eqns_data%indx_data%var(iLookINDEX%ixSoilOnlyNrg)%dat(i))
++        gout(ind) = event(eqns_data%indx_data%var(iLookINDEX%ixSoilOnlyNrg)%dat(i), 0._rkind)
+       else 
+         TcSoil = crit_soilT(xPsi)
+-        gout(ind) = uu(eqns_data%indx_data%var(iLookINDEX%ixSoilOnlyNrg)%dat(i)) - TcSoil
++        gout(ind) = event(eqns_data%indx_data%var(iLookINDEX%ixSoilOnlyNrg)%dat(i), TcSoil)
+       end if
+     endif
+   end do
+@@ -1008,6 +1011,15 @@ integer(c_int) function layerDisCont4ida(t, sunvec_u, sunvec_up, gout, user_data
+   ierr = 0
+   return
+ 
++contains
++
++  ! distance past a threshold, offset one error weight toward the side being approached so crossings within the tolerance are not events
++  real(c_double) function event(ix, threshold)
++    integer(i4b),intent(in) :: ix         ! index of the state variable
++    real(rkind),intent(in)  :: threshold  ! value of the state at the discontinuity
++    event = uu(ix) - threshold - eqns_data%rootdir(ind)*( eqns_data%rtol(ix)*abs(threshold) + eqns_data%atol(ix) )
++  end function event
++
+ end function layerDisCont4ida
+ 
+ ! ----------------------------------------------------------------

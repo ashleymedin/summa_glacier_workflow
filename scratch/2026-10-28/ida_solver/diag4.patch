@@ -1,0 +1,211 @@
+diff --git a/build/source/dshare/type4ida.f90 b/build/source/dshare/type4ida.f90
+index 0546ce25..a349bf8e 100644
+--- a/build/source/dshare/type4ida.f90
++++ b/build/source/dshare/type4ida.f90
+@@ -48,6 +48,7 @@ type data4ida
+   real(qp), allocatable           :: resSink(:)                      ! additional (sink) terms on the RHS of the state equation
+   real(rkind), allocatable        :: atol(:)                         ! vector of absolute tolerances
+   real(rkind), allocatable        :: rtol(:)                         ! vector of relative tolerances
++  integer(i4b), allocatable       :: rootdir(:)                      ! side of each event threshold the solution is on (+1 below, -1 above)
+   integer(i4b)                    :: ixSaturation                    ! index of the lowest saturated layer
+   real(rkind), allocatable        :: dBaseflow_dWat(:,:)             ! derivative in baseflow w.r.t. soil water characteristic
+   real(rkind), allocatable        :: dBaseflow_dTk(:,:)              ! derivative in baseflow w.r.t. temperature (m s-1 K-1)
+diff --git a/build/source/engine/summaSolv4ida.f90 b/build/source/engine/summaSolv4ida.f90
+index a90275e9..a6ca46c3 100644
+--- a/build/source/engine/summaSolv4ida.f90
++++ b/build/source/engine/summaSolv4ida.f90
+@@ -154,6 +154,7 @@ subroutine summaSolv4ida(&
+   USE computJacobWithPrime_module,only:computJacob4ida        ! system Jacobian
+   USE tol4ida_module,only:computWeight4ida                    ! weight required for tolerances
+   USE var_lookup,only:maxvarDecisions                         ! maximum number of decisions
++  USE soil_utils_module,only:crit_soilT
+   !======= Declarations =========
+   implicit none
+ 
+@@ -234,6 +235,13 @@ subroutine summaSolv4ida(&
+   integer(i4b),allocatable          :: rootsfound(:)                ! crossing direction of discontinuities
+   integer(i4b),allocatable          :: rootdir(:)                   ! forced crossing direction of discontinuities
+   logical(lgt)                      :: tinystep                     ! if step goes below small size
++  integer(c_long)                   :: dbgNcf(1), dbgNef(1), dbgMark
++  type(N_Vector),pointer            :: dbgEle, dbgEwt
++  real(rkind),allocatable,target    :: dbgEleBuf(:), dbgEwtBuf(:)
++  integer(i4b)                      :: dbgI, dbgJ(1), dbgL
++  integer(i4b)                      :: dbgRoots, dbgTrig, dbgSt
++  real(qp)                          :: dbgCoef
++  character(len=32)                 :: dbgS
+   real(rkind)                       :: small                        ! value to see if canopy water is just a bit negative, depends on the absolute tolerance for canopy water
+   type(var_dlength)                 :: flux_prev                    ! previous model fluxes for a local HRU
+   character(LEN=256)                :: cmessage                     ! error message of downwind routine
+@@ -420,6 +428,7 @@ subroutine summaSolv4ida(&
+       allocate( rootsfound(nRoot) )
+       allocate( rootdir(nRoot) )
+       rootdir = 0
++      allocate( eqns_data%rootdir(nRoot) ); eqns_data%rootdir = 0
+       retval = FIDARootInit(ida_mem, nRoot, c_funloc(layerDisCont4ida))
+       if (retval /= 0) then; err=20; message=trim(message)//'error in FIDARootInit'; return; endif
+     else ! will not use, allocate at something
+@@ -485,11 +494,14 @@ subroutine summaSolv4ida(&
+     tret(1) = t0 ! initial time
+     tretPrev = tret(1)
+     nSteps = 0 ! initialize number of time steps taken in solver
++    dbgRoots = 0; dbgMark = 0; dbgCoef = 0.33_qp; dbgTrig = 0
++    call get_environment_variable('IDA_ADAPT',dbgS,status=dbgSt); if(dbgSt==0) read(dbgS,*) dbgTrig
+ 
+     do while(tret(1) < dt_cur)
+       ! call this at beginning of step to reduce root bouncing (only looking in one direction)
+       if(detect_events .and. .not.tinystep)then
+         call find_rootdir(eqns_data, rootdir)
++        eqns_data%rootdir = rootdir
+         retval = FIDASetRootDirection(ida_mem, rootdir)
+         if (retval /= 0) then; err=20; message=trim(message)//'error in FIDASetRootDirection'; return; endif
+       endif
+@@ -540,6 +552,37 @@ subroutine summaSolv4ida(&
+       retval = FIDAGetLastStep(ida_mem, dt_last)
+       dt_diff = tret(1) - tretPrev
+       nSteps = nSteps + 1 ! number of time steps taken in solver
++      if(retvalr .eq. IDA_ROOT_RETURN) dbgRoots = dbgRoots + 1
++      if(mod(nSteps,20000)==0)then
++        allocate(dbgEleBuf(nState),dbgEwtBuf(nState))
++        dbgEle => FN_VMake_Serial(int(nState,c_long), dbgEleBuf, sunctx)
++        dbgEwt => FN_VMake_Serial(int(nState,c_long), dbgEwtBuf, sunctx)
++        retval = FIDAGetEstLocalErrors(ida_mem, dbgEle)
++        retval = FIDAGetErrWeights(ida_mem, dbgEwt)
++        dbgJ = maxloc(abs(dbgEleBuf*dbgEwtBuf)); dbgI = dbgJ(1)
++        retval = FIDAGetNumNonlinSolvConvFails(ida_mem, dbgNcf)
++        call get_environment_variable('OMPI_COMM_WORLD_RANK',dbgS)
++        print*,'IDASTEP ',trim(dbgS),nSteps,'t',real(tret(1)),'h',real(dt_last(1)),'ncf',dbgNcf(1),'worst',dbgI,'err',real(abs(dbgEleBuf(dbgI)*dbgEwtBuf(dbgI))), &
++          'type',indx_data%var(iLookINDEX%ixStateType)%dat(indx_data%var(iLookINDEX%ixMapSubset2Full)%dat(dbgI)), &
++          'ctl',indx_data%var(iLookINDEX%ixControlVolume)%dat(indx_data%var(iLookINDEX%ixMapSubset2Full)%dat(dbgI)),'y',stateVec(dbgI),'nSnow',nSnow,'nGlce',nGlce
++        print*,'IDASNOW ',trim(dbgS),'TmTf',(eqns_data%mLayerTempTrial(dbgL)-273.16_rkind,dbgL=1,nSnow),'RiG',eqns_data%diag_data%var(iLookDIAG%scalarRiBulkGround)%dat(1), &
++          'RiC',eqns_data%diag_data%var(iLookDIAG%scalarRiBulkCanopy)%dat(1),'veg',eqns_data%computeVegFlux
++        do dbgL=1,nSoil
++          print*,'IDASOIL ',trim(dbgS),dbgL,'psi',eqns_data%mLayerMatricHeadTrial(dbgL),'psiP',eqns_data%mLayerMatricHeadPrime(dbgL), &
++            'TmTc',eqns_data%mLayerTempTrial(nSnow+dbgL)-crit_soilT(eqns_data%mLayerMatricHeadTrial(dbgL)),'ice',eqns_data%prog_data%var(iLookPROG%mLayerVolFracIce)%dat(nSnow+dbgL)
++        end do
++        flush(6)
++        call FN_VDestroy(dbgEle); call FN_VDestroy(dbgEwt)
++        deallocate(dbgEleBuf,dbgEwtBuf)
++      endif
++      if(dbgTrig>0)then
++        retval = FIDAGetNumNonlinSolvConvFails(ida_mem, dbgNcf)
++        if(dbgNcf(1)-dbgMark >= dbgTrig .and. dbgCoef > 1.e-4_qp)then
++          dbgCoef = 0.1_qp*dbgCoef; dbgMark = dbgNcf(1)
++          retval = FIDASetNonlinConvCoef(ida_mem, dbgCoef)
++          retval = FIDAReInit(ida_mem, tret(1), sunvec_y, sunvec_yp)
++        endif
++      endif
+ 
+       ! possible that vegetation water may go a bit negative because of discontinous canopy wetting derivatives, so check and correct
+       !  note, this only seems to be an issue for early steps if start in a dry cold state and temperature is the energy state variable (nrgConserv decision is closedForm)
+@@ -646,6 +689,11 @@ subroutine summaSolv4ida(&
+         endif
+       endif
+     enddo ! while loop on one_step mode until time dt_cur
++    if(nSteps>5000)then
++      retval = FIDAGetNumNonlinSolvConvFails(ida_mem, dbgNcf); retval = FIDAGetNumErrTestFails(ida_mem, dbgNef)
++      call get_environment_variable('OMPI_COMM_WORLD_RANK',dbgS)
++      print*,'IDAWIN ',trim(dbgS),nSteps,'ncf',dbgNcf(1),'nef',dbgNef(1),'roots',dbgRoots,'coef',real(dbgCoef),'t',real(tret(1)),real(dt_cur); flush(6)
++    endif
+     !****************************** End of Main Solver ***************************************
+     
+     if(idaSucceeds)then
+@@ -678,6 +726,7 @@ subroutine summaSolv4ida(&
+     deallocate( eqns_data%resSink )
+     deallocate( rootsfound )
+     deallocate( rootdir )
++    if(allocated(eqns_data%rootdir)) deallocate( eqns_data%rootdir )
+ 
+     ! Get Stats from IDA
+     retval = FIDAGetIntegratorStats(ida_mem, nStepsSun, nREvals, nLinSetups, &
+@@ -760,7 +809,7 @@ subroutine setSolverParams(dt_cur,mpar_data,ida_mem,retval)
+ 
+   !======= Internals ============
+   integer,parameter           :: nonlin_iter = 4    ! maximum number of nonlinear iterations before reducing step size, default = 4
+-  real(qp),parameter          :: coef_nonlin = 0.03 ! coefficient in the nonlinear convergence test, default = 0.33, tighter so a nearly saturated layer does not alternate between steps
++  real(qp),parameter          :: coef_nonlin = 0.33 ! coefficient in the nonlinear convergence test, default = 0.33
+   integer,parameter           :: fail_iter = 50     ! maximum number of error test and convergence test failures, default 10
+   
+   associate(&
+@@ -780,7 +829,14 @@ subroutine setSolverParams(dt_cur,mpar_data,ida_mem,retval)
+     if (retval /= 0) return
+ 
+     ! Set maximun number of nonliear iterations, maybe should just make 4 (instead of SUMMA parameter)
+-    retval = FIDASetMaxNonlinIters(ida_mem, nonlin_iter)
++    block
++      character(len=32) :: dbgS
++      integer :: dbgSt, dbgN
++      dbgN = nonlin_iter
++      call get_environment_variable('IDA_NLITER',dbgS,status=dbgSt)
++      if(dbgSt==0) read(dbgS,*) dbgN
++      retval = FIDASetMaxNonlinIters(ida_mem, dbgN)
++    end block
+     if (retval /= 0) return
+ 
+     !  Set maximum number of convergence test failures
+@@ -960,9 +1016,9 @@ integer(c_int) function layerDisCont4ida(t, sunvec_u, sunvec_up, gout, user_data
+   if(eqns_data%indx_data%var(iLookINDEX%ixVegNrg)%dat(1)/=integerMissing)then
+     ind = ind+1
+     if(enthalpyStateVec)then
+-      gout(ind) = uu(eqns_data%indx_data%var(iLookINDEX%ixVegNrg)%dat(1))
++      gout(ind) = event(eqns_data%indx_data%var(iLookINDEX%ixVegNrg)%dat(1), 0._rkind)
+     else
+-      gout(ind) = uu(eqns_data%indx_data%var(iLookINDEX%ixVegNrg)%dat(1)) - Tfreeze
++      gout(ind) = event(eqns_data%indx_data%var(iLookINDEX%ixVegNrg)%dat(1), Tfreeze)
+     end if
+   endif
+ 
+@@ -976,9 +1032,9 @@ integer(c_int) function layerDisCont4ida(t, sunvec_u, sunvec_up, gout, user_data
+     if(eqns_data%indx_data%var(iLookINDEX%ixSnLaSoGlNrg)%dat(i)/=integerMissing)then
+       ind = ind+1
+       if(enthalpyStateVec)then
+-        gout(ind) = uu(eqns_data%indx_data%var(iLookINDEX%ixSnLaSoGlNrg)%dat(i))
++        gout(ind) = event(eqns_data%indx_data%var(iLookINDEX%ixSnLaSoGlNrg)%dat(i), 0._rkind)
+       else
+-        gout(ind) = uu(eqns_data%indx_data%var(iLookINDEX%ixSnLaSoGlNrg)%dat(i)) - Tfreeze
++        gout(ind) = event(eqns_data%indx_data%var(iLookINDEX%ixSnLaSoGlNrg)%dat(i), Tfreeze)
+       end if
+     endif
+   end do
+@@ -988,7 +1044,7 @@ integer(c_int) function layerDisCont4ida(t, sunvec_u, sunvec_up, gout, user_data
+     if (eqns_data%indx_data%var(iLookINDEX%ixSoilOnlyHyd)%dat(i)/=integerMissing)then
+       ind = ind+1
+       xPsi = uu(eqns_data%indx_data%var(iLookINDEX%ixSoilOnlyHyd)%dat(i))
+-      gout(ind) = uu(eqns_data%indx_data%var(iLookINDEX%ixSoilOnlyHyd)%dat(i))
++      gout(ind) = event(eqns_data%indx_data%var(iLookINDEX%ixSoilOnlyHyd)%dat(i), 0._rkind)
+     else
+       xPsi = eqns_data%prog_data%var(iLookPROG%mLayerMatricHead)%dat(i)
+     endif
+@@ -996,10 +1052,10 @@ integer(c_int) function layerDisCont4ida(t, sunvec_u, sunvec_up, gout, user_data
+     if(eqns_data%indx_data%var(iLookINDEX%ixSoilOnlyNrg)%dat(i)/=integerMissing)then
+       ind = ind+1
+       if(enthalpyStateVec)then
+-        gout(ind) = uu(eqns_data%indx_data%var(iLookINDEX%ixSoilOnlyNrg)%dat(i))
++        gout(ind) = event(eqns_data%indx_data%var(iLookINDEX%ixSoilOnlyNrg)%dat(i), 0._rkind)
+       else 
+         TcSoil = crit_soilT(xPsi)
+-        gout(ind) = uu(eqns_data%indx_data%var(iLookINDEX%ixSoilOnlyNrg)%dat(i)) - TcSoil
++        gout(ind) = event(eqns_data%indx_data%var(iLookINDEX%ixSoilOnlyNrg)%dat(i), TcSoil)
+       end if
+     endif
+   end do
+@@ -1008,6 +1064,20 @@ integer(c_int) function layerDisCont4ida(t, sunvec_u, sunvec_up, gout, user_data
+   ierr = 0
+   return
+ 
++contains
++
++  ! distance past a threshold, offset one error weight toward the side being approached so crossings within the tolerance are not events
++  real(c_double) function event(ix, threshold)
++    integer(i4b),intent(in) :: ix         ! index of the state variable
++    real(rkind),intent(in)  :: threshold  ! value of the state at the discontinuity
++    character(len=8) :: dbgS
++    integer :: dbgSt
++    real(rkind) :: band
++    band = 1._rkind
++    call get_environment_variable('IDA_DEADBAND',dbgS,status=dbgSt); if(dbgSt==0) read(dbgS,*) band
++    event = uu(ix) - threshold - band*eqns_data%rootdir(ind)*( eqns_data%rtol(ix)*abs(threshold) + eqns_data%atol(ix) )
++  end function event
++
+ end function layerDisCont4ida
+ 
+ ! ----------------------------------------------------------------

@@ -17,6 +17,7 @@ if val != "be":
     names = [] if val == "dflt" else [f"{k}Tol{v}" for v in ("TempCas", "TempVeg", "WatVeg", "TempSoilSnow", "WatSnow", "Matric", "Aquifr") for k in ("rel", "abs")]
     def fmt(n):  # SCALED=1: temperature/energy absolute tolerances keep the absEnergyFac of 1e7 (enthalpyForm), as the defaults do
         if os.environ.get("SCALED") and n.startswith("absTolTemp"): return ("%.3e" % (float(val.replace("d", "e")) * 1e7)).replace("e", "d"), "1.0d+15"
+        if os.environ.get("RELTOL_ENERGY") and n.startswith("relTolTemp"): return os.environ["RELTOL_ENERGY"], "0.1"  # RELTOL_ENERGY: relative tolerance for energy states only
         return val, "0.1"
     rows = "\n".join(n.ljust(25) + " | " + fmt(n)[0].rjust(12) + " | " + "0.0".rjust(12) + " | " + fmt(n)[1].rjust(12) for n in names)
     p = f"{R}/inputs/localParamInfo.txt"; s = open(p).read()
