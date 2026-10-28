@@ -50,7 +50,7 @@ def on_grid(path, like):
     return out
 
 
-def panel(ax, config, a, setup):
+def panel(ax, config, a, setup, keep_out, letter):
     c = load_config(config)
     project, name = c["project_dir"], c["domain"]
     with rasterio.open(os.path.join(project, "attributes", "elevation", "dem", f"domain_{name}_glacier_elv_utm.tif")) as r:
@@ -77,8 +77,21 @@ def panel(ax, config, a, setup):
     index = levels % (5 * a.contour) == 0
     ax.contour(xs, ys, dem, levels=levels[~index], colors="#3a3a3a", linewidths=0.4, zorder=1)
     labelled = ax.contour(xs, ys, dem, levels=levels[index], colors="#1a1a1a", linewidths=0.9, zorder=1)
-    for text in ax.clabel(labelled, fontsize=6, fmt="%d", inline=True, inline_spacing=4):
-        text.set_zorder(12)
+    place = []  # one label per index contour, at its rightmost vertex outside both setups' basins, so a and b (c and d) match
+    free = ~geometry_mask(list(keep_out), transform=tr, invert=True, out_shape=shape)
+    for segs in labelled.allsegs:
+        best = None
+        for seg in segs:
+            for x, y in seg[::4]:
+                col, row = int((x - tr.c) / tr.a), int((y - tr.f) / tr.e)
+                if left < x < right - 0.04 * (right - left) and bottom < y < top and 0 <= row < shape[0] and 0 <= col < shape[1] and free[row, col]:
+                    if best is None or x > best[0]:
+                        best = (x, y)
+        place.append(best)
+    for k, best in enumerate(place):
+        if best is not None:
+            for text in ax.clabel(labelled, levels=[labelled.levels[k]], fontsize=6.5, fmt="%d", manual=[best], inline=True, inline_spacing=3):
+                text.set_zorder(12)
     ax.imshow(np.where(outside, 1.0, np.nan), cmap="gray_r", vmin=0, vmax=1.3, alpha=0.55, extent=extent, zorder=2)
     ax.contourf(xs, ys, (ext & ~glc).astype(float), levels=[0.5, 1.5], colors=[PINK], alpha=0.45, zorder=3)
     ax.contour(xs, ys, (ext & ~glc).astype(float), levels=[0.5], colors=[PINK], linewidths=1.0, zorder=4)
@@ -104,6 +117,19 @@ def panel(ax, config, a, setup):
             px, py = gpd.GeoSeries([Point(s["Longitude"], s["Latitude"])], crs=4326).to_crs(crs).iloc[0].coords[0]
             ax.plot(px, py, marker="s", ms=7, mfc="#f1c40f", mec="black", mew=1.0, ls="none", zorder=14)
             ax.annotate(f"{int(s['Elevation'])} m", (px, py), xytext=(8, 6), textcoords="offset points", fontsize=6, zorder=14)
+    if a.reaches:
+        from nhd_reach import model_reach_length, terminus
+        nhd = os.path.join(project, "shapefiles", "nhd.gpkg")
+        if os.path.exists(nhd):
+            reach = gpd.read_file(nhd, layer="reach").to_crs(crs)
+            reach.plot(ax=ax, color="#08306b", linewidth=2.6, zorder=15)
+            term = terminus(c, crs)
+            length = model_reach_length(c)
+            if length:
+                gauge_pt = gpd.GeoSeries([Point(lon, lat)], crs=4326).to_crs(crs).iloc[0]
+                d = np.array([term.x - gauge_pt.x, term.y - gauge_pt.y])
+                d = d / np.hypot(*d)
+                ax.plot([gauge_pt.x, gauge_pt.x + d[0] * length], [gauge_pt.y, gauge_pt.y + d[1] * length], color=RED, lw=2.4, ls="--", zorder=15)
     if a.streams:
         nhd = os.path.join(project, "shapefiles", "nhd.gpkg")
         if os.path.exists(nhd):
@@ -122,6 +148,8 @@ def panel(ax, config, a, setup):
                 ax.add_patch(Rectangle((bx[0], bx[1]), bx[2] - bx[0], bx[3] - bx[1], fill=False, ec=ORANGE, lw=1.3, ls="--", zorder=9))
     ax.set_xlim(left, right)
     ax.set_ylim(bottom, top)
+    ax.text(0.02, 0.98, f"({letter})", transform=ax.transAxes, ha="left", va="top", fontsize=11, fontweight="bold", zorder=20,
+            bbox=dict(fc="white", ec="none", alpha=0.8, pad=1.5))
     ax.set_aspect("equal")
     ax.set_xticks([])
     ax.set_yticks([])
@@ -147,13 +175,17 @@ def main():
     p.add_argument("--contour", type=float, default=100.0, help="contour interval, m")
     p.add_argument("--grids", action="store_true", help="the extent of each glacier's flow-model grid")
     p.add_argument("--stations", action="store_true", help="the USGS weather stations")
+    p.add_argument("--reaches", action="store_true", help="the NHD reach from the terminus to the gauge (dark blue) and the model's, from its stream length (red dashed)")
     p.add_argument("--streams", action="store_true", help="the NHD streams and lakes, and the terminus-to-gauge windows of the YAML")
     a = p.parse_args()
     fig, axes = plt.subplots(len(a.basins), len(a.setups), figsize=(max(4.6 * len(a.setups), 6.6), 5.6 * len(a.basins)), squeeze=False)
     for i, basin in enumerate(a.basins):
+        configs = {st: os.path.join(HERE, "domains", f"{basin}{'_general' if st == 'general' else ''}.yaml") for st in ("general", "added")}
+        keep_out = [g for st, cfg in configs.items() for g in gpd.read_file(glob.glob(os.path.join(load_config(cfg)["project_dir"], "shapefiles", "river_basins", "*.shp"))[0]).to_crs(32606).geometry]
         for j, setup in enumerate(a.setups):
-            config = os.path.join(HERE, "domains", f"{basin}{'_general' if setup == 'general' else ''}.yaml")
-            panel(axes[i, j], config, a, setup)
+            config = configs[setup]
+            keep_crs = load_config(config)["utm_crs"]
+            panel(axes[i, j], config, a, setup, [g for g in gpd.GeoSeries(keep_out, crs=32606).to_crs(keep_crs)], "abcdefgh"[i * len(a.setups) + j])
             label = "general setup" if setup == "general" else "added-data setup"
             axes[i, j].set_title(f"{basin.capitalize()}, {label}", fontsize=10)
     handles = [Line2D([], [], color="#3a3a3a", lw=0.5, label=f"{a.contour:g} m contours (labelled every {5 * a.contour:g} m)"),
@@ -165,10 +197,13 @@ def main():
         handles.append(Line2D([], [], color=ORANGE, lw=1.2, label="flow-model grid"))
     if a.stations and setup == "added":  # the stations belong to the added-data setup
         handles.append(Line2D([], [], marker="s", ls="none", mfc="#f1c40f", mec="black", ms=6, label="weather station"))
+    if a.reaches:
+        handles += [Line2D([], [], color="#08306b", lw=2.6, label="NHD reach, terminus to gauge"),
+                    Line2D([], [], color=RED, lw=2.4, ls="--", label="model reach (its stream length from the gauge)")]
     if a.streams:
         handles += [Line2D([], [], color=BLUE, lw=1.4, label="stream (NHD; dotted: through lakes and ice)"), Patch(fc="#a6cee3", ec=BLUE, label="lake (NHD)"),
                     Line2D([], [], color=ORANGE, lw=1.3, ls="--", label="terminus-to-gauge window")]
-    fig.legend(handles=handles, loc="lower center", ncol=min(len(handles), 2 if len(a.setups) == 1 else 5), fontsize=8, frameon=False)
+    fig.legend(handles=handles, loc="lower center", ncol=min(len(handles), 3 if len(a.setups) == 1 else 4), fontsize=7.5, frameon=False)
     fig.tight_layout(rect=(0, 0.07, 1, 1), h_pad=3.0)
     os.makedirs(os.path.dirname(os.path.abspath(a.output)), exist_ok=True)
     fig.savefig(a.output, dpi=250)

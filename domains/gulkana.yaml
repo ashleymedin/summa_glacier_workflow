@@ -22,6 +22,7 @@ usgs_datum: -16.1                               # m added to USGS heights (WGS84
 small_meltout: {dems: data/external/GlacierDEM/ArcticDEM_Gulkana_series, glaciers: [RGI60-01.00332, RGI60-01.00333, RGI60-01.00334, RGI60-01.22903]}   # multi-year strips (acquire_arcticdem.py --series): bed of the glaciers without a survey where their ice has gone
 
 hru_bands: [1480, 1880]                          # elevation band edges, m, of the HRUs (make_hrus.py)
+terminus: [-145.4260, 63.2586]                    # lon, lat of the ice front in late imagery (Esri WorldView, 2024-25), for the stream reach
 basin_within: huc12                             # clip the basin to the USGS HUC12 of the gauge (acquire_nhd.py), US only
 
 forcing_period: {first: 2004-10, last: 2026-09}    # months of ERA5 the era5 step fetches; Jul-Sep 2026 are ERA5T

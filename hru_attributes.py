@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """HRU area, centre, elevation, slope and contour length from the HRU polygons and the surface DEM.
 
-Reads shapefiles/catchment/<name>_HRUs_elevation.shp and attributes/elevation/dem/domain_<name>_elv.tif, and
+Reads shapefiles/catchment/<name>_HRUs_elevation.shp and the start surface attributes/elevation/dem/domain_<name>_glacier_elv.tif, and
 writes, by HRU id, into both that shapefile (HRU_area, center_lat, center_lon, elev_mean) and
 settings/SUMMA/attributes.nc (HRUarea, latitude, longitude, elevation, tan_slope, contourLength):
 
@@ -42,7 +42,7 @@ def main():
     utm = hrus.to_crs(c["utm_crs"])
     area = utm.geometry.area.values
     centre = utm.geometry.centroid.to_crs("epsg:4326")
-    dem_path = os.path.join(project, "attributes", "elevation", "dem", f"domain_{name}_elv.tif")
+    dem_path = os.path.join(project, "attributes", "elevation", "dem", f"domain_{name}_glacier_elv.tif")  # the setup's start surface
     dem, nodata, affine, tan_slope, _ = dem_slope_aspect(dem_path)
     with rasterio.open(dem_path) as src:
         polygons = hrus.to_crs(src.crs)

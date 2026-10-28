@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Build a domain's GRU and HRUs from its basin: elevation bands of the surface DEM, cut to the basin outline.
+"""Build a domain's GRU and HRUs from its basin: elevation bands of the setup's start surface, cut to the basin outline.
 
 The GRU is the basin of glacier_extend.py (shapefiles/river_basins), whole glaciers included. The HRUs are its elevation bands, the
 YAML's hru_bands (edges in m, so n edges make n+1 HRUs), else bands hru_band_size (m, default 400) wide from the lowest elevation in
-the basin, as SYMFLUENCE's ELEVATION_BAND_SIZE did, numbered up from the lowest, each the union of the basin cells of the DEM (domain_<name>_elv.tif) in the band, so a band can be several islands.
+the basin, as SYMFLUENCE's ELEVATION_BAND_SIZE did, numbered up from the lowest, each the union of the basin cells of the start surface (domain_<name>_glacier_elv.tif: MERIT, with the USGS survey surface on the benchmark glacier in the added-data setup, so the setups' HRUs differ) in the band, so a band can be several islands.
 A 3x3 median filter on the band numbers takes the single-cell speckle out. Writes
 
   shapefiles/catchment/<name>_HRUs_elevation.shp   GRU_ID, HRU_ID, elevClass, with HRU_area, centre and elev_mean (hru_attributes.py
@@ -37,7 +37,7 @@ def main():
     c = load_config(a.config)
     project, name = c["project_dir"], c["domain"]
     basin = gpd.read_file(glob.glob(os.path.join(project, "shapefiles", "river_basins", "*.shp"))[0]).to_crs(4326)
-    with rasterio.open(os.path.join(project, "attributes", "elevation", "dem", f"domain_{name}_elv.tif")) as src:
+    with rasterio.open(os.path.join(project, "attributes", "elevation", "dem", f"domain_{name}_glacier_elv.tif")) as src:
         dem, transform = src.read(1).astype(float), src.transform
         dem[dem == src.nodata] = np.nan
     inside = geometry_mask(list(basin.geometry), transform=transform, invert=True, out_shape=dem.shape) & np.isfinite(dem)
