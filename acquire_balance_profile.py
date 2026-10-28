@@ -13,7 +13,7 @@ The shift is printed beside USGS's own calibration; the two differ by the profil
 USGS elevations are WGS84 ellipsoid heights; --datum (m) is added to them to put the profile in the model DEM's
 heights (Gulkana -16.1, Wolverine -14.0: the setup's surface less the survey DEM on the glacier).
 
-    ./acquire_balance_profile.py data/domain_Gulkana/USGSweatherData/Gulkana gulkana_balance_profile.txt --datum -16.1
+    ./acquire_balance_profile.py data/domain_Gulkana/observations/storage/mass_balance gulkana_balance_profile.txt --datum -16.1
 """
 
 import argparse

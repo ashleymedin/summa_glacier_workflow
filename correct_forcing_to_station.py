@@ -40,7 +40,7 @@ A correction is applied only where the data exist; the others stay at 0 or 1.  S
 means of the 15-minute samples in the hour ending at each forcing time, precipitation the sum of all four.  The corrections are written to
 corrections.csv beside the corrected files.
 
-    ./correct_forcing_to_station.py $S/domain_Wolverine/forcing/SUMMA_input $S/domain_Wolverine/USGSweatherData \\
+    ./correct_forcing_to_station.py $S/domain_Wolverine/forcing/SUMMA_input $S/domain_Wolverine/observations/stations \\
         $S/domain_Wolverine/settings/SUMMA/attributes.nc $S/domain_Wolverine/forcing/SUMMA_input/station_corrected \\
         --stakes $S/domain_Wolverine/observations/storage/mass_balance/Input_Wolverine_Glaciological_Data.csv
 """
@@ -242,7 +242,7 @@ def stake_ratios_graded(path, hours, z, snow_at, min_elev, dom_elev=None):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("forcing", help="directory of the monthly SUMMA forcing files")
-    p.add_argument("stations", help="USGSweatherData directory, one subdirectory per station elevation (m)")
+    p.add_argument("stations", help="station directory (observations/stations), one subdirectory per station elevation (m)")
     p.add_argument("attributes", help="SUMMA attributes file, for the HRU elevations")
     p.add_argument("output", help="directory to write the corrected forcing to")
     p.add_argument("--stakes", help="Input_<glacier>_Glaciological_Data.csv; scale precipitation to the winter balances")

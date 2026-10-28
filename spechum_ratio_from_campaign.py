@@ -16,7 +16,7 @@ as in Wilson et al.'s Gulkana 2024 data release.  Writes hruId, month, ratio row
 correct_forcing_to_station.py --spechum-ratios.  Needs xarray, gcsfs and zarr; the ERA5 pulls are cached.
 
     ./spechum_ratio_from_campaign.py $S/domain_Gulkana/forcing/SUMMA_input $S/domain_Gulkana/settings/SUMMA/attributes.nc \\
-        $S/domain_Gulkana/Wilson_gulkana_2024_data/1_meteo/gulkanaB_AWS_2024.csv 63.285514 -145.410336 \\
+        $S/domain_Gulkana/observations/campaigns/wilson_2024/1_meteo/gulkanaB_AWS_2024.csv 63.285514 -145.410336 \\
         $S/domain_Gulkana/forcing/spechum_ratios_wilson2024.csv
 """
 

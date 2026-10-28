@@ -30,7 +30,7 @@ def load(name, label=LABEL):
 
 
 def stakes(name):
-    s = pd.read_csv(f'{WF}/data/domain_{name}/USGSweatherData/{name}/Input_{name}_Glaciological_Data.csv')
+    s = pd.read_csv(f'{WF}/data/domain_{name}/observations/storage/mass_balance/Input_{name}_Glaciological_Data.csv')
     for c in ('spring_date', 'fall_date'):
         s[c] = pd.to_datetime(s[c], format='%Y/%m/%d', errors='coerce')
     return s[(s.Year >= 2009) & (s.Year <= 2022)]

@@ -13,10 +13,10 @@ data:
   debris_extent: data/external/Debris_data
   debris_thickness: data/external/Debris_thick
   ice_thickness: data/external/Thickness_data
-  usgs_outlines: GlacierDEM/USGS_Glacier_Boundaries_shp/USGS_Glacier_Boundaries.shp
-usgs_outline: {glacier: Wolverine Glacier, date: 2006/08/08, dem: GlacierDEM/EasternKenai_20060808_DEM/EasternKenai_20060808_DEM.tif}  # the survey before the 2008 start, in place of RGI's
-millan_reference: {date: 2015/08/13, dem: GlacierDEM/EasternKenai_20150813_DEM/EasternKenai_20150813_DEM.tif}  # the survey inside Millan's 2010-2020 decade; the bed is it less his thickness
-later_outline: {date: 2020/10/19, dems: GlacierDEM/ArcticDEM_Wolverine}  # the last survey; ArcticDEM strips after it give the bed where ice melted out
+  usgs_outlines: data/external/GlacierDEM/USGS_Glacier_Boundaries_shp/USGS_Glacier_Boundaries.shp
+usgs_outline: {glacier: Wolverine Glacier, date: 2006/08/08, dem: data/external/GlacierDEM/EasternKenai_20060808_DEM/EasternKenai_20060808_DEM.tif}  # the survey before the 2008 start, in place of RGI's
+millan_reference: {date: 2015/08/13, dem: data/external/GlacierDEM/EasternKenai_20150813_DEM/EasternKenai_20150813_DEM.tif}  # the survey inside Millan's 2010-2020 decade; the bed is it less his thickness
+later_outline: {date: 2020/10/19, dems: data/external/GlacierDEM/ArcticDEM_Wolverine}  # the last survey; ArcticDEM strips after it give the bed where ice melted out
 usgs_datum: -14.0                               # m added to USGS heights (WGS84 ellipsoid) to give the model DEM's
 
 forcing_period: {first: 2004-10, last: 2026-09}
@@ -24,7 +24,7 @@ cold_start: 2008-01
 soil_offset: 1.5
 ice_temp: -5.0
 
-stations: USGSweatherData
+stations: observations/stations
 stakes: observations/storage/mass_balance/Input_Wolverine_Glaciological_Data.csv
 gauge_shield: SA                                # single-Alter shield on the 990 m weighing gauge
 precip_grad: true                               # SUMMA precipElevGrad fitted with the stake ratios

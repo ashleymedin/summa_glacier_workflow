@@ -10,7 +10,7 @@ as SUMMA counts them. Writes, in <run>/glacier_change:
   area.csv     each year's glacier area (km2) of the main glacier and of all the run's glaciers, and the main
                glacier's debris
   start.csv    the main glacier's area and debris in the run's cold state, where it starts
-  surveys.csv  the USGS survey outlines' areas (USGSweatherData/<Name>/Input_<Name>_Geodetics.csv), the only
+  surveys.csv  the USGS survey outlines' areas (observations/storage/mass_balance/Input_<Name>_Geodetics.csv), the only
                measured areas; the yearly area-altitude record interpolates between them
   bands.csv    the main glacier's area by the USGS 100 m bands: the model's cold state (model_start), its first
                year and the year of the last survey it reaches, and USGS at the survey years in or just before the run
@@ -86,12 +86,12 @@ def main():
         ice[:, :, nx[g]:, g] = False
     debris = ice & (D >= MIN_DEBRIS)
 
-    usgs = pd.read_csv(os.path.join(project, "USGSweatherData", name, f"Input_{name}_Area_Altitude_Distribution.csv"),
+    usgs = pd.read_csv(os.path.join(project, "observations", "storage", "mass_balance", f"Input_{name}_Area_Altitude_Distribution.csv"),
                        index_col="Year")
     area = pd.DataFrame({"model_main_km2": ice[:, :, :, main_g].sum((1, 2)) * cell,
                          "model_all_km2": ice.sum((1, 2, 3)) * cell,
                          "model_main_debris_km2": debris[:, :, :, main_g].sum((1, 2)) * cell}, index=years)
-    geo = pd.read_csv(os.path.join(project, "USGSweatherData", name, f"Input_{name}_Geodetics.csv"))
+    geo = pd.read_csv(os.path.join(project, "observations", "storage", "mass_balance", f"Input_{name}_Geodetics.csv"))
     geo["date"] = pd.to_datetime(geo.Date)
     ref = geo.loc[geo.Area_max == geo.Area_min, "date"].iloc[0]  # the reference survey, whose area both columns hold
     geo["area_km2"] = np.where(geo.date <= ref, geo.Area_max, geo.Area_min) / 1e6

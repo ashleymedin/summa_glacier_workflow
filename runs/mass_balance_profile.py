@@ -28,7 +28,7 @@ for name, case, trial in (('Gulkana', 'gulkana_corrected', 384), ('Wolverine', '
                     rows.append({'year': t[i].year, 'hru': h + 1, 'type': int(typ[h, k]), 'elev': z[i, h, k], 'b': m[i, h, k] / 1000})
     r = pd.DataFrame(rows)
     print(r.groupby(['hru', 'type']).agg(elev=('elev', 'mean'), b_mweq=('b', 'mean')).round(2).to_string())
-    s = pd.read_csv(f'{WF}/data/domain_{name}/USGSweatherData/{name}/Input_{name}_Glaciological_Data.csv').dropna(subset=['ba'])
+    s = pd.read_csv(f'{WF}/data/domain_{name}/observations/storage/mass_balance/Input_{name}_Glaciological_Data.csv').dropna(subset=['ba'])
     out = []
     for y, g in r.groupby('year'):
         clean = g[g.type != 4].sort_values('elev')

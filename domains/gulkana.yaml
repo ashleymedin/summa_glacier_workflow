@@ -14,10 +14,10 @@ data:
   debris_extent: data/external/Debris_data
   debris_thickness: data/external/Debris_thick
   ice_thickness: data/external/Thickness_data
-  usgs_outlines: GlacierDEM/USGS_Glacier_Boundaries_shp/USGS_Glacier_Boundaries.shp
-usgs_outline: {glacier: Gulkana Glacier, date: 2007/08/11, dem: GlacierDEM/Deltas_20070811_DEM/Deltas_20070811_DEM.tif}  # the survey before the 2008 start, in place of RGI's 2009 outline
-millan_reference: {date: 2016/08/30, dem: GlacierDEM/Deltas_20160830_DEM/Deltas_20160830_DEM.tif}  # the survey inside Millan's 2010-2020 decade; the bed is it less his thickness
-later_outline: {date: 2021/09/19, dems: GlacierDEM/ArcticDEM_Gulkana}  # the last survey; ArcticDEM strips after it give the bed where ice melted out
+  usgs_outlines: data/external/GlacierDEM/USGS_Glacier_Boundaries_shp/USGS_Glacier_Boundaries.shp
+usgs_outline: {glacier: Gulkana Glacier, date: 2007/08/11, dem: data/external/GlacierDEM/Deltas_20070811_DEM/Deltas_20070811_DEM.tif}  # the survey before the 2008 start, in place of RGI's 2009 outline
+millan_reference: {date: 2016/08/30, dem: data/external/GlacierDEM/Deltas_20160830_DEM/Deltas_20160830_DEM.tif}  # the survey inside Millan's 2010-2020 decade; the bed is it less his thickness
+later_outline: {date: 2021/09/19, dems: data/external/GlacierDEM/ArcticDEM_Gulkana}  # the last survey; ArcticDEM strips after it give the bed where ice melted out
 usgs_datum: -16.1                               # m added to USGS heights (WGS84 ellipsoid) to give the model DEM's
 
 forcing_period: {first: 2004-10, last: 2026-09}    # months of ERA5 the era5 step fetches; Jul-Sep 2026 are ERA5T
@@ -28,13 +28,13 @@ soil_offset: 1.5                                # deg C, soil and debris above t
 ice_temp: -5.0                                  # deg C
 
 # station correction of the forcing (correct_forcing_to_station.py)
-stations: USGSweatherData                       # in project_dir
+stations: observations/stations                       # in project_dir
 stakes: observations/storage/mass_balance/Input_Gulkana_Glaciological_Data.csv
 gauge_shield: SA                                # weighing gauges at 1480 and 1725 m, shield assumed as Wolverine's
 gauge_rain: true                                # precipitation the stakes leave scaled by the gauges, by month
 precip_grad: true                               # SUMMA precipElevGrad fitted with the stake ratios
 spechum_campaign:                               # Wilson et al. 2024 Site B, for the April-August humidity
-  station: Wilson_gulkana_2024_data/1_meteo/gulkanaB_AWS_2024.csv
+  station: observations/campaigns/wilson_2024/1_meteo/gulkanaB_AWS_2024.csv
   latitude: 63.285514
   longitude: -145.410336
   ratios: forcing/spechum_ratios_wilson2024.csv
