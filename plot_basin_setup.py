@@ -39,7 +39,7 @@ from shapely.geometry import Point, box
 from domain_config import load_config
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PURPLE, PINK, RED, BLUE, GREEN, ORANGE, BROWN = "#7b2d8e", "#e8629c", "#c0392b", "#1f78b4", "#1a9850", "#e08214", "#8c5a2b"
+PURPLE, PINK, RED, BLUE, GREEN, ORANGE, BROWN = "#7b2d8e", "#e8629c", "#c0392b", "#1f78b4", "#1a9850", "#e08214", "#6b3a12"
 
 
 def on_grid(path, like):
@@ -95,7 +95,8 @@ def panel(ax, config, a, setup, keep_out, letter):
                 text.set_zorder(12)
     ax.imshow(np.where(outside, 1.0, np.nan), cmap="gray_r", vmin=0, vmax=1.3, alpha=0.55, extent=extent, zorder=2)
     if debris.any():
-        ax.contourf(xs, ys, (debris & ~outside).astype(float), levels=[0.5, 1.5], colors=[BROWN], alpha=0.65, zorder=3)
+        ax.contourf(xs, ys, (debris & ~outside).astype(float), levels=[0.5, 1.5], colors=[BROWN], alpha=0.9, zorder=3)
+        ax.contour(xs, ys, (debris & ~outside).astype(float), levels=[0.5], colors=["#3b1f08"], linewidths=0.8, zorder=3)
     ax.contourf(xs, ys, (ext & ~glc).astype(float), levels=[0.5, 1.5], colors=[PINK], alpha=0.45, zorder=3)
     ax.contour(xs, ys, (ext & ~glc).astype(float), levels=[0.5], colors=[PINK], linewidths=1.0, zorder=4)
     ax.contour(xs, ys, (glc & ~outside).astype(float), levels=[0.5], colors=[PURPLE], linewidths=1.3, zorder=5)
@@ -206,7 +207,7 @@ def main():
             axes[i, j].set_title(f"{basin.capitalize()}, {label}", fontsize=10)
     handles = [Line2D([], [], color="#3a3a3a", lw=0.5, label=f"{a.contour:g} m contours (labelled every {5 * a.contour:g} m)"),
                Line2D([], [], color=PURPLE, lw=1.3, label="glacier outline at the start"),
-               Patch(fc=BROWN, ec=BROWN, alpha=0.7, label="debris-covered ice"), Patch(fc=PINK, ec=PINK, alpha=0.5, label="room to advance"),
+               Patch(fc=BROWN, ec="#3b1f08", label="debris-covered ice"), Patch(fc=PINK, ec=PINK, alpha=0.5, label="room to advance"),
                Line2D([], [], color="black", lw=1.8, label="basin"), Line2D([], [], color=GREEN, lw=1.8, label="HRUs"),
                Line2D([], [], marker="^", ls="none", mfc=RED, mec="white", ms=8, label="gauge")]
     if a.grids:
@@ -226,7 +227,7 @@ def main():
     fig.legend(handles=handles, loc="lower center", ncol=min(len(handles), 3 if len(a.setups) == 1 else 4), fontsize=7.5, frameon=False)
     fig.tight_layout(rect=(0, 0.07, 1, 1), h_pad=3.0)
     os.makedirs(os.path.dirname(os.path.abspath(a.output)), exist_ok=True)
-    fig.savefig(a.output, dpi=250)
+    fig.savefig(a.output, dpi=250, bbox_inches="tight", pad_inches=0.05)
     print("wrote", a.output)
 
 
