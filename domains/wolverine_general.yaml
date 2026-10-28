@@ -17,7 +17,7 @@ data:
   debris_thickness: data/external/Debris_thick
   ice_thickness: data/external/Thickness_data
 
-small_meltout: {dems: data/external/GlacierDEM/ArcticDEM_Wolverine_series, glaciers: [RGI60-01.09162]}
+small_meltout: {dems: data/external/GlacierDEM/ArcticDEM_Wolverine_series, glaciers: [RGI60-01.09162, RGI60-01.09092]}
 
 forcing_period: {first: 2004-10, last: 2026-09}
 cold_start: 2008-01
