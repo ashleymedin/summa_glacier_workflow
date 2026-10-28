@@ -2,8 +2,8 @@
 """Build a domain's GRU and HRUs from its basin: elevation bands of the surface DEM, cut to the basin outline.
 
 The GRU is the basin of glacier_extend.py (shapefiles/river_basins), whole glaciers included. The HRUs are its elevation bands, the
-YAML's hru_bands (edges in m, so n edges make n+1 HRUs; default two edges at the thirds of the basin's elevation range), numbered up
-from the lowest, each the union of the basin cells of the DEM (domain_<name>_elv.tif) in the band, so a band can be several islands.
+YAML's hru_bands (edges in m, so n edges make n+1 HRUs), else bands hru_band_size (m, default 400) wide from the lowest elevation in
+the basin, as SYMFLUENCE's ELEVATION_BAND_SIZE did, numbered up from the lowest, each the union of the basin cells of the DEM (domain_<name>_elv.tif) in the band, so a band can be several islands.
 A 3x3 median filter on the band numbers takes the single-cell speckle out. Writes
 
   shapefiles/catchment/<name>_HRUs_elevation.shp   GRU_ID, HRU_ID, elevClass, with HRU_area, centre and elev_mean (hru_attributes.py
@@ -44,7 +44,7 @@ def main():
     edges = c.get("hru_bands")
     if not edges:
         lo, hi = np.nanmin(dem[inside]), np.nanmax(dem[inside])
-        edges = [lo + (hi - lo) / 3, lo + 2 * (hi - lo) / 3]
+        edges = list(np.arange(lo + c.get("hru_band_size", 400.0), hi, c.get("hru_band_size", 400.0)))
     band = np.where(inside, np.digitize(dem, edges) + 1, 0).astype(np.int16)
     smooth = median_filter(band, size=3)
     band = np.where(inside & (smooth > 0), smooth, band)

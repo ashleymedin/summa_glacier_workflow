@@ -10,7 +10,7 @@ One panel per basin (rows) and setup (columns), in the domain's UTM grid. Layers
   basin, HRUs, gauge     shapefiles/river_basins, shapefiles/catchment, and the YAML's pour_point
 
 and, with the flags, --grids (the extent of each glacier's flow-model grid), --stations (the USGS weather stations in
-observations/stations; the added-data panels only) and --streams (the NHD streams and lakes of shapefiles/nhd.gpkg, acquire_nhd.py,
+observations/stations; the added-data panels only) and --streams (the NHD streams and lakes of shapefiles/nhd.gpkg, acquire_nhd.py, inside the basin,
 and the YAML's terminus-to-gauge windows, dashed).
 
     ./plot_basin_setup.py figs/setups.pdf
@@ -102,8 +102,8 @@ def panel(ax, config, a, setup):
         st = st[st["Location"] == name]
         for _, s in st.iterrows():
             px, py = gpd.GeoSeries([Point(s["Longitude"], s["Latitude"])], crs=4326).to_crs(crs).iloc[0].coords[0]
-            ax.plot(px, py, marker="s", ms=6, mfc="#f1c40f", mec="black", mew=0.8, ls="none", zorder=11)
-            ax.annotate(f"{int(s['Elevation'])} m", (px, py), xytext=(5, 3), textcoords="offset points", fontsize=6, zorder=10)
+            ax.plot(px, py, marker="s", ms=7, mfc="#f1c40f", mec="black", mew=1.0, ls="none", zorder=14)
+            ax.annotate(f"{int(s['Elevation'])} m", (px, py), xytext=(8, 6), textcoords="offset points", fontsize=6, zorder=14)
     if a.streams:
         nhd = os.path.join(project, "shapefiles", "nhd.gpkg")
         if os.path.exists(nhd):
@@ -112,7 +112,7 @@ def panel(ax, config, a, setup):
                                     ("flowlines", (460,), dict(color=BLUE, linewidth=1.4)),
                                     ("flowlines", (558,), dict(color=BLUE, linewidth=0.7, linestyle=":"))):  # artificial paths, through lakes and ice
                 gdf = gpd.read_file(nhd, layer=layer).to_crs(crs).rename(columns=str.lower)
-                gdf = gdf[gdf["ftype"].isin(keep) & gdf.intersects(window)]
+                gdf = gpd.clip(gdf[gdf["ftype"].isin(keep)], basin.geometry.union_all())  # only what is in the basin
                 if len(gdf):
                     gdf.plot(ax=ax, zorder=9, **kw)
         for lake in (c.get("observations") or {}).get("lake_area", []):
