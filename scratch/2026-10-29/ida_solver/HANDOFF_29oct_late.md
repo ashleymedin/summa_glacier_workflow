@@ -31,3 +31,10 @@ Branches live in the summa repo, so they survive the scratchpad.
 4. Then psi-smooth2 onto multi-calib with a "-" changelog entry (changes BE solution).
 5. Handoff items 2-4 from the plan doc (freezing-onset smoothing, energy relTol 0, sampled first generation at absTol 1e-4) untouched.
 6. Old worktrees wroot/wadapt/wbrent (session b2242790) still need `git worktree remove --force` by the user.
+
+## Results that came in after the write-up
+- Bow BE, 48 trials: b0 319 s vs sm2 326 s CPU, no failures (trial-15 fix holds); streamflow obj change median 1e-5, max 8e-4 (10 shared samples).
+- Bow IDA, 48 trials: b0 522 s vs sm2 516 s CPU, no failures; median 6e-4, max 0.012 (30 shared samples).
+- Wolverine default IDA spinup to 2016-10-01, one process: bf finishes in 148 s; sm2 had NOT finished when checked, so the
+  psi-smooth2 IDA stall is in the default spinup between 2016-04-20 and 2016-10-01. Bisect the date with spinrun.py.
+- sm2_wol_be (Wolverine BE, combined branch) wrote no result (sm2_wol_be.out empty); rerun it.
