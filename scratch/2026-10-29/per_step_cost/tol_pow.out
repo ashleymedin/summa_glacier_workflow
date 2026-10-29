@@ -1,0 +1,8 @@
+pow exit 0 wall 1039 s
+s =          1
+
+ FORTRAN STOP: finished parallel parameter evaluation successfully.
+real 1038.54
+user 2934.82
+sys 12.18
+
