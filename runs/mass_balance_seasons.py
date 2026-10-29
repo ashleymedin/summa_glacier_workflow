@@ -33,7 +33,7 @@ def stakes(name):
     s = pd.read_csv(f'{WF}/data/domain_{name}/observations/storage/mass_balance/Input_{name}_Glaciological_Data.csv')
     for c in ('spring_date', 'fall_date'):
         s[c] = pd.to_datetime(s[c], format='%Y/%m/%d', errors='coerce')
-    return s[(s.Year >= 2009) & (s.Year <= 2022)]
+    return s
 
 
 def at(t, cum, date):
@@ -50,7 +50,7 @@ def profile(name, label=LABEL, verbose=True):
         f0 = prev.fall_date.median() if prev.fall_date.notna().any() else pd.Timestamp(y - 1, 9, 30)
         f1 = g.fall_date.median() if g.fall_date.notna().any() else pd.Timestamp(y, 9, 30)
         sp = g.spring_date.median()
-        if f0 < t[0]:
+        if f0 < t[0] or f1 > t[-1]:
             continue
         mw = at(t, cum, sp) - at(t, cum, f0)
         ma = at(t, cum, f1) - at(t, cum, f0)
