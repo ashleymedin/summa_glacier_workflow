@@ -24,4 +24,4 @@ for fn in sys.argv[1:]:
                 res[k][caller] += n; tot[k] += n
 for k in LEAF:
     print(f"== {k}: {100*tot[k]/main:.1f}% of main-thread samples")
-    for c, n in res[k].most_common(15): print(f"  {100*n/main:5.1f}%  {c}")
+    for c, n in res[k].most_common(int(__import__("os").environ.get("NTOP","15"))): print(f"  {100*n/main:5.1f}%  {c}")

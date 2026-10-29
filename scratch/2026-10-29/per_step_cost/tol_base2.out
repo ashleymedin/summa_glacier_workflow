@@ -1,0 +1,8 @@
+base2 exit 0 wall 1099 s
+ds =          1
+
+ FORTRAN STOP: finished parallel parameter evaluation successfully.
+real 1099.27
+user 3254.95
+sys 6.24
+
