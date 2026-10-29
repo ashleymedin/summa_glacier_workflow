@@ -1,0 +1,8 @@
+flux exit 0 wall 1283 s
+s =          1
+
+ FORTRAN STOP: finished parallel parameter evaluation successfully.
+real 1282.70
+user 3627.05
+sys 14.15
+

@@ -1,0 +1,8 @@
+be12 exit 0 wall 381 s
+ads =          1
+
+ FORTRAN STOP: finished parallel parameter evaluation successfully.
+real 380.91
+user 1117.13
+sys 1.23
+
