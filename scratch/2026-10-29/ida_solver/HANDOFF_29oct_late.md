@@ -38,3 +38,5 @@ Branches live in the summa repo, so they survive the scratchpad.
 - Wolverine default IDA spinup to 2016-10-01, one process: bf finishes in 148 s; sm2 had NOT finished when checked, so the
   psi-smooth2 IDA stall is in the default spinup between 2016-04-20 and 2016-10-01. Bisect the date with spinrun.py.
 - sm2_wol_be (Wolverine BE, combined branch) wrote no result (sm2_wol_be.out empty); rerun it.
+- Confirmed: sm2 full-year spinup hit the 1500 s timeout (bf: 148 s). Its last logged date (2016-04-03) is only the buffered
+  stdout; the run to 2016-04-20 passes in 85 s, so the stall starts after 2016-04-20.
