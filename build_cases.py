@@ -12,9 +12,6 @@ that differ between the upland soil and the debris are then written into its tri
           and topology are written into <dest>
   merge   two domains become one, one GRU each, with their HRUs, glacier grids and forcing side by side
 
-A case whose targets leave out stream_temperature runs without bedrock layers or hyporheic exchange (deepTherml
-and hyporhTdyn none), which only the stream temperature needs.
-
     ./build_cases.py cases.yaml gulkana_test wolverine_test
 """
 
@@ -86,17 +83,6 @@ def set_precip_grad(inputs, source):
         lines[-1] += "\n"
     lines.append(f"{'precipElevGrad':<26}| {grad:12.5f} | {0.0:12.4f} | {0.005:12.4f}\n")
     open(params, "w").writelines(lines)
-
-
-def drop_stream_thermal(inputs):
-    """deepTherml and hyporhTdyn set to none in the case's modelDecisions.txt, for a case not scored on stream temperature."""
-    path = os.path.join(inputs, "modelDecisions.txt")
-    lines = open(path).readlines()
-    for i, l in enumerate(lines):
-        w = l.split()
-        if w and w[0] in ("deepTherml", "hyporhTdyn"):
-            lines[i] = l.replace(w[1], "none", 1)
-    open(path, "w").writelines(lines)
 
 
 def merge_netcdf(paths, out, concat, shift, keep=None):
@@ -213,8 +199,6 @@ def build_inputs(name, spec, cases_dir):
     if not os.path.isdir(inputs):
         template = os.path.abspath(os.path.join(cases_dir, spec["template"]))
         shutil.copytree(template, inputs, ignore=shutil.ignore_patterns("attributes.nc", "coldState.nc", "forcingFileList.txt"))
-    if "targets" in spec and "stream_temperature" not in spec["targets"]:
-        drop_stream_thermal(inputs)
     months = months_between(spec["first_month"], spec["last_month"])
     copy_forcing = spec.get("copy_forcing", True)
     with tempfile.TemporaryDirectory() as tmp:
