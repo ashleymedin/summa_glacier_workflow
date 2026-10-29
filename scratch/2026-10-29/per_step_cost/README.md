@@ -11,3 +11,4 @@ Per-step cost of IDA on the gulkana_wolverine case, summa solver slowdown plan, 
                  base2/base3 (head 97f7a3af), stk (-fstack-arrays, segfaults after 2 min, dropped), alloc (234d4ae5 + 10a0b5de: 3316 -> 3123 s, bit-identical)
                  base4 (97f7a3af) vs tab (7b627b83, soil lookup tables kept by parameters): 3508 -> 3012 s, bit-identical
                  tab2 (7b627b83) vs pow (5c93c446, two-pow soil functions): 3084 -> 2935 s, objectives within 3e-6
+                 queue_total.sh: 67f0d897 vs 006eaf96 paired, see queue_total.out (Wolverine IDA 3901 -> 2893 s, BE 1191 -> 905 s; Bow IDA 121 -> 97 s, BE 66 -> 60 s)

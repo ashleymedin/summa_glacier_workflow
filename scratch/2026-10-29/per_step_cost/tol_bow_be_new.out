@@ -1,0 +1,8 @@
+bow_be_new exit 0 wall 28 s
+hreads =          1
+
+ FORTRAN STOP: finished parallel parameter evaluation successfully.
+real 28.17
+user 60.42
+sys 0.33
+

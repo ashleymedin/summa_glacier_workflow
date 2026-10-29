@@ -1,0 +1,8 @@
+wol_be_new exit 0 wall 321 s
+eads =          1
+
+ FORTRAN STOP: finished parallel parameter evaluation successfully.
+real 320.81
+user 904.53
+sys 3.56
+

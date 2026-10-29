@@ -1,0 +1,8 @@
+wol_dflt_new exit 0 wall 1033 s
+s =          1
+
+ FORTRAN STOP: finished parallel parameter evaluation successfully.
+real 1032.83
+user 2892.87
+sys 11.66
+

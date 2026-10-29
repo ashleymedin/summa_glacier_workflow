@@ -1,0 +1,24 @@
+== wol_dflt
+wol_dflt_old exit 0 wall 1377 s
+user 3901.18
+wol_dflt_new exit 0 wall 1033 s
+user 2892.87
+wol_dflt_new: failed 0, identical False, max |diff| per target 1.18e-07 1.91e-07 2.86e-06 1.01e-11
+== wol_be
+wol_be_old exit 0 wall 417 s
+user 1191.44
+wol_be_new exit 0 wall 321 s
+user 904.53
+wol_be_new: failed 0, identical False, max |diff| per target 1.02e-08 1.1e-09 8.89e-09 1.02e-11
+== bow_dflt
+bow_dflt_old exit 0 wall 49 s
+user 120.83
+bow_dflt_new exit 0 wall 41 s
+user 96.72
+bow_dflt_new: failed 0, identical False, max |diff| per target 0.0051
+== bow_be
+bow_be_old exit 0 wall 30 s
+user 66.29
+bow_be_new exit 0 wall 28 s
+user 60.42
+bow_be_new: failed 0, identical False, max |diff| per target 0.000918

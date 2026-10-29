@@ -1,0 +1,8 @@
+bow_dflt_new exit 0 wall 41 s
+hreads =          1
+
+ FORTRAN STOP: finished parallel parameter evaluation successfully.
+real 40.73
+user 96.72
+sys 0.44
+
