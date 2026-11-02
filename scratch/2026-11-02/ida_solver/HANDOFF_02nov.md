@@ -21,14 +21,15 @@ Branch `psi-smooth3` lives in the summa repo = psi-smooth2 (15511ef7) + e81c8aba
   per-domain steps and soil states (use the non-opt exe; _opt needs >= 2 ranks). tolall.py (2026-10-28) Wolverine
   now uses tolall_bf_wol/config.toml, because wolverine_run was removed and gulkana_wolverine_run is a different calibration.
 
-## Running
-- queue_sm3.sh (started 11:07): sm3_wol (IDA) and sm3_wol_be, 8 trials x 3 ranks; then Bow sm3_bow_be and sm3_bow_i,
-  48 trials. Output to 2026-10-28/ida_solver/<tag>.out.
+## sm3 calibration comparison (queue_sm3.sh, 0 failed in all four)
+- Wolverine IDA 8 trials: CPU 3285 s vs bf_wol 3507 s; discharge <= 1e-7, stream temp <= 2e-6, mass balance <= 4e-5.
+- Wolverine BE 8 trials: 1145 s vs bf_wol_be 1221 s; discharge <= 6e-7, mass balance <= 2e-3.
+- Bow BE 48: 318 s vs b0 319 / sm2 326; vs b0 median 0, max 6e-5; vs sm2 max 8e-4.
+- Bow IDA 48: 519 s vs b0 522 / sm2 516; vs b0 identical (47 shared); vs sm2 max 0.012.
+- Baselines are from 29 Oct, so CPU is not a paired measurement.
 
 ## Open
-1. Compare sm3 results with cmp_objectives.py (/Users/amedin/miniconda3/envs/glacier/bin/python):
-   sm3_wol vs bf_wol (IDA 3507 s), sm3_wol_be vs bf_wol_be (1221 s), sm3_bow_be vs b0/sm2 (319/326 s),
-   sm3_bow_i vs b0/sm2 (522/516 s).
+1. Done (above).
 2. Put f2cd9285 on multi-calib after a quiet-machine IDA CPU check (bf_wol vs b0_wol).
 3. Then psi-smooth3 (92ccc687 + 15511ef7 + e81c8aba) onto multi-calib with one "-" changelog entry.
 4. Plan-doc items untouched: freezing-onset smoothing, energy relTol 0, sampled first generation at absTol 1e-4.
