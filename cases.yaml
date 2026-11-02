@@ -49,11 +49,11 @@ wolverine_general:
   dest: runs/wolverine_general
   template: tests/wolverine/summa_inputs
   first_month: 2004-10
-  last_month: 2026-09
+  last_month: 2025-06                 # 2026-09 once the ERA5 after Jun 2025 is in
   forcing: raw
   copy_forcing: false
   calibrate: [2005-10-01, 2015-09-30]
-  evaluate: [2015-10-01, 2026-09-30]
+  evaluate: [2015-10-01, 2025-06-30]  # 2026-09-30 once the ERA5 after Jun 2025 is in
   targets: [discharge, grace]
 
 wolverine_added:
@@ -61,11 +61,11 @@ wolverine_added:
   dest: runs/wolverine_added
   template: tests/wolverine/summa_inputs
   first_month: 2004-10
-  last_month: 2026-09
+  last_month: 2025-06                 # 2026-09 once the ERA5 after Jun 2025 is in
   forcing: station_corrected
   copy_forcing: false
   calibrate: [2005-10-01, 2015-09-30]
-  evaluate: [2015-10-01, 2026-09-30]
+  evaluate: [2015-10-01, 2025-06-30]  # 2026-09-30 once the ERA5 after Jun 2025 is in
   targets: [discharge, mass_balance, stream_temperature]
 
 gulkana_general:
@@ -73,11 +73,11 @@ gulkana_general:
   dest: runs/gulkana_general
   template: tests/gulkana/summa_inputs
   first_month: 2004-10
-  last_month: 2026-09
+  last_month: 2025-06                 # 2026-09 once the ERA5 after Jun 2025 is in
   forcing: raw
   copy_forcing: false
   calibrate: [2005-10-01, 2015-09-30]
-  evaluate: [2015-10-01, 2026-09-30]
+  evaluate: [2015-10-01, 2025-06-30]  # 2026-09-30 once the ERA5 after Jun 2025 is in
   targets: [discharge, grace]
 
 gulkana_added:
@@ -85,11 +85,11 @@ gulkana_added:
   dest: runs/gulkana_added
   template: tests/gulkana/summa_inputs
   first_month: 2004-10
-  last_month: 2026-09
+  last_month: 2025-06                 # 2026-09 once the ERA5 after Jun 2025 is in
   forcing: station_corrected
   copy_forcing: false
   calibrate: [2005-10-01, 2015-09-30]
-  evaluate: [2015-10-01, 2026-09-30]
+  evaluate: [2015-10-01, 2025-06-30]  # 2026-09-30 once the ERA5 after Jun 2025 is in
   targets: [discharge, mass_balance]
 
 # the earlier full runs of glacier.tex: spin-up 2008, calibrated 2009-2015, evaluated 2016-2022
