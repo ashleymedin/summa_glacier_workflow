@@ -29,12 +29,13 @@ import netCDF4 as nc4
 import numpy as np
 import pandas as pd
 import rasterio
+from scipy.ndimage import gaussian_filter
 from matplotlib.colors import LightSource
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch, Rectangle
 from rasterio.features import geometry_mask
 from rasterio.warp import Resampling, reproject
-from shapely.geometry import LineString, Point, box
+from shapely.geometry import LineString, Point, Polygon, box
 
 from domain_config import load_config
 
@@ -50,6 +51,28 @@ def on_grid(path, like):
     return out
 
 
+def soft(mask):
+    """A boolean raster as a blurred 0-1 field, so its 0.5 contour is a smooth outline (display only)."""
+    return gaussian_filter(mask.astype(float), 1.0)
+
+
+def chaikin(geom, n=3):
+    """A line or polygon with its corners cut n times (display only); the staircase of a raster outline becomes a smooth curve."""
+    def cut(xy, closed):
+        for _ in range(n):
+            xy = np.asarray(xy)
+            a, b = (xy, np.roll(xy, -1, axis=0)) if closed else (xy[:-1], xy[1:])
+            q = np.empty((2 * len(a), 2))
+            q[0::2], q[1::2] = 0.75 * a + 0.25 * b, 0.25 * a + 0.75 * b
+            xy = q if closed else np.vstack([xy[:1], q, xy[-1:]])
+        return xy
+    if geom.geom_type in ("MultiPolygon", "GeometryCollection", "MultiLineString"):
+        return geom.__class__([chaikin(g, n) for g in geom.geoms])
+    if geom.geom_type == "Polygon":
+        return Polygon(cut(geom.exterior.coords[:-1], True), [cut(r.coords[:-1], True) for r in geom.interiors])
+    return LineString(cut(geom.coords, geom.coords[0] == geom.coords[-1]))
+
+
 def panel(ax, config, a, setup, keep_out, letter):
     c = load_config(config)
     project, name = c["project_dir"], c["domain"]
@@ -62,6 +85,8 @@ def panel(ax, config, a, setup, keep_out, letter):
         debris = on_grid(os.path.join(project, "attributes", "glaciers", f"domain_{name}_domain_type.tif"), like) == 4
     basin = gpd.read_file(glob.glob(os.path.join(project, "shapefiles", "river_basins", "*.shp"))[0]).to_crs(crs)
     hrus = gpd.read_file(os.path.join(project, "shapefiles", "catchment", f"{name}_HRUs_elevation.shp")).to_crs(crs)
+    smooth_hrus = hrus.set_geometry(hrus.geometry.map(chaikin))
+    smooth_basin = basin.set_geometry(basin.geometry.map(chaikin))
     outside = ~geometry_mask(list(basin.geometry), transform=tr, invert=True, out_shape=shape)
     x0, y0, x1, y1 = basin.total_bounds
     pad = 0.06 * max(x1 - x0, y1 - y0)
@@ -95,14 +120,14 @@ def panel(ax, config, a, setup, keep_out, letter):
                 text.set_zorder(12)
     ax.imshow(np.where(outside, 1.0, np.nan), cmap="gray_r", vmin=0, vmax=1.3, alpha=0.55, extent=extent, zorder=2)
     if debris.any():
-        ax.contourf(xs, ys, (debris & ~outside).astype(float), levels=[0.5, 1.5], colors=[BROWN], alpha=0.5, zorder=0.5)
-        ax.contour(xs, ys, (debris & ~outside).astype(float), levels=[0.5], colors=["#6b3a12"], linewidths=0.9, zorder=3)
-    ax.contourf(xs, ys, (ext & ~glc).astype(float), levels=[0.5, 1.5], colors=[PINK], alpha=0.45, zorder=3)
-    ax.contour(xs, ys, (ext & ~glc).astype(float), levels=[0.5], colors=[PINK], linewidths=1.0, zorder=4)
-    start = ax.contour(xs, ys, glc.astype(float), levels=[0.5], linewidths=0)  # outline traced on cell edges, clipped to the basin polygon
-    gpd.GeoSeries([LineString(seg).intersection(basin.geometry.iloc[0]) for seg in start.allsegs[0] if len(seg) > 1]).plot(ax=ax, color=PURPLE, linewidth=1.3, zorder=5)
-    hrus.boundary.plot(ax=ax, color=GREEN, linewidth=1.8, zorder=6)
-    basin.boundary.plot(ax=ax, color="black", linewidth=1.8, zorder=7)
+        ax.contourf(xs, ys, soft(debris & ~outside), levels=[0.5, 1.5], colors=[BROWN], alpha=0.5, zorder=0.5)
+        ax.contour(xs, ys, soft(debris & ~outside), levels=[0.5], colors=["#6b3a12"], linewidths=0.9, zorder=3)
+    ax.contourf(xs, ys, soft(ext & ~glc), levels=[0.5, 1.5], colors=[PINK], alpha=0.45, zorder=3)
+    ax.contour(xs, ys, soft(ext & ~glc), levels=[0.5], colors=[PINK], linewidths=1.0, zorder=4)
+    start = ax.contour(xs, ys, soft(glc), levels=[0.5], linewidths=0)  # outline traced on cell edges, clipped to the basin polygon
+    gpd.GeoSeries([LineString(seg).intersection(smooth_basin.geometry.union_all()) for seg in start.allsegs[0] if len(seg) > 1]).plot(ax=ax, color=PURPLE, linewidth=1.3, zorder=5)
+    smooth_hrus.boundary.plot(ax=ax, color=GREEN, linewidth=1.8, zorder=6)
+    smooth_basin.boundary.plot(ax=ax, color="black", linewidth=1.8, zorder=7)
     lat, lon = (float(v) for v in c["pour_point"].split("/"))
     gx, gy = gpd.GeoSeries([Point(lon, lat)], crs=4326).to_crs(crs).iloc[0].coords[0]
     ax.plot(gx, gy, marker="^", ms=15, mfc=RED, mec="white", mew=1.5, ls="none", zorder=13)
