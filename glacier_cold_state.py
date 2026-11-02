@@ -15,9 +15,9 @@ domain with a clean one beside it wherever the glacier has debris, so debris can
 is kept only where one HRU holds the whole glacier. Any domain may start with zero area.
 
 Layering: clean glacier ice has five layers, 0.15, 0.30, 1.80, 4.75 and 23 m thick. A debris domain puts
-soil layers over the same ice, as many as its debris may need (2 to 5): the fewest whose top layer of at most
---debris-top-max, each layer up to 3 times the one above, reach the thickest debris cell of the HRU, since
-debris advection can thicken the domain toward it and the count is fixed for the run.
+soil layers over the same ice, at least 2: the fewest whose top layer of at most --debris-top-max, each layer
+up to 3 times the one above, reach --debris-headroom times the HRU's mean debris thickness, since debris
+advection can thicken the domain and the count is fixed for the run.
 The debris is split as SUMMA re-splits it at each glacier update: the top layer the smaller of an equal share
 and --debris-top-max, each layer below a fixed ratio times the one above, so thin debris splits evenly.
 
@@ -67,12 +67,12 @@ def debris_layering(thick, n_layers, top_max):
     return depths
 
 
-def debris_layer_count(thick, top_max, growth=3.0, fewest=2, most=5):
+def debris_layer_count(thick, top_max, growth=3.0, fewest=2):
     """Fewest debris layers whose top layer of top_max, each up to growth times the one above, reach thick."""
-    for n in range(fewest, most + 1):
-        if top_max * sum(growth**k for k in range(n)) >= thick:
-            return n
-    return most
+    n = fewest
+    while top_max * sum(growth**k for k in range(n)) < thick:
+        n += 1
+    return n
 
 
 def first_year_air_temperature(forcing_dir, hru_ids, start):
@@ -316,7 +316,7 @@ def build_domains(project_dir, hru_ids, hru_area, single_glac_hru, hru_id_column
     return dom, debris_thick
 
 
-def build_layers(dom_type, debris_thick, debris_max, upland_heights, upland_nsoil, upland_nsnow, a):
+def build_layers(dom_type, debris_thick, upland_heights, upland_nsoil, upland_nsnow, a):
     """Layer counts and interface heights of every domain (heights indexed [dom, hru, interface])."""
     n_hru, n_dom = dom_type.shape[1], dom_type.shape[2]
     n_glce = len(ICE_DEPTHS)
@@ -333,7 +333,7 @@ def build_layers(dom_type, debris_thick, debris_max, upland_heights, upland_nsoi
                 columns[(i, j)] = np.concatenate([[0.0], ICE_DEPTHS])
             elif t == DEBRIS:
                 thick = max(debris_thick[i], a.debris_min)
-                n_debris = debris_layer_count(max(thick, debris_max[i]), a.debris_top_max)
+                n_debris = debris_layer_count(thick * a.debris_headroom, a.debris_top_max)
                 debris = np.cumsum(debris_layering(thick, n_debris, a.debris_top_max))
                 counts["nSoil"][0, i, j], counts["nGlce"][0, i, j] = n_debris, n_glce
                 columns[(i, j)] = np.concatenate([[0.0], debris, thick + ICE_DEPTHS])
@@ -366,6 +366,8 @@ def main():
     p.add_argument("--ice-temp", type=float, default=-5.0, help="glacier ice starting temperature, deg C")
     p.add_argument("--debris-min", type=float, default=0.02, help="thinnest debris, m (glacAreaChange.f90 min_thickness)")
     p.add_argument("--debris-top-max", type=float, default=0.05, help="thickest top debris layer, m (maxDebrisTop)")
+    p.add_argument("--debris-headroom", type=float, default=3.0,
+                   help="debris layers are counted for this many times the HRU's mean debris thickness")
     p.add_argument("--gru-threshold", type=float, default=0.8,
                    help="fraction of a glacier's cells that must lie in a GRU for it to belong there")
     p.add_argument("--wall-pad", type=float, default=500.0,
@@ -404,7 +406,7 @@ def main():
                               ("mLayerVolFracLiq", 0.2), ("mLayerMatricHead", -1.0), ("dt_init", 3600)):
             states[name] = float(np.asarray(ds[name][:]).flat[0]) if name in ds.variables else default
     debris_max = np.array([grids["debris"][grids["cell2hru"] == hru].max(initial=0.0) for hru in hru_ids])
-    counts, heights, n_toto = build_layers(dom["domType"], debris_thick, debris_max, upland_heights, upland_nsoil, upland_nsnow, a)
+    counts, heights, n_toto = build_layers(dom["domType"], debris_thick, upland_heights, upland_nsoil, upland_nsnow, a)
     depths = np.maximum(heights[:, :, 1:] - heights[:, :, :-1], 0.0)
     n_dom = dom["domType"].shape[2]
     n_hru = len(hru_ids)
@@ -414,7 +416,7 @@ def main():
     maat = first_year_air_temperature(forcing, list(hru_ids), a.start)
     for i, hru in enumerate(hru_ids):
         thick = max(debris_thick[i], a.debris_min)
-        n = debris_layer_count(max(thick, debris_max[i]), a.debris_top_max)
+        n = debris_layer_count(thick * a.debris_headroom, a.debris_top_max)
         print(f"HRU {hru}: first-year mean air temperature from {a.start} {maat[i] - TFREEZE:.2f} degC, debris {thick:.3f} m "
               f"(mapped {debris_thick[i]:.3f} m, thickest cell {debris_max[i]:.2f} m) in {n} layers "
               f"{np.round(debris_layering(thick, n, a.debris_top_max), 3).tolist()} m")
