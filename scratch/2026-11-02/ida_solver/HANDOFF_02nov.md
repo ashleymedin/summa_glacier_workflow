@@ -28,9 +28,16 @@ Branch `psi-smooth3` lives in the summa repo = psi-smooth2 (15511ef7) + e81c8aba
 - Bow IDA 48: 519 s vs b0 522 / sm2 516; vs b0 identical (47 shared); vs sm2 max 0.012.
 - Baselines are from 29 Oct, so CPU is not a paired measurement.
 
+## Merges, 2 Nov evening
+- Paired IDA CPU check (queue_bfq.sh, run concurrently): bf 3285 s vs b0 3324 s, 0 failed; the fix itself moves
+  discharge <= 2e-4, mass balance <= 0.07, stream temp <= 0.02.
+- Cherry-picked onto multi-calib: 57d2f1f3 (debris baseflow), a44ebb23, b2a8b057, ece1f50d (psi smoothing).
+  No changelog entries (the user removed -90 in 567a4bf6; fixes to post-V3 glacier/IDA work get none).
+- Same four onto develop (wdev worktree): 409a5a0c, 44da3796, 3ad6986d, 24ffe886. Builds; not run.
+  wdev's bld/bldnm point at the removed MacOSX27.0 SDK and no longer link; reconfigure them.
+- Merged multi-calib (queue_mc.sh): Wolverine IDA 2713 s, BE 851 s, 0 failed; vs sm3 discharge <= 4e-9,
+  mass balance <= 2e-5 (round-off). CPU vs sm3 (3285/1145) not paired; the rest is later multi-calib speedups.
+
 ## Open
-1. Done (above).
-2. Put f2cd9285 on multi-calib after a quiet-machine IDA CPU check (bf_wol vs b0_wol).
-3. Then psi-smooth3 (92ccc687 + 15511ef7 + e81c8aba) onto multi-calib with one "-" changelog entry.
-4. Plan-doc items untouched: freezing-onset smoothing, energy relTol 0, sampled first generation at absTol 1e-4.
-5. Old worktrees wroot/wadapt/wbrent (session b2242790) still need `git worktree remove --force` by the user.
+1. Plan-doc items untouched: freezing-onset smoothing, energy relTol 0, sampled first generation at absTol 1e-4.
+2. Old worktrees wroot/wadapt/wbrent (session b2242790) still need `git worktree remove --force` by the user.
