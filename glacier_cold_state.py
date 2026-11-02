@@ -366,7 +366,7 @@ def main():
     p.add_argument("--ice-temp", type=float, default=-5.0, help="glacier ice starting temperature, deg C")
     p.add_argument("--debris-min", type=float, default=0.02, help="thinnest debris, m (glacAreaChange.f90 min_thickness)")
     p.add_argument("--debris-top-max", type=float, default=0.05, help="thickest top debris layer, m (maxDebrisTop)")
-    p.add_argument("--debris-headroom", type=float, default=3.0,
+    p.add_argument("--debris-headroom", type=float, default=2.0,
                    help="debris layers are counted for this many times the HRU's mean debris thickness")
     p.add_argument("--gru-threshold", type=float, default=0.8,
                    help="fraction of a glacier's cells that must lie in a GRU for it to belong there")
