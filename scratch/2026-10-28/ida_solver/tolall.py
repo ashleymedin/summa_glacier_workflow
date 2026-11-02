@@ -7,7 +7,7 @@ T = "/Users/amedin/Research/SummaSundials/summa/utils/test/test_calibration"
 S = os.path.dirname(os.path.abspath(__file__)); R = f"{S}/tolall_{tag}"
 shutil.rmtree(R, ignore_errors=True); os.makedirs(f"{R}/output"); os.makedirs(f"{R}/state")
 SRC = os.path.normpath(f"{T}/gulkana_wolverine/summa_inputs" if CASE == "wolverine" else f"{T}/../test_mizuroute/bow_real_data/summa_inputs")
-CFG = f"{T}/wolverine_run/config.toml" if CASE == "wolverine" else f"{T}/bow_calibration/config.toml"
+CFG = f"{S}/tolall_bf_wol/config.toml" if CASE == "wolverine" else f"{T}/bow_calibration/config.toml"  # Wolverine: setup of the removed wolverine_run
 shutil.copytree(SRC, f"{R}/inputs")
 shutil.copy(f"{SRC}/coldState.nc", f"{R}/state/")
 if val != "be":
@@ -24,7 +24,7 @@ if val != "be":
     if names: s = re.sub(r"^(lowerBoundHead [^\n]*)(?=\n)", lambda m: m.group(1) + "\n" + rows, s, count=1, flags=re.M)
     open(p, "w").write(s)
 c = open(CFG).read()
-c = c.replace(SRC + "/", f"{R}/inputs/").replace(f"{T}/{'wolverine_run' if CASE == 'wolverine' else 'bow_calibration'}/", f"{R}/")
+c = c.replace(SRC + "/", f"{R}/inputs/").replace(f"{S}/tolall_bf_wol/" if CASE == "wolverine" else f"{T}/bow_calibration/", f"{R}/")
 c = re.sub(r"^n_samples = .*", f"n_samples = {ns}", c, flags=re.M)
 open(f"{R}/config.toml", "w").write(c)
 t0 = time.time()
