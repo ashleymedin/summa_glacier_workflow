@@ -15,6 +15,7 @@ if val != "be":
     s = re.sub(r"^num_method\s+homegrown", "num_method                      ida      ", s, count=1, flags=re.M)
     open(p, "w").write(s)
     names = [] if val == "dflt" else [f"{k}Tol{v}" for v in ("TempCas", "TempVeg", "WatVeg", "TempSoilSnow", "WatSnow", "Matric", "Aquifr") for k in ("rel", "abs")]
+    if os.environ.get("TOLNAMES"): names = [n for n in names if n in os.environ["TOLNAMES"].split(",")]  # TOLNAMES: move only these tolerances
     def fmt(n):  # SCALED=1: temperature/energy absolute tolerances keep the absEnergyFac of 1e7 (enthalpyForm), as the defaults do
         if os.environ.get("SCALED") and n.startswith("absTolTemp"): return ("%.3e" % (float(val.replace("d", "e")) * 1e7)).replace("e", "d"), "1.0d+15"
         if os.environ.get("RELTOL_ENERGY") and n.startswith("relTolTemp"): return os.environ["RELTOL_ENERGY"], "0.1"  # RELTOL_ENERGY: relative tolerance for energy states only
@@ -26,6 +27,7 @@ if val != "be":
 c = open(CFG).read()
 c = c.replace(SRC + "/", f"{R}/inputs/").replace(f"{S}/tolall_bf_wol/" if CASE == "wolverine" else f"{T}/bow_calibration/", f"{R}/")
 c = re.sub(r"^n_samples = .*", f"n_samples = {ns}", c, flags=re.M)
+if os.environ.get("PARAMS"): c = re.sub(r"^param_list = \[", "param_list = [" + "".join(f'"{x}", ' for x in os.environ["PARAMS"].split(",")), c, count=1, flags=re.M)  # PARAMS: extra calibrated parameters
 open(f"{R}/config.toml", "w").write(c)
 t0 = time.time()
 r = subprocess.run(["/usr/bin/time", "-p", "mpirun", "-np", nr, exe, "-c", "config.toml"], cwd=R,
