@@ -14,7 +14,7 @@ data:
   debris_thickness: data/external/Debris_thick
   ice_thickness: data/external/Thickness_data
   usgs_outlines: data/external/GlacierDEM/USGS_Glacier_Boundaries_shp/USGS_Glacier_Boundaries.shp
-usgs_outline: {glacier: Wolverine Glacier, date: 2006/08/08, dem: data/external/GlacierDEM/EasternKenai_20060808_DEM/EasternKenai_20060808_DEM.tif}  # the survey before the 2008 start, in place of RGI's
+usgs_outline: {glacier: Wolverine Glacier, date: 2004/10/01, outlines: [1998/09/24, 2006/08/08], dems: [data/external/GlacierDEM/EasternKenai_19950927_DEM/EasternKenai_19950927_DEM.tif, data/external/GlacierDEM/EasternKenai_20060808_DEM/EasternKenai_20060808_DEM.tif]}  # interpolated in time to the 2004-10 start, in place of RGI's
 millan_reference: {date: 2015/08/13, dem: data/external/GlacierDEM/EasternKenai_20150813_DEM/EasternKenai_20150813_DEM.tif}  # the survey inside Millan's 2010-2020 decade; the bed is it less his thickness
 later_outline: {date: 2020/10/19, dems: data/external/GlacierDEM/ArcticDEM_Wolverine}  # the last survey; ArcticDEM strips after it give the bed where ice melted out
 usgs_datum: -14.0                               # m added to USGS heights (WGS84 ellipsoid) to give the model DEM's
@@ -39,7 +39,8 @@ observations:
 # late-summer scenes check_glacier_imagery.py compares with the starting and final glacier
 imagery: {landsat: [2004, 2005, 2009, 2010], sentinel: [2019, 2021, 2025, 2026]}
 
-cold_start: 2008-01
+start_debris_scenes: [observations/imagery/imagery_landsat_2004-08-29.tif, observations/imagery/imagery_landsat_2005-08-08.tif]  # imagery classes near the start; debris mapped ~2010 that they show as ice starts clean
+cold_start: 2004-10
 soil_offset: 1.5
 ice_temp: -5.0
 
