@@ -34,7 +34,7 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Patch, Rectangle
 from rasterio.features import geometry_mask
 from rasterio.warp import Resampling, reproject
-from shapely.geometry import Point, box
+from shapely.geometry import LineString, Point, box
 
 from domain_config import load_config
 
@@ -60,8 +60,8 @@ def panel(ax, config, a, setup, keep_out, letter):
         glc = on_grid(os.path.join(project, "attributes", "glaciers", f"domain_{name}_rgi_id.tif"), like) > 0
         ext = on_grid(os.path.join(project, "attributes", "glaciers", f"domain_{name}_rgi_id_extend.tif"), like) > 0
         debris = on_grid(os.path.join(project, "attributes", "glaciers", f"domain_{name}_domain_type.tif"), like) == 4
-    basin = gpd.read_file(glob.glob(os.path.join(project, "shapefiles", "river_basins", "*.shp"))[0]).to_crs(crs)
     hrus = gpd.read_file(os.path.join(project, "shapefiles", "catchment", f"{name}_HRUs_elevation.shp")).to_crs(crs)
+    basin = gpd.GeoDataFrame(geometry=[hrus.geometry.union_all()], crs=crs)  # the HRUs tile the basin; their union is the outline drawn
     outside = ~geometry_mask(list(basin.geometry), transform=tr, invert=True, out_shape=shape)
     x0, y0, x1, y1 = basin.total_bounds
     pad = 0.06 * max(x1 - x0, y1 - y0)
@@ -99,7 +99,8 @@ def panel(ax, config, a, setup, keep_out, letter):
         ax.contour(xs, ys, (debris & ~outside).astype(float), levels=[0.5], colors=["#6b3a12"], linewidths=0.9, zorder=3)
     ax.contourf(xs, ys, (ext & ~glc).astype(float), levels=[0.5, 1.5], colors=[PINK], alpha=0.45, zorder=3)
     ax.contour(xs, ys, (ext & ~glc).astype(float), levels=[0.5], colors=[PINK], linewidths=1.0, zorder=4)
-    ax.contour(xs, ys, (glc & ~outside).astype(float), levels=[0.5], colors=[PURPLE], linewidths=1.3, zorder=5)
+    start = ax.contour(xs, ys, glc.astype(float), levels=[0.5], linewidths=0)  # outline traced on cell edges, clipped to the basin polygon
+    gpd.GeoSeries([LineString(seg).intersection(basin.geometry.iloc[0]) for seg in start.allsegs[0] if len(seg) > 1]).plot(ax=ax, color=PURPLE, linewidth=1.3, zorder=5)
     hrus.boundary.plot(ax=ax, color=GREEN, linewidth=1.8, zorder=6)
     basin.boundary.plot(ax=ax, color="black", linewidth=1.8, zorder=7)
     lat, lon = (float(v) for v in c["pour_point"].split("/"))
