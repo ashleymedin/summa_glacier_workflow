@@ -60,8 +60,8 @@ def panel(ax, config, a, setup, keep_out, letter):
         glc = on_grid(os.path.join(project, "attributes", "glaciers", f"domain_{name}_rgi_id.tif"), like) > 0
         ext = on_grid(os.path.join(project, "attributes", "glaciers", f"domain_{name}_rgi_id_extend.tif"), like) > 0
         debris = on_grid(os.path.join(project, "attributes", "glaciers", f"domain_{name}_domain_type.tif"), like) == 4
+    basin = gpd.read_file(glob.glob(os.path.join(project, "shapefiles", "river_basins", "*.shp"))[0]).to_crs(crs)
     hrus = gpd.read_file(os.path.join(project, "shapefiles", "catchment", f"{name}_HRUs_elevation.shp")).to_crs(crs)
-    basin = gpd.GeoDataFrame(geometry=[hrus.geometry.union_all()], crs=crs)  # the HRUs tile the basin; their union is the outline drawn
     outside = ~geometry_mask(list(basin.geometry), transform=tr, invert=True, out_shape=shape)
     x0, y0, x1, y1 = basin.total_bounds
     pad = 0.06 * max(x1 - x0, y1 - y0)
