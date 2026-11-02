@@ -68,12 +68,13 @@ def terminus_shapes(grid, fdir, acc, gid, glacier_id):
         return shape
 
     shape0 = upstream(gridyx)
+    acc_terminus = np.where(shape0 == 1, acc_glacier, 0)  # a glacier with two outlets: stay above this one
     percentile, y1, x1, n = 100, y, x, 0
     shape1 = shape0.copy()
-    while (y1[n] == y[0] and x1[n] == x[0]) or (shape0 - shape1).sum() < 2:
+    while ((y1[n] == y[0] and x1[n] == x[0]) or ((shape0 == 1) & (shape1 == 0)).sum() < 2) and percentile > 0.1:
         percentile -= 0.1
-        y1, x1 = np.where(acc_glacier >= np.percentile(acc_glacier[acc_glacier > 0], percentile))
-        n = acc_glacier[y1, x1].argmin()  # the most upstream of them
+        y1, x1 = np.where(acc_terminus >= np.percentile(acc_terminus[acc_terminus > 0], percentile))
+        n = acc_terminus[y1, x1].argmin()  # the most upstream of them
         gridyx = (y1[n], x1[n])
         shape1 = upstream(gridyx)
     return acc_glacier, gridyx, shape0, shape1
@@ -82,7 +83,7 @@ def terminus_shapes(grid, fdir, acc, gid, glacier_id):
 def drag(grid, fdir, acc, gid, glacier_id, possible, surface):
     """Cells the glacier may advance into by dragging its terminus downstream, none above the terminus surface."""
     acc_glacier, gridyx, shape0, shape1 = terminus_shapes(grid, fdir, acc, gid, glacier_id)
-    ext_shape = shape0 - shape1
+    ext_shape = ((shape0 == 1) & (shape1 == 0)).astype(np.uint8)
     y, x = np.where(ext_shape == 1)
     for i in range(x.size):  # thicken a terminus one cell thick to two
         if np.sum(ext_shape[y[i] - 1:y[i] + 2, x[i] - 1:x[i] + 2]) <= 4:
