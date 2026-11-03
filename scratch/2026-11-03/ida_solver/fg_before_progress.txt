@@ -1,0 +1,2 @@
+fg4_wol: 7/16 trials, 20 windows, max window 142664645 steps
+fg5_wol: 3/16 trials, 10 windows, max window 443846413 steps
