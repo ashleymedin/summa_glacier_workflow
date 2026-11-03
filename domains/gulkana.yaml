@@ -20,6 +20,7 @@ millan_reference: {date: 2016/08/30, dem: data/external/GlacierDEM/Deltas_201608
 later_outline: {date: 2021/09/19, dems: data/external/GlacierDEM/ArcticDEM_Gulkana}  # the last survey; ArcticDEM strips after it give the bed where ice melted out
 usgs_datum: -16.1                               # m added to USGS heights (WGS84 ellipsoid) to give the model DEM's
 small_meltout: {dems: data/external/GlacierDEM/ArcticDEM_Gulkana_series, glaciers: [RGI60-01.00332, RGI60-01.00333, RGI60-01.00334, RGI60-01.22903]}   # multi-year strips (acquire_arcticdem.py --series): bed of the glaciers without a survey where their ice has gone
+glacier_dem: {dems: data/external/Copernicus_GLO30/*.tif, date: 2012/07/01, dhdt: data/external/Hugonnet/01_02_rgi60_2000-01-01_2020-01-01/dhdt/*.tif}  # TanDEM-X 2011-14; glacier cells off the surveys, carried to cold_start at the 2000-19 rates
 
 hru_bands: [1480, 1880]                          # elevation band edges, m, of the HRUs (make_hrus.py)
 basin_within: huc12                             # clip the basin to the USGS HUC12 of the gauge (acquire_nhd.py), US only

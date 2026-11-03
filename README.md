@@ -158,6 +158,8 @@ Downloaded by hand to the paths in the domain YAMLs:
 | Debris cover, ablation zones and outlines (Herreid and Pellicciotti, 2020), S1 | https://zenodo.org/records/3866466/files/SupplementaryInformation.zip |
 | Debris thickness (Rounce et al., 2021) | https://n5eil01u.ecs.nsidc.org/HMA/HMA_DTE.001/2000.01.01/ |
 | USGS benchmark-glacier survey outlines (McNeil et al., 2019, ver. 3.0), to `data/external/GlacierDEM/` | https://doi.org/10.5066/P9R8BP3K |
+| Copernicus GLO-30 DEM tiles over the glaciers, to `data/external/Copernicus_GLO30/` | https://copernicus-dem-30m.s3.amazonaws.com/ (`Copernicus_DSM_COG_10_<tile>_DEM/<same>.tif`) |
+| Elevation change rates 2000-2019 (Hugonnet et al., 2021), dhdt tiles of regions 01-02 | https://doi.org/10.6096/13 |
 | Glacier thickness (Millan et al., 2022) | https://www.sedoo.fr/theia-publication-products/?uuid=55acbdd5-3982-4eac-89b2-46703557938c |
 | USGS benchmark-glacier stations, stakes and glacier-wide balances | https://www.sciencebase.gov/catalog/item/6441de03d34ee8d4ade7d2a5 |
 | Gulkana 2024 Site B station (Wilson et al.) | `data/domain_Gulkana/observations/campaigns/wilson_2024` |

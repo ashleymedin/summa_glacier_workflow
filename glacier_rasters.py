@@ -9,9 +9,11 @@ From the global glacier products (each downloaded by hand, see README.md) writes
 
 and in attributes/elevation/dem domain_<name>_glacier_elv.tif, the glacier surface: the DEM, with the start
 surface of the glacier usgs_outline names (its survey DEM, or its survey DEMs interpolated in time to its date,
-or carried to it by the dhdt rate tiles, each levelled to the millan_reference survey; the change from the DEM carried smoothly over cells none covers);
+or carried to it by the dhdt rate tiles, each levelled to the millan_reference survey; the change from the DEM carried smoothly over cells none covers),
+and on glacier cells no survey covers, with glacier_dem, a dated DEM (Copernicus GLO-30) levelled to the DEM on the ground
+around the glaciers and carried from its date to cold_start at the dhdt rates;
 and domain_<name>_bedrock_elv.tif, Millan's reference surface (the survey DEM millan_reference names, levelled
-by usgs_datum, else the glacier surface) less his thickness, and that surface itself where the reference outline
+by usgs_datum, else the glacier_dem uncarried, else the glacier surface) less his thickness, and that surface itself where the reference outline
 has no ice; both again as *_elv_utm.tif on the flow model's UTM grid, with Millan sampled straight onto it. The
 start outline is that survey's, or between the two usgs_outline lists. Where later_outline names a later
 survey of that glacier, the bed under the ice lost between the two outlines is the surface of the ArcticDEM strips
@@ -341,15 +343,15 @@ def thickness_on_grid(files, glacier, grid, shape):
     return np.where(glacier, ice, 0.0)
 
 
-def rate_on_grid(files, grid, shape):
-    """A rate raster mosaic (Hugonnet's dh/dt tiles) sampled once onto a grid, bilinear, with cells it leaves bare
-    taking the nearest value."""
+def rate_on_grid(files, grid, shape, resampling=Resampling.bilinear):
+    """A raster mosaic (Hugonnet's dh/dt tiles, or DEM tiles) sampled once onto a grid, bilinear, with cells it leaves
+    bare taking the nearest value."""
     rate = np.full(shape, np.nan)
     for path in files:
         with rasterio.open(path) as s:
             out = np.full(shape, np.nan)
             reproject(rasterio.band(s, 1), out, src_transform=s.transform, src_crs=s.crs, src_nodata=s.nodata,
-                      dst_transform=grid.transform, dst_crs=grid.crs, dst_nodata=np.nan, resampling=Resampling.bilinear)
+                      dst_transform=grid.transform, dst_crs=grid.crs, dst_nodata=np.nan, resampling=resampling)
             rate = np.where(np.isfinite(out), out, rate)
     _, (r, k) = distance_transform_edt(~np.isfinite(rate), return_indices=True)
     return rate[r, k]
@@ -361,7 +363,9 @@ def surface_and_bed(c, dem, glacier, grid, ice, outlines, surveys, start):
     DEM by usgs_datum) less his thickness, and that surface itself where the reference outline has no ice, so it does not
     depend on the start. The start surface is the usgs_outline survey (dem), or the surveys it lists (dems)
     interpolated to its date, each levelled to the reference and, with dhdt (a glob of rate tiles), carried to the
-    date at that rate. Where later_outline names a later survey, the bed
+    date at that rate. With glacier_dem, glacier cells outside the survey take its dated DEM as Millan's reference,
+    levelled to the DEM by their median difference on the ice-free ground within 1 km, and that carried from its
+    date to cold_start at its dhdt rate tiles as the start surface. Where later_outline names a later survey, the bed
     under ice lost by then is the ArcticDEM surface after it."""
     usgs, ref, later = c.get("usgs_outline"), c.get("millan_reference"), c.get("later_outline")
     surface, anchor, reference = dem.astype(np.float64), None, None
@@ -382,6 +386,21 @@ def surface_and_bed(c, dem, glacier, grid, ice, outlines, surveys, start):
         dhdt = rate_on_grid(sorted(glob.glob(os.path.join(HERE, usgs["dhdt"]))), grid, dem.shape) if usgs.get("dhdt") else None
         surface, _ = survey_surface(dem, glacier, grid, ever, paths, decimal_year(usgs["date"]), anchor=anchor, dhdt=dhdt)
     reference = surface if reference is None else np.where(own, reference, surface)
+    gdem = c.get("glacier_dem")
+    if gdem:  # MERIT's date over ice is unknown, so the glaciers take a dated DEM
+        off = glacier & ~own if usgs else glacier
+        dated = rate_on_grid(sorted(glob.glob(os.path.join(HERE, gdem["dems"]))), grid, dem.shape, Resampling.average)
+        dx, dy = cell_size(grid, dem.shape)
+        ground = ~glacier & (distance_transform_edt(~glacier, sampling=(dy, dx)) <= 1000.0)
+        level = np.nanmedian((dem - dated)[ground])
+        dated = dated + level
+        rate = rate_on_grid(sorted(glob.glob(os.path.join(HERE, gdem["dhdt"]))), grid, dem.shape)
+        years = decimal_year(c["cold_start"].replace("-", "/") + "/01") - decimal_year(gdem["date"])
+        reference = np.where(off, dated, reference)
+        surface = np.where(off, dated + rate * years, surface)
+        print(f"glacier DEM of {gdem['date']}: levelled {level:+.1f} m to the DEM, "
+              f"{np.median((dated - dem)[off]):+.1f} m from the DEM on {off.sum()} glacier cells; carried {years:+.2f} yr, "
+              f"median {np.median(rate[off] * years):+.1f} m, largest {np.max(rate[off] * years):+.1f} m")
     bed = np.where(glacier, reference - ice, surface)
     if usgs and later:
         bed = melt_out_bed(dem, surface, bed, glacier, grid, gpd.GeoSeries([start], crs=surveys.crs),
