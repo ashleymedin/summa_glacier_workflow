@@ -18,6 +18,7 @@ data:
   ice_thickness: data/external/Thickness_data
 
 small_meltout: {dems: data/external/GlacierDEM/ArcticDEM_Wolverine_series, glaciers: [RGI60-01.09162]}
+glacier_dem: {dems: data/external/Copernicus_GLO30/*.tif, date: 2012/07/01, dhdt: data/external/Hugonnet/01_02_rgi60_2000-01-01_2020-01-01/dhdt/*.tif}  # TanDEM-X 2011-14; glacier cells off the surveys, carried to cold_start at the 2000-19 rates
 
 hru_bands: [950, 1315]                          # elevation band edges, m, of the HRUs (make_hrus.py)
 stream_network: wolverine_network.json            # the tributary network of the two-stream test (add_stream_network.py)
