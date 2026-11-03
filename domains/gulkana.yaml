@@ -32,6 +32,7 @@ observations:
   streamflow: {source: usgs, gauge: "15478040"}
   stream_temperature: {site: "15478040", aquarius: "stream_temperature/raw_data/Temperature,_water.degC.Work@15478040.20060223.xlsx"}
   grace: true
+  dussaillant: {release: data/external/wgms-amce-2026-02-10, region: ALA, outlines: [RGI60-01.00570, RGI60-01.00332, RGI60-01.00333, RGI60-01.00334, RGI60-01.22903]}
   mass_balance: {release: storage/mass_balance/Output_Gulkana_Glacier_Wide_solutions_calibrated.csv, balance: seasonal}
   velocity: true
   lake_area:
