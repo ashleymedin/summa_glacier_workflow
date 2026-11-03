@@ -1,0 +1,5 @@
+psiSmooth 1e-12 m (ns*, dns*) vs 1e-2 m (fx*, dsm*), both with the ratio-of-slopes derivative (b19bba51)
+fx4_wol: 16/16 trials, 0 windows, user 6650 s      ns4_wol: 2/16 trials at the 2.5 h cap, one 119,603,471-step window (frozen layer at psi -3.8e-7 m)
+fx5_wol: 16/16 trials, 0 windows, user 6631 s      ns5_wol: 16/16 trials, 5 windows (max 12,316,004 steps), user 9631 s
+dsm_wol: 1 window 21,375 steps, user 3556 s        dns_wol: 0 windows, user 3572 s, objectives within 2e-6
+dsm_bow: user 580 s                                 dns_bow: user 578 s
