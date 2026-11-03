@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write the annual mass change of Dussaillant et al. (2025) for a basin's glaciers as a SUMMA calibration observation file.
+"""Write the annual mass change of the WGMS annual mass-change estimates (Dussaillant et al., 2025) for a basin's glaciers as a SUMMA calibration observation file.
 
 The source is the WGMS release "Annual mass-change estimates for the world's glaciers" (doi:10.5904/wgms-amce-2026-02-10),
 unzipped under data/external; --release names its folder.  glacier/<region>_mwe.csv holds each RGI 6.0 glacier's
@@ -10,7 +10,7 @@ Values are written in mm w.e., each stamped at the end of its year (1 Oct), for 
 compares them with the change between the simulated mass minima near the year ends.  The series is the product's own:
 geodetic over the multi-year trend, with its year-to-year shape taken from glaciological records near the glacier.
 
-    ./acquire_dussaillant.py data/external/wgms-amce-2026-02-10 ALA RGI60-01.09162 wolverine_dussaillant.nc --first 2005
+    ./acquire_wgms_amce.py data/external/wgms-amce-2026-02-10 ALA RGI60-01.09162 wolverine_wgms_amce.nc --first 2005
 """
 
 import argparse
@@ -69,12 +69,12 @@ def main():
         varname="mb_obs", units="mm", long_name="annual glacier-wide mass change, water equivalent",
         cell_methods="time: sum",
         attrs={
-            "title": "Annual mass change of the basin's glaciers, Dussaillant et al. (2025), for SUMMA calibration",
-            "source": "WGMS (2026) doi:10.5904/wgms-amce-2026-02-10; Dussaillant et al. (2025) doi:10.5194/essd-17-1977-2025",
+            "title": "Annual mass change of the basin's glaciers, the WGMS annual mass-change estimates (Dussaillant et al., 2025), for SUMMA calibration",
+            "source": "WGMS (2026) doi:10.5904/wgms-amce-2026-02-10; the WGMS annual mass-change estimates (Dussaillant et al., 2025) doi:10.5194/essd-17-1977-2025",
             "glaciers": ", ".join(ids),
             "comment": "Area-weighted mean over the glaciers of the hydrological-year mass change, 1 Oct to 30 Sep; "
                        f"mean 1-sigma {np.mean(sig):.0f} mm per year.",
-            "history": f"created {dt.date.today()} by acquire_dussaillant.py",
+            "history": f"created {dt.date.today()} by acquire_wgms_amce.py",
         },
         time_zone="dates only",
     )

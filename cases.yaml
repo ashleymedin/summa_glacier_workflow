@@ -41,7 +41,7 @@ gulkana_wolverine:
   forcing_name: "GulkanaWolverine_{Y}-{M}-01-00-00-00.nc"
 
 # the two runs of each basin in glacier.tex, Oct 2004 - Sep 2026: spin-up WY2005, calibrated WY2006-2015, evaluated WY2016-2026
-# general: the global data only (domains/<basin>_general.yaml), raw ERA5, scored on discharge and the annual mass change of Dussaillant et al. (2025)
+# general: the global data only (domains/<basin>_general.yaml), raw ERA5, scored on discharge and the annual mass change of the WGMS annual mass-change estimates (Dussaillant et al., 2025)
 # added:   the USGS surveys, stations and stakes (domains/<basin>.yaml), station-corrected ERA5, discharge and the seasonal mass balance
 # `./run_study.py <basin>` builds and calibrates both; first_month needs the ERA5 of 2004-2008 (acquire_era5.py)
 wolverine_general:
@@ -54,7 +54,7 @@ wolverine_general:
   copy_forcing: false
   calibrate: [2005-10-01, 2015-09-30]
   evaluate: [2015-10-01, 2025-06-30]  # 2026-09-30 once the ERA5 after Jun 2025 is in
-  targets: [discharge, dussaillant]
+  targets: [discharge, wgms_amce]
 
 wolverine_added:
   domain: wolverine
@@ -78,7 +78,7 @@ gulkana_general:
   copy_forcing: false
   calibrate: [2005-10-01, 2015-09-30]
   evaluate: [2015-10-01, 2025-06-30]  # 2026-09-30 once the ERA5 after Jun 2025 is in
-  targets: [discharge, dussaillant]
+  targets: [discharge, wgms_amce]
 
 gulkana_added:
   domain: gulkana

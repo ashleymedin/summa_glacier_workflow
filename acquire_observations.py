@@ -7,7 +7,7 @@ Every key is optional, so a basin without the data leaves it out (the mass balan
   stream_temperature  {site, aquarius?}                          calibration/USGS_<site>_daily_temperature.nc; aquarius
                                                                  is an hourly export under observations/ in place of USGS's daily means
   grace               true                                       calibration/<domain>_grace_tws.nc, the cell holding GRU 1
-  dussaillant         {release, region, outlines: [RGI ids]}     calibration/<domain>_dussaillant.nc, the annual mass change of Dussaillant et al. (2025)
+  wgms_amce         {release, region, outlines: [RGI ids]}     calibration/<domain>_wgms_amce.nc, the annual mass change of the WGMS annual mass-change estimates (Dussaillant et al., 2025)
                                                                  from the unzipped WGMS release (a by-hand download), mean of the glaciers by area
   mass_balance        {release, balance: seasonal|annual}        calibration/<domain>_mass_balance_<balance>.nc from the
                                                                  USGS release table under observations/ (a by-hand download)
@@ -30,7 +30,7 @@ from concurrent.futures import ThreadPoolExecutor
 from domain_config import load_config
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-KINDS = ("streamflow", "stream_temperature", "grace", "dussaillant", "mass_balance", "velocity", "lake_area")
+KINDS = ("streamflow", "stream_temperature", "grace", "wgms_amce", "mass_balance", "velocity", "lake_area")
 
 
 DRY = False
@@ -127,9 +127,9 @@ def main():
             run(py, os.path.join(HERE, "acquire_grace_tws.py"), "--attributes",
                 os.path.join(c["project_dir"], "settings", "SUMMA", "attributes.nc"), "--gru", 1,
                 os.path.join(cal, f"{c['domain'].lower()}_grace_tws.nc"))
-        elif kind == "dussaillant":
-            run(py, os.path.join(HERE, "acquire_dussaillant.py"), os.path.join(HERE, s["release"]), s["region"], ",".join(s["outlines"]),
-                os.path.join(cal, f"{c['domain'].lower()}_dussaillant.nc"), "--first", start[:4])
+        elif kind == "wgms_amce":
+            run(py, os.path.join(HERE, "acquire_wgms_amce.py"), os.path.join(HERE, s["release"]), s["region"], ",".join(s["outlines"]),
+                os.path.join(cal, f"{c['domain'].lower()}_wgms_amce.nc"), "--first", start[:4])
         elif kind == "mass_balance":
             run(py, os.path.join(HERE, "acquire_glacier_mass_balance.py"), os.path.join(obs, s["release"]), s["balance"],
                 os.path.join(cal, f"{c['domain'].lower()}_mass_balance_{s['balance']}.nc"))

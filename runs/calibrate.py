@@ -91,9 +91,9 @@ def search_for(case, name):
 CASES = {  # domain, observation files and gauge of each run
     "wolverine": {"obs": "data/domain_Wolverine/observations/calibration", "flow": "USGS_15236900_daily_flow.nc",
                   "mb": "wolverine_mass_balance_seasonal.nc", "temp": "USGS_15236900_daily_temperature.nc",
-                  "grace": "wolverine_grace_tws.nc", "dussaillant": "wolverine_dussaillant.nc"},
+                  "grace": "wolverine_grace_tws.nc", "wgms_amce": "wolverine_wgms_amce.nc"},
     "gulkana": {"obs": "data/domain_Gulkana/observations/calibration", "flow": "USGS_15478040_daily_flow.nc",
-                "mb": "gulkana_mass_balance_seasonal.nc", "grace": "gulkana_grace_tws.nc", "dussaillant": "gulkana_dussaillant.nc"},
+                "mb": "gulkana_mass_balance_seasonal.nc", "grace": "gulkana_grace_tws.nc", "wgms_amce": "gulkana_wgms_amce.nc"},
 }
 
 
@@ -265,16 +265,16 @@ baseline_start = "{base}"
 baseline_end   = "{base + datetime.timedelta(days=364)}"
 metric         = "rmse"
 ''')
-    if "dussaillant" in targets:
+    if "wgms_amce" in targets:
         lines.append(f'''
 
 [[calibration.target]]
 
-name       = "dussaillant"
+name       = "wgms_amce"
 variable   = "basin__GlacierMassChange"
 gru        = 1
 obs_path   = "{obs}"
-obs_file   = "{c["dussaillant"]}"
+obs_file   = "{c["wgms_amce"]}"
 vname_obs  = "mb_obs"
 accumulate = true
 balance    = "annual"
