@@ -199,6 +199,8 @@ def build_inputs(name, spec, cases_dir):
     if not os.path.isdir(inputs):
         template = os.path.abspath(os.path.join(cases_dir, spec["template"]))
         shutil.copytree(template, inputs, ignore=shutil.ignore_patterns("attributes.nc", "coldState.nc", "forcingFileList.txt"))
+    if os.path.exists(os.path.join(inputs, "coldState_cold.nc")):  # spinup.py would start from the old domain's state
+        os.remove(os.path.join(inputs, "coldState_cold.nc"))
     months = months_between(spec["first_month"], spec["last_month"])
     copy_forcing = spec.get("copy_forcing", True)
     with tempfile.TemporaryDirectory() as tmp:
