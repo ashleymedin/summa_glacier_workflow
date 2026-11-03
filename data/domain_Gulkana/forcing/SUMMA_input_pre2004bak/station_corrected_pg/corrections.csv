@@ -1,0 +1,17 @@
+hruId,elevation_m,SWRadAtm_ratio,airpres_ratio,pptrate_ratio,stakes_used,airtemp_offset_dry_K_01,airtemp_offset_dry_K_02,airtemp_offset_dry_K_03,airtemp_offset_dry_K_04,airtemp_offset_dry_K_05,airtemp_offset_dry_K_06,airtemp_offset_dry_K_07,airtemp_offset_dry_K_08,airtemp_offset_dry_K_09,airtemp_offset_dry_K_10,airtemp_offset_dry_K_11,airtemp_offset_dry_K_12,airtemp_offset_wet_K_01,airtemp_offset_wet_K_02,airtemp_offset_wet_K_03,airtemp_offset_wet_K_04,airtemp_offset_wet_K_05,airtemp_offset_wet_K_06,airtemp_offset_wet_K_07,airtemp_offset_wet_K_08,airtemp_offset_wet_K_09,airtemp_offset_wet_K_10,airtemp_offset_wet_K_11,airtemp_offset_wet_K_12,spechum_ratio_dry_01,spechum_ratio_dry_02,spechum_ratio_dry_03,spechum_ratio_dry_04,spechum_ratio_dry_05,spechum_ratio_dry_06,spechum_ratio_dry_07,spechum_ratio_dry_08,spechum_ratio_dry_09,spechum_ratio_dry_10,spechum_ratio_dry_11,spechum_ratio_dry_12,spechum_ratio_wet_01,spechum_ratio_wet_02,spechum_ratio_wet_03,spechum_ratio_wet_04,spechum_ratio_wet_05,spechum_ratio_wet_06,spechum_ratio_wet_07,spechum_ratio_wet_08,spechum_ratio_wet_09,spechum_ratio_wet_10,spechum_ratio_wet_11,spechum_ratio_wet_12
+1,1346.4575721630151,0.9858,1.0000,1.2724,20,4.153,3.040,1.952,0.424,0.154,-0.509,-0.503,-0.216,0.248,1.702,3.885,4.053,1.644,1.194,0.429,-0.048,-0.486,-1.155,-1.185,-1.100,-0.505,0.077,0.830,1.278,1.0000,1.0000,1.0000,0.8417,0.9655,0.8619,0.9026,0.9131,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,0.8417,0.9655,0.8619,0.9026,0.9131,1.0000,1.0000,1.0000,1.0000
+2,2024.6325451879445,0.9858,1.0000,3.1484,12,6.523,5.688,3.407,0.462,-0.231,-1.045,-1.420,-1.069,-0.259,2.547,6.257,5.943,4.013,3.841,1.883,-0.010,-0.871,-1.691,-2.102,-1.953,-1.012,0.922,3.201,3.168,1.0000,1.0000,1.0000,0.8417,0.9655,0.8619,0.9026,0.9131,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,0.8417,0.9655,0.8619,0.9026,0.9131,1.0000,1.0000,1.0000,1.0000
+3,1787.3034853502884,0.9770,1.0000,2.7450,57,5.572,4.658,2.834,0.413,-0.113,-0.867,-1.117,-0.798,-0.108,2.198,5.306,5.152,3.106,2.821,1.330,-0.037,-0.756,-1.511,-1.784,-1.662,-0.863,0.586,2.302,2.427,1.0000,1.0000,1.0000,0.8462,0.9689,0.8665,0.9072,0.9168,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,1.0000,0.8462,0.9689,0.8665,0.9072,0.9168,1.0000,1.0000,1.0000,1.0000
+
+lapse_rate_K_per_km,-3.01,-2.60,-4.36,-6.44,-7.07,-7.29,-7.85,-7.76,-7.25,-5.25,-3.00,-3.71
+wet_threshold_mm_per_h,0.1
+precipElevGrad_per_m,0.00165
+pptrate_stake_snowfall_weight,1.000,1.000,1.000,0.876,0.000,0.000,0.000,0.000,0.742,0.910,1.000,1.000
+pptrate_gauge,"SA shield, 1480 m gauge, 88318 h, catch 0.85"
+pptrate_gauge_1480m_by_month,88318 h,1.904,1.269,1.838,1.798,1.376,1.143,1.481,2.109,1.909,2.094,2.433,2.046
+pptrate_gauge_1725m_by_month,53811 h,2.057,2.350,2.446,2.196,1.683,1.164,1.846,2.954,2.435,2.180,1.948,2.049
+pptrate_unstaked_hru1_by_month,1.904,1.269,1.838,1.798,1.376,1.143,1.481,2.109,1.909,2.094,2.433,2.046
+pptrate_unstaked_hru2_by_month,2.057,2.350,2.446,2.196,1.683,1.164,1.846,2.954,2.435,2.180,1.948,2.049
+pptrate_unstaked_hru3_by_month,2.057,2.350,2.446,2.196,1.683,1.164,1.846,2.954,2.435,2.180,1.948,2.049
+windspd_ratio,1.532,1.584,1.641,1.840,2.169,2.314,2.414,2.221,2.063,1.869,1.704,1.714
+wind_exposure,1.0,station 1480 m
