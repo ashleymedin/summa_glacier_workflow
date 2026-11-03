@@ -43,7 +43,7 @@ imagery: {landsat: [2004, 2005, 2009], sentinel: [2019, 2020, 2021, 2025, 2026]}
 start_debris_scenes: [observations/imagery/imagery_landsat_2004-08-14.tif, observations/imagery/imagery_landsat_2005-08-10.tif]  # imagery classes near the start; debris mapped ~2010 that they show as ice starts clean
 cold_start: 2004-10                             # first forcing month; its 12 months of raw ERA5 set the start
 soil_offset: 1.5                                # deg C, soil and debris above the mean annual air temperature
-ice_temp: -5.0                                  # deg C
+ice_temp: -1.0                                  # deg C
 
 # station correction of the forcing (correct_forcing_to_station.py)
 stations: observations/stations                       # in project_dir

@@ -27,4 +27,4 @@ forcing_period: {first: 2004-10, last: 2026-09}
 start_debris_scenes: [../domain_Gulkana/observations/imagery/imagery_landsat_2004-08-14.tif, ../domain_Gulkana/observations/imagery/imagery_landsat_2005-08-10.tif]  # imagery classes near the start; debris mapped ~2010 that they show as ice starts clean
 cold_start: 2004-10                             # first forcing month; its 12 months of raw ERA5 set the start (2004-10 once the forcing exists)
 soil_offset: 1.5
-ice_temp: -5.0
+ice_temp: -1.0

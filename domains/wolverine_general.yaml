@@ -27,4 +27,4 @@ forcing_period: {first: 2004-10, last: 2026-09}
 start_debris_scenes: [../domain_Wolverine/observations/imagery/imagery_landsat_2004-08-29.tif, ../domain_Wolverine/observations/imagery/imagery_landsat_2005-08-08.tif]  # imagery classes near the start; debris mapped ~2010 that they show as ice starts clean
 cold_start: 2004-10
 soil_offset: 1.5
-ice_temp: -0.2
+ice_temp: -1.0
