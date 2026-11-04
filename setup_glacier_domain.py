@@ -66,7 +66,7 @@ def main():
         run(py, os.path.join(HERE, "glacier_zonal_stats.py"), a.config)
     if "era5" in a.steps:
         if not c.get("seed_from"):  # a seeded domain reads the source domain's raw_data
-            run(py, os.path.join(HERE, "acquire_era5.py"), a.config, c["forcing_period"]["first"], c["forcing_period"]["last"])
+            run(py, os.path.join(HERE, "acquire_era5.py"), c["forcing_period"]["first"], c["forcing_period"]["last"], a.config)
         run(py, os.path.join(HERE, "remap_forcing.py"), a.config)
     if "forcing" in a.steps:
         forcing = os.path.join(project, "forcing", "SUMMA_input")
