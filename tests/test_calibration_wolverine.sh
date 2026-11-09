@@ -241,7 +241,8 @@ import netCDF4 as nc
 
 work, pop, ngen = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
 
-d = nc.Dataset(os.path.join(work, "output", "wolverine_calibration.nc"))
+import glob
+d = nc.Dataset(sorted(glob.glob(os.path.join(work, "output", "*_calibration.nc")))[0])
 sense = [s.strip() for s in d["objective"].sense.split(",")]
 obj = np.ma.filled(d["objective"][:].astype(float), np.nan).T   # (target, sample)
 failed = np.asarray(d["trial_failed"][:]) == 1
