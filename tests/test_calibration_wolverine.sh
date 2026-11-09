@@ -128,40 +128,40 @@ end_date   = "2019-12-31"
 
 n_samples = ${N_SAMPLES}
 
-param_list = [
-    "k_soil",
-    "theta_sat",
-    "aquiferBaseflowExp",
-    "aquiferBaseflowRate",
-    "qSurfScale",
-    "summerLAI",
-    "frozenPrecipMultip",
-    "Fcapil",
-    "tempCritRain",
-    "heightCanopyTop",
-    "heightCanopyBottom",
-    "windReductionParam",
-    "vGn_n",
-    "routingGammaScale",
-    "routingGammaShape",
-    "glacierWindFactor",
-    "glacierTempReduction",
-    "glacStor_kIce",
-    "glacStor_kSnow",
-    "glacStor_kFirn",
-    "k_snow",
-    "mw_exp",
-    "albedoDecayRate",
-    "albedoMax"
-]
-
 write_aligned = false
 
 
-[calibration.parameter_transformations]
+[calibration.parameters]
 
-k_soil              = "log"
-aquiferBaseflowRate = "log"
+# every member of an ordered chain is listed, so it is searched
+k_soil               = { transformation = "log" }
+theta_sat            = {}
+aquiferBaseflowExp   = {}
+aquiferBaseflowRate  = { transformation = "log" }
+qSurfScale           = {}
+summerLAI            = {}
+frozenPrecipMultip   = {}
+Fcapil               = {}
+tempCritRain         = {}
+heightCanopyTop      = {}
+heightCanopyBottom   = {}
+windReductionParam   = {}
+vGn_n                = {}
+routingGammaScale    = {}
+routingGammaShape    = {}
+glacierWindFactor    = {}
+glacierTempReduction = {}
+glacStor_kIce        = {}
+glacStor_kSnow       = {}
+glacStor_kFirn       = {}
+k_snow               = {}
+mw_exp               = {}
+albedoDecayRate      = {}
+albedoMax            = {}
+theta_res            = {}
+critSoilWilting      = {}
+critSoilTranspire    = {}
+fieldCapacity        = {}
 
 
 [[parameter_dependencies.ordered]]
@@ -173,7 +173,6 @@ gap_fraction = 0.25
 
 parameters   = ["theta_res", "critSoilWilting", "critSoilTranspire", "fieldCapacity", "theta_sat"]
 gap_fraction = 0.025
-sample_gaps  = true
 
 
 [calibration.nsga2]
@@ -186,7 +185,8 @@ population_size = ${POPULATION}
 
 name      = "discharge"
 variable  = "streamflow"
-reach     = 1
+spatial_unit = "reach"
+spatial_id   = 1
 obs_path  = "${DATA}/observations/"
 obs_file  = "USGS_15236900_daily_flow.nc"
 vname_obs = "q_obs"
@@ -198,7 +198,8 @@ metric    = "kge"
 
 name      = "stream_temperature"
 variable  = "T_reach"
-reach     = 1
+spatial_unit = "reach"
+spatial_id   = 1
 obs_path  = "${DATA}/observations/"
 obs_file  = "USGS_15236900_daily_temperature.nc"
 vname_obs = "t_obs"
@@ -210,7 +211,8 @@ metric    = "rmse"
 
 name       = "mass_balance"
 variable   = "basin__GlacierMassChange"
-gru        = 1
+spatial_unit = "gru"
+spatial_id   = 1
 obs_path   = "${DATA}/observations/"
 obs_file   = "wolverine_mass_balance_seasonal.nc"
 vname_obs  = "mb_obs"
