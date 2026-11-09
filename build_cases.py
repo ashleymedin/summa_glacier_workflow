@@ -83,6 +83,21 @@ def set_precip_grad(inputs, source):
         lines[-1] += "\n"
     lines.append(f"{'precipElevGrad':<26}| {grad:12.5f} | {0.0:12.4f} | {0.005:12.4f}\n")
     open(params, "w").writelines(lines)
+    set_wind_exposure(params, WIND_EXPOSURE_STATION if os.path.exists(path) else 1.0)
+
+
+WIND_EXPOSURE_STATION = 0.77  # glacier wind over the station's, Gulkana Site B (Wilson et al. 2026)
+
+
+def set_wind_exposure(params, value):
+    """windExposure in localParamInfo.txt: the station wind scaled to the glacier surface, 1 on ERA5's own wind."""
+    lines = []
+    for line in open(params):
+        if line.split("|")[0].strip() == "windExposure":
+            lo, hi = (x.strip() for x in line.split("|")[2:4])
+            line = f"{'windExposure':<26}| {value:12.4f} | {lo:>12} | {hi:>12}\n"
+        lines.append(line)
+    open(params, "w").writelines(lines)
 
 
 def merge_netcdf(paths, out, concat, shift, keep=None):
