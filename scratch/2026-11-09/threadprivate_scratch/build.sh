@@ -1,0 +1,3 @@
+#!/bin/sh
+# build one worktree with fp contraction off for exact comparisons
+cd $1 && env FC=/opt/local/bin/gfortran LIBRARY_LINKS='-llapack' SUNDIALS_DIR=/Users/amedin/Research/SummaSundials/sundials/instdir/ FLAGS_OPT='-ffp-contract=off' cmake -B cmake_build -S build -DUSE_SUNDIALS=ON -DSPECIFY_LAPACK_LINKS=ON -DCMAKE_BUILD_TYPE=Release > build.log 2>&1 && env FC=/opt/local/bin/gfortran LIBRARY_LINKS='-llapack' SUNDIALS_DIR=/Users/amedin/Research/SummaSundials/sundials/instdir/ FLAGS_OPT='-ffp-contract=off' cmake --build cmake_build -j 8 >> build.log 2>&1; echo "$1 exit $?"; grep -i -E "error|warning: .*(threadprivate|save)" build.log | head

@@ -1,0 +1,12 @@
+ida flag 1 real 78.09 user 71.71 
+ida noflag 1 real 77.99 user 74.61 
+ida flag 2 real 71.50 user 68.92 
+ida noflag 2 real 77.87 user 75.22 
+ida flag 3 real 71.97 user 69.20 
+ida noflag 3 real 77.77 user 74.91 
+homegrown flag 1 real 22.57 user 20.36 
+homegrown noflag 1 real 23.90 user 21.65 
+homegrown flag 2 real 23.17 user 20.87 
+homegrown noflag 2 real 24.62 user 22.22 
+homegrown flag 3 real 22.84 user 20.59 
+homegrown noflag 3 real 24.17 user 21.89 

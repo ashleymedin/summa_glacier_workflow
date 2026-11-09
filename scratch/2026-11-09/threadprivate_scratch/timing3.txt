@@ -1,0 +1,12 @@
+homegrown base 1 user 23.87 maxrss 94191616
+homegrown new2 1 user 22.25 maxrss 96829440
+homegrown base 2 user 23.64 maxrss 92717056
+homegrown new2 2 user 22.84 maxrss 97386496
+homegrown base 3 user 23.76 maxrss 93011968
+homegrown new2 3 user 23.07 maxrss 96911360
+ida base 1 user 79.78 maxrss 100630528
+ida new2 1 user 74.34 maxrss 95731712
+ida base 2 user 82.63 maxrss 100696064
+ida new2 2 user 82.49 maxrss 103055360
+ida base 3 user 88.84 maxrss 97452032
+ida new2 3 user 80.15 maxrss 96927744

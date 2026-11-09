@@ -1,0 +1,12 @@
+ida base 1 user 77.58
+ida new 1 user 75.21
+ida base 2 user 77.63
+ida new 2 user 73.16
+ida base 3 user 82.75
+ida new 3 user 72.83
+homegrown base 1 user 23.17
+homegrown new 1 user 22.62
+homegrown base 2 user 23.06
+homegrown new 2 user 22.64
+homegrown base 3 user 23.31
+homegrown new 3 user 22.68
