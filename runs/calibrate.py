@@ -22,6 +22,7 @@ calibration driver does. Needs summa's MPI calibration executable (bin/summa_sun
 import argparse
 import csv
 import datetime
+import glob
 import math
 import os
 import shutil
@@ -308,6 +309,15 @@ metric     = "rmse"
     return "".join(lines)
 
 
+def calibration_file(work):
+    """The trials file a calibration driver run wrote in <work>/output (<case>_run0001_calibration.nc, or the older
+    <case>_calibration.nc)."""
+    found = sorted(glob.glob(os.path.join(work, "output", "*_calibration.nc")))
+    if not found:
+        raise SystemExit(f"no *_calibration.nc in {work}/output")
+    return found[0]
+
+
 def run_driver(work, config, settings, ranks):
     if os.path.isdir(work):
         shutil.rmtree(work)
@@ -384,12 +394,12 @@ def main():
                              "nsga2", a.population * a.generations, a.population, temperature=False,
                              search=search_for(a.case, a.search))
         run_driver(work, config, settings, a.ranks)
-        print(f"calibration written to {work}/output/{a.case}_calibration.nc")
+        print(f"calibration written to {calibration_file(work)}")
         return
 
     evaluation = os.path.join(run_dir, f"{a.name}_evaluation")
     search = search_of(os.path.join(run_dir, a.name))
-    with nc4.Dataset(os.path.join(run_dir, a.name, "output", f"{a.case}_calibration.nc")) as d:
+    with nc4.Dataset(calibration_file(os.path.join(run_dir, a.name))) as d:
         front = np.flatnonzero(np.asarray(d["pareto_front"][:]) == 1)
         names = [n for n in searched_names(search) if n in d.variables]
         values = {i: {n: float(d[n][i]) for n in names} for i in front}
@@ -403,7 +413,7 @@ def main():
         config = config_text(a.case, run_dir, pinned, work, cal0, ev1, ev0, ev1,
                              "dds", 1, 1, temperature=True, search=search, pinned=values[i])
         run_driver(work, config, pinned, a.ranks)
-        with nc4.Dataset(os.path.join(work, "output", f"{a.case}_calibration.nc")) as d:
+        with nc4.Dataset(calibration_file(work)) as d:
             ev = np.ma.filled(d["objective"][0].astype(float), np.nan)
             ev_names = [t.strip() for t in d["objective"].target.split(",")]
         row = {"sample": int(i) + 1}

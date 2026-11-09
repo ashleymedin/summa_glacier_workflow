@@ -19,7 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import netCDF4 as nc4
 
-from calibrate import HERE, config_text, fit12, periods, pin_settings, run_driver, search_of, searched_names
+from calibrate import HERE, calibration_file, config_text, fit12, periods, pin_settings, run_driver, search_of, searched_names
 
 OUTPUTS = ["averageRoutedRunoff", "glacierRoutedRunoff", "basin__GlacierMassChange", "basin__GlacierArea",
            "basin__SurfaceRunoff", "basin__AquiferBaseflow", "scalarSWE", "scalarRainfall", "scalarSnowfall",
@@ -66,7 +66,7 @@ def main():
     a = p.parse_args()
     run_dir = os.path.join(HERE, a.case)
     search = search_of(os.path.join(run_dir, a.name))
-    with nc4.Dataset(os.path.join(run_dir, a.name, "output", f"{a.case}_calibration.nc")) as d:
+    with nc4.Dataset(calibration_file(os.path.join(run_dir, a.name))) as d:
         names = [n for n in searched_names(search) if n in d.variables]
         values = {s: {n: float(d[n][s - 1]) for n in names} for s in a.samples}
     for kv in a.pin:

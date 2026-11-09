@@ -11,6 +11,7 @@ value. Writes <case>/calibration/param_screen.csv and prints the table.
     ./param_screen.py wolverine_general wolverine_added gulkana_general gulkana_added
 """
 import csv
+import glob
 import os
 import sys
 
@@ -22,7 +23,7 @@ RUNS = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 
 
 
 def screen(case, name="calibration"):
-    with nc4.Dataset(os.path.join(RUNS, case, name, "output", f"{case}_calibration.nc")) as d:
+    with nc4.Dataset(sorted(glob.glob(os.path.join(RUNS, case, name, "output", "*_calibration.nc")))[0]) as d:
         obj = np.ma.filled(d["objective"][:].astype(float), np.nan)
         targets = [t.strip() for t in d["objective"].target.split(",")]
         ran = np.asarray(d["trial_failed"][:]) == 0

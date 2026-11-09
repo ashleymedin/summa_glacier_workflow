@@ -8,6 +8,7 @@ front. A parameter a case does not search is left as --; on the corrected forcin
     ./fill_param_table.py <glacier.tex> [--fa wolverine_added=0.40 ...] [--dry]
 """
 import argparse
+import glob
 import os
 import re
 
@@ -64,9 +65,10 @@ ROWS = [
 
 def balanced(case):
     """The balanced front member's searched values, or None if the calibration has not written its front."""
-    path = os.path.join(RUNS, case, "calibration", "output", f"{case}_calibration.nc")
-    if not os.path.exists(path):
+    found = sorted(glob.glob(os.path.join(RUNS, case, "calibration", "output", "*_calibration.nc")))
+    if not found:
         return None
+    path = found[0]
     with nc4.Dataset(path) as d:
         front = np.flatnonzero(np.asarray(d["pareto_front"][:]) == 1)
         if front.size == 0:

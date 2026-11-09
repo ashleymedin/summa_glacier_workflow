@@ -5,6 +5,7 @@ then every front member's held-out scores (calibrate.py evaluate). Waits for <ca
 
     ./post_cal.py wolverine_general
 """
+import glob
 import os
 import subprocess
 import sys
@@ -29,7 +30,7 @@ def run(args, log):
 
 def picks(case):
     """Sample numbers (1-based) of the best-KGE, balanced and best mass-change members of the front."""
-    with nc4.Dataset(os.path.join(RUNS, case, "calibration", "output", f"{case}_calibration.nc")) as d:
+    with nc4.Dataset(sorted(glob.glob(os.path.join(RUNS, case, "calibration", "output", "*_calibration.nc")))[0]) as d:
         front = np.flatnonzero(np.asarray(d["pareto_front"][:]) == 1)
         obj = np.ma.filled(d["objective"][:].astype(float), np.nan)[front]
     kge, mb = obj[:, 0], obj[:, 1]
