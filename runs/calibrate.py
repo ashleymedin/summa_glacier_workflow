@@ -82,10 +82,15 @@ def periods(case):
 
 
 def search_for(case, name):
-    """The named search, without the STATION_FIXED parameters on a station-corrected case."""
+    """The named search, without the STATION_FIXED parameters on a station-corrected case, and without the debris
+    ones on a case with no debris-covered domain (domType 4), where they select nothing and debris cannot emerge."""
     search = dict(SEARCHES[name])
     if case_spec(case).get("forcing") == "station_corrected":
         search["params"] = [q for q in search["params"] if q.split("@")[0] not in STATION_FIXED]
+    with nc4.Dataset(os.path.join(HERE, case, "summa_inputs", "coldState.nc")) as d:
+        debris = bool(np.any(np.asarray(d["domType"][:]) == 4))
+    if not debris:
+        search["params"] = [q for q in search["params"] if not q.endswith("@glacDbr") and q != "debrisConc"]
     return search
 
 
