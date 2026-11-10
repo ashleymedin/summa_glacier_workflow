@@ -3,7 +3,9 @@
 from the cold state, each cycle restarting from the last restart file, and the final state replaces summa_inputs/coldState.nc.
 
 The glacier ice, debris, soil, snow and canopy all start from the cold state's values and settle over the cycles; the
-accumulated area-change mass is zeroed in the result. The cold state it started from is kept as coldState_cold.nc and
+geometry is the built one throughout: each cycle starts with the glacier area last updated at its end, so the flow model
+never runs, and the result has no update date, so the simulation updates the area at the end of its first year as from
+the cold state. The accumulated area-change mass is zeroed in the result. The cold state it started from is kept as coldState_cold.nc and
 a rerun starts from it again. Needs summa's serial TOML executable (bin/summa_sundials_mizuroute.exe).
 
     ./spinup.py gulkana_added
@@ -22,6 +24,14 @@ import netCDF4 as nc4
 import numpy as np
 
 from calibrate import GLACIER, HERE, SUMMA_DIR, config_text, periods
+
+
+def set_update_day(path, julday):
+    """updateJulDay, SUMMA's day of the last glacier area update, in a state file; -9999 (missing) means none yet."""
+    with nc4.Dataset(path, "r+") as d:
+        if "updateJulDay" not in d.variables:
+            d.createVariable("updateJulDay", "f8", ("scalarv", "gru"))
+        d["updateJulDay"][:] = julday
 
 
 def main():
@@ -48,11 +58,13 @@ def main():
     with open(os.path.join(work, "config.toml"), "w") as f:
         f.write(config)
     exe = os.path.join(SUMMA_DIR, "bin", "summa_sundials_mizuroute.exe")
+    cal0_jd = 2440588.0 + (cal0 - datetime.date(1970, 1, 1)).days  # SUMMA's julian day at 00:00, a cycle's end
     current = cold
     for k in range(1, a.years + 1):
         for d in glob.glob(os.path.join(work, "state", "*")) + glob.glob(os.path.join(work, "output", "*")):
             os.remove(d)
         shutil.copy(current, os.path.join(work, "state", "coldState.nc"))
+        set_update_day(os.path.join(work, "state", "coldState.nc"), cal0_jd)
         with open(os.path.join(work, "run.log"), "w") as log:
             status = subprocess.run([exe, "-c", os.path.join(work, "config.toml"), "-r", "e"], cwd=work,
                                     stdout=log, stderr=subprocess.STDOUT).returncode
@@ -62,6 +74,7 @@ def main():
         current = os.path.join(work, f"cycle_{k % 2}.nc")
         shutil.copy(restarts[-1], current)
         print(f"{a.case}: cycle {k}/{a.years}", flush=True)
+    set_update_day(current, -9999.0)
     with nc4.Dataset(current, "r+") as d:
         v = d["glacMass4AreaChange"]
         x = np.ma.filled(v[:], 0.0)
