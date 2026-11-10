@@ -32,3 +32,22 @@ scratch/**/*.npz
 scratch/**/*.log
 scratch/**/verify/
 scratch/**/rasters_*/
+# spin-up cycles spinup.py writes into each run
+runs/*/spinup/
+# scratch run output: the scripts that made it are committed, not what they wrote
+scratch/**/*.nc
+scratch/**/*.out
+scratch/**/*.TBL
+scratch/**/prof_*
+scratch/**/output/
+scratch/**/tolall_*/
+scratch/**/ens_*/
+!scratch/2026-11-10/rerun_wolverine_added_g4_s125/*.nc
+scratch/**/spin_*/
+scratch/2026-11-03/soil_depth/d*m/
+scratch/2026-11-02/spin2005/*/
+scratch/2026-10-28/cases_test*/
+scratch/2026-10-28/ext_*/
+scratch/**/sample_*.txt
+scratch/**/.seen_*
+scratch/**/days_*.csv

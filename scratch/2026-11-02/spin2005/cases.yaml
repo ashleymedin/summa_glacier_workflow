@@ -1,0 +1,17 @@
+# WY2005 spin-up check of the 2004-10 cold start, raw ERA5; paths relative to this file
+gulkana_spin:
+  domain: gulkana
+  dest: gulkana
+  template: /Users/amedin/Research/SummaSundials/summa_glacier_workflow/tests/gulkana/summa_inputs
+  first_month: 2004-10
+  last_month: 2005-09
+  forcing: raw
+  copy_forcing: false
+wolverine_spin:
+  domain: wolverine
+  dest: wolverine
+  template: /Users/amedin/Research/SummaSundials/summa_glacier_workflow/tests/wolverine/summa_inputs
+  first_month: 2004-10
+  last_month: 2005-09
+  forcing: raw
+  copy_forcing: false
