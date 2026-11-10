@@ -83,10 +83,19 @@ def set_precip_grad(inputs, source):
         lines[-1] += "\n"
     lines.append(f"{'precipElevGrad':<26}| {grad:12.5f} | {0.0:12.4f} | {0.005:12.4f}\n")
     open(params, "w").writelines(lines)
-    set_wind_exposure(params, WIND_EXPOSURE_STATION if os.path.exists(path) else 1.0)
+    set_wind_exposure(params, wind_exposure_station() if os.path.exists(path) else 1.0)
 
 
-WIND_EXPOSURE_STATION = 0.77  # glacier wind over the station's, Gulkana Site B (Wilson et al. 2026)
+# glacier wind over the forcing station's, from Gulkana Site B (Wilson et al. 2026), wind_exposure_from_campaign.py
+WIND_EXPOSURE_CSV = os.path.join(HERE, "data", "domain_Gulkana", "forcing", "wind_exposure_wilson2024.csv")
+
+
+def wind_exposure_station():
+    """The campaign's heat-weighted ratio of glacier-surface wind to the reference station's."""
+    for row in csv.DictReader(open(WIND_EXPOSURE_CSV)):
+        if row["month"] == "all":
+            return float(row["heat_weighted_ratio"])
+    raise SystemExit(f"no campaign ratio in {WIND_EXPOSURE_CSV}")
 
 
 def set_wind_exposure(params, value):
