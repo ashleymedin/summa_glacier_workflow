@@ -23,6 +23,7 @@ as SUMMA counts them. Writes, in <run>/glacier_change:
                the image classes on that grid, by date; setup, the RGI id of every glacier's cold-state cells on that grid
 
     ./compare_glacier_change.py domains/gulkana.yaml runs/gulkana_corrected/calibration_paper1_rerun/sample_384
+    ./compare_glacier_change.py domains/gulkana_general.yaml runs/gulkana_general/calibration_rerun/sample_370 --observations domains/gulkana.yaml
 """
 
 import argparse
@@ -59,9 +60,12 @@ def main():
                                 formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
     p.add_argument("config", help="domain YAML in domains/")
     p.add_argument("run", help="a rerun trial folder, <case>/<name>_rerun/sample_<n>")
+    p.add_argument("--observations", help="domain YAML whose USGS surveys and imagery to take (default config)")
     a = p.parse_args()
     c = load_config(a.config)
     project, name = c["project_dir"], c["domain"]
+    o = load_config(a.observations) if a.observations else c
+    obs_project, obs_name = o["project_dir"], o["domain"]
     run = os.path.abspath(a.run)
     out_dir = os.path.join(run, "glacier_change")
     os.makedirs(out_dir, exist_ok=True)
@@ -86,12 +90,12 @@ def main():
         ice[:, :, nx[g]:, g] = False
     debris = ice & (D >= MIN_DEBRIS)
 
-    usgs = pd.read_csv(os.path.join(project, "observations", "storage", "mass_balance", f"Input_{name}_Area_Altitude_Distribution.csv"),
+    usgs = pd.read_csv(os.path.join(obs_project, "observations", "storage", "mass_balance", f"Input_{obs_name}_Area_Altitude_Distribution.csv"),
                        index_col="Year")
     area = pd.DataFrame({"model_main_km2": ice[:, :, :, main_g].sum((1, 2)) * cell,
                          "model_all_km2": ice.sum((1, 2, 3)) * cell,
                          "model_main_debris_km2": debris[:, :, :, main_g].sum((1, 2)) * cell}, index=years)
-    geo = pd.read_csv(os.path.join(project, "observations", "storage", "mass_balance", f"Input_{name}_Geodetics.csv"))
+    geo = pd.read_csv(os.path.join(obs_project, "observations", "storage", "mass_balance", f"Input_{obs_name}_Geodetics.csv"))
     geo["date"] = pd.to_datetime(geo.Date)
     ref = geo.loc[geo.Area_max == geo.Area_min, "date"].iloc[0]  # the reference survey, whose area both columns hold
     geo["area_km2"] = np.where(geo.date <= ref, geo.Area_max, geo.Area_min) / 1e6
@@ -114,7 +118,7 @@ def main():
         bands.append(pd.Series(usgs.loc[y].values, index=centres, name=f"usgs_{y}"))
 
     def binned(s, label):
-        s = s - c.get("usgs_datum", 0.0)
+        s = s - o.get("usgs_datum", 0.0)
         bands.append(pd.Series([((s >= b - 50) & (s < b + 50)).sum() * cell for b in centres], index=centres, name=label))
 
     binned(s0[:ny[main_g], :nx[main_g]][i0], "model_start")
@@ -161,7 +165,7 @@ def main():
     for g in range(len(ids)):
         setup[on_main(ice0, [g]) if g != main_g else i0] = ids[g]
     rows, maps = [], {"model_years": years, "dx": dx, "setup": setup}
-    for tif in sorted(glob.glob(os.path.join(project, "observations", "imagery", "imagery_*.tif"))):
+    for tif in sorted(glob.glob(os.path.join(obs_project, "observations", "imagery", "imagery_*.tif"))):
         date = os.path.basename(tif)[:-4].split("_")[-1]
         k = int(np.where(years == min(max(int(date[:4]), years.min()), years.max()))[0][0])
         cls = np.zeros((ny[main_g], nx[main_g]), dtype=np.uint8)
