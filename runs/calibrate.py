@@ -47,7 +47,7 @@ PAPER1 = ["k_soil", "theta_sat", "aquiferBaseflowExp", "aquiferBaseflowRate", "q
 PAPER1_CHAIN = ["theta_res", "critSoilWilting", "critSoilTranspire", "fieldCapacity", "theta_sat"]
 
 # domain: the upland soil and the debris searched apart, and the englacial debris concentration, the debris's other soil values fixed in trialParams.nc;
-# frac_sand (with frac_clay fixed) sets the conductivity of the solids, which thCondSoil = funcSoilWet uses
+# frac_sand (with frac_clay fixed) sets the conductivity of the solids, which thCondSoil = funcSoilWet uses; frac_silt is their remainder
 DOMAIN = [p for p in PAPER1 if p not in ("k_soil", "theta_sat", "vGn_n", "k_macropore", "thCond_soil")] + \
          ["k_soil@upland", "k_macropore@upland", "theta_sat@upland", "vGn_n@upland", "frac_sand@upland",
           "theta_sat@glacDbr", "frac_sand@glacDbr", "debrisConc"]
@@ -61,6 +61,8 @@ SEARCHES = {
                "chains": [(DOMAIN_CHAIN, 0.025)],
                "bounds": {"theta_sat@upland": (0.35, 0.65),     # mineral soil
                           "theta_sat@glacDbr": (0.2, 0.45),     # supraglacial debris, Fontrodona-Bach et al. (2025)
+                          "frac_sand@upland": (0.0, 0.9),       # up to what the fixed clay (0.1) leaves
+                          "frac_sand@glacDbr": (0.0, 0.9),
                           "debrisConc": (0.1, 6.4)}},           # kg m-3, Anderson and Anderson (2018)
 }
 
@@ -226,6 +228,11 @@ write_aligned = false
     for members, gap in search["chains"]:
         names = ", ".join(f'"{m}"' for m in members)
         lines.append(f"\n\n[[parameter_dependencies.ordered]]\n\nparameters   = [{names}]\ngap_fraction = {gap}\n")
+    for p in searched_names(search):
+        if p.split("@")[0] == "frac_sand":  # silt takes what sand and clay leave, so the three add to one
+            at = p[len("frac_sand"):]
+            lines.append(f'\n\n[[parameter_dependencies.remainder]]\n\nparameter = "frac_silt{at}"\n'
+                         f'of        = ["frac_sand{at}", "frac_clay{at}"]\n')
     if algorithm == "nsga2":
         lines.append(f"\n[calibration.nsga2]\n\npopulation_size = {population}\n")
     lines.append(f'''

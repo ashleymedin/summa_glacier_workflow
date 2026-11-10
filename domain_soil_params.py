@@ -10,7 +10,8 @@ parameters then override these per domain type.
            of Carsel and Parrish (1988), since supraglacial debris has no measured hydraulic properties;
            wilting and transpiration points only kept in order below field capacity, as no plants grow
   all      frac_clay 0.1 in every domain, so frac_sand alone sets the conductivity of the solids under
-           thCondSoil = funcSoilWet, 2.92 W m-1 K-1 at frac_sand 0 to 8.27 at 1
+           thCondSoil = funcSoilWet, 2.92 W m-1 K-1 at frac_sand 0 to 8.21 at 0.9; frac_silt is the remainder
+           of sand and clay, which SUMMA requires to add to one with them
 
     ./domain_soil_params.py runs/gulkana_corrected/summa_inputs
 """
@@ -52,6 +53,7 @@ def main():
     p.add_argument("settings", help="a case's summa_inputs folder")
     a = p.parse_args()
     default = defaults(os.path.join(a.settings, "localParamInfo.txt"))
+    every = dict(ALL, frac_silt=1.0 - default["frac_sand"] - ALL["frac_clay"])
     with nc4.Dataset(os.path.join(a.settings, "coldState.nc")) as c:
         dom_type = np.asarray(c["domType"][0], int)  # (hru, dom)
     with nc4.Dataset(os.path.join(a.settings, "attributes.nc")) as d:
@@ -61,13 +63,14 @@ def main():
     with nc4.Dataset(os.path.join(a.settings, "trialParams.nc"), "a") as t:
         if "dom" not in t.dimensions:
             t.createDimension("dom", dom_type.shape[1])
-        for name in list(DEBRIS) + list(ALL):
-            value = np.full(dom_type.T.shape, ALL.get(name, default[name]))
+        for name in list(DEBRIS) + list(every):
+            value = np.full(dom_type.T.shape, every.get(name, default[name]))
             if name in DEBRIS:
                 value[dom_type.T == GLAC_DBR] = DEBRIS[name]
             var = t[name] if name in t.variables else t.createVariable(name, "f8", ("dom", "hru"))
             var[:] = value
-    print(f"{a.settings}/trialParams.nc: {len(DEBRIS)} debris parameters, frac_clay {ALL['frac_clay']} everywhere, "
+    print(f"{a.settings}/trialParams.nc: {len(DEBRIS)} debris parameters, frac_clay {every['frac_clay']} and frac_silt "
+          f"{every['frac_silt']:.2f} everywhere, "
           f"{int((dom_type == GLAC_DBR).sum())} debris domains")
 
 
