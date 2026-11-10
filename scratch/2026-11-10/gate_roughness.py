@@ -45,7 +45,7 @@ def main():
             b1 = nc4.num2date(b[:, 1], b.units, only_use_cftime_datetimes=False, only_use_python_datetimes=True)
             mbo = np.ma.filled(d["mb_obs"][:].astype(float), np.nan)
         for label in LABELS:
-            out = os.path.join(WF, "runs", case, "calibration_rerun", f"sample_{sample}_gate_{label}", "output")
+            out = os.path.join(WF, "runs", case, "calibration_rerun_nov10", f"sample_{sample}_gate_{label}", "output")
             with nc4.Dataset(os.path.join(out, f"{case}_rank0001_sample000001_day.nc")) as d:
                 dt = times(d)
                 dmb = np.asarray(d["basin__GlacierMassChange_mean"][:, 0]) * 86400.0  # mm d-1
