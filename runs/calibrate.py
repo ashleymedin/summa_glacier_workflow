@@ -23,7 +23,6 @@ import argparse
 import csv
 import datetime
 import glob
-import math
 import os
 import shutil
 import subprocess
@@ -121,10 +120,10 @@ def search_of(calibration):
 def config_text(case, run_dir, settings, work, start, end, score_start, score_end, algorithm, n_samples,
                 population, temperature, search=SEARCHES["paper1"], pinned=None):
     """The calibration driver's TOML for one search or one pinned trial; pinned name@domainType values are
-    held by bounds one ulp wide (the driver refuses equal ones), the parameter files holding the rest (pin_settings).
+    held by equal bounds, the parameter files holding the rest (pin_settings).
     Every member of an ordered chain is searched."""
     bounds = dict(search["bounds"])
-    bounds.update({k: (v, math.nextafter(v, math.inf)) for k, v in (pinned or {}).items() if "@" in k})
+    bounds.update({k: (v, v) for k, v in (pinned or {}).items() if "@" in k})
     c = CASES[case.split("_")[0]]
     targets = case_spec(case).get("targets", ["discharge", "mass_balance", "stream_temperature"])
     routed = os.path.exists(os.path.join(run_dir, "topology.nc"))
