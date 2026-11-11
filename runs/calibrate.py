@@ -65,6 +65,7 @@ SEARCHES = {
                           "frac_sand@glacDbr": (0.0, 0.9),
                           "debrisConc": (0.1, 6.4),             # kg m-3, Anderson and Anderson (2018)
                           "frozenPrecipMultip": (0.3, 2.0),
+                          "glacierWindFactor": (1.0, 3.0),    # ERA5's wind is 1/2.5-1/7 of the stations', Site B's 0.59 of theirs
                           "precipElevGrad": (0.0, 0.0025)}},   # m-1 above the HRU elevation
 }
 
