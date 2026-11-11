@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
-"""Remap a domain's gridded ERA5 (forcing/raw_data) to its HRUs as SUMMA forcing (forcing/SUMMA_input).
+"""Remap a domain's gridded ERA5 (forcing/raw_data and forcing/raw_levels) to its HRUs as SUMMA forcing
+(forcing/SUMMA_input).
 
 Each HRU takes the mean of the ERA5 cells it overlaps, weighted by the overlap area: the 0.25-degree cell
 of each grid point is intersected with the HRU polygons of shapefiles/catchment/<domain>_HRUs_elevation.shp
-in an equal-area projection.  The variables are then carried from the same weighting of the cells' elevations
-(elev_m of shapefiles/forcing/forcing_ERA5.shp) to the HRU's elev_mean: air temperature by the month's lapse rate,
-pressure hypsometrically at the mean of the two temperatures, specific humidity at the cells' relative humidity, and
-longwave at the cells' sky emissivity (by the fourth power of the temperature ratio).  With wind_climatology in the
+in an equal-area projection.  Shortwave, precipitation and wind are the cells' surface fields.  Air temperature,
+pressure and humidity are the free air's at the HRU's elev_mean, read from each cell's column of pressure levels
+(acquire_era5_levels.py; the TopoSCALE method of Fiddes and Gruber, 2014): linear in geopotential height between the
+two levels around the HRU, temperature, the logarithm of pressure and relative humidity alike, and linear in time
+between the levels' fields.  Only
+levels over ERA5's own surface (CLEAR m and more) count, the others being extrapolated from its near-surface air; an
+HRU under the lowest of them continues the lowest two.  Longwave is the cell's at its sky emissivity, by the fourth
+power of the free-air temperature at the HRU over that at the cell's surface elevation.  With wind_climatology in the
 YAML (acquire_climatology.py), the wind is scaled by month to the climatology's mean over the HRU, over the run's mean
 of the cell-weighted wind for that month.  With precip_climatology
 in the YAML (acquire_climatology.py), precipitation is scaled by the HRU's mean climatology over the same weighting
 of the cells' mean, the climatology's pattern within the ERA5 cells.  Every month of raw_data is written, one file per month, with the names
-the rest of the pipeline reads.  Variables, units and time (hours since 1900-01-01 UTC) pass through.
+the rest of the pipeline reads.  Units and time (hours since 1900-01-01 UTC) pass through.  remap.csv keeps the
+free air's mean lapse rate over the HRUs' elevations by calendar month, which build_cases.py gives SUMMA to carry
+the temperature from an HRU to its domains, and the precipitation and wind ratios.
 
     ./remap_forcing.py domains/gulkana.yaml
 """
@@ -27,12 +34,13 @@ from rasterio.features import geometry_mask
 from netCDF4 import Dataset, num2date
 from shapely.geometry import box
 
+from acquire_era5_levels import levels_dir
 from domain_config import load_config
 
 VARS = ("airpres", "LWRadAtm", "SWRadAtm", "pptrate", "airtemp", "spechum", "windspd")
 HALF = 0.125                       # deg, half an ERA5 cell
-LAPSE = 0.0065                     # K m-1, temperature decrease with height
-G, R_DRY = 9.80665, 287.05         # m s-2, J kg-1 K-1
+CLEAR = 0.0                        # m over ERA5's surface from which a pressure level counts as free air
+SPAN = 300.0                       # m, least height over which the free-air lapse rate is taken
 TFREEZE, SATVPFRZ, W_RATIO = 273.16, 610.8, 0.622   # SUMMA's convert_funcs constants
 FILL = -9999.0
 
@@ -52,14 +60,12 @@ def weights(hrus, lat, lon):
     return w
 
 
-def cell_elevation(shapefile, lat, lon):
-    """(lat, lon) ERA5 cell elevation, m; NaN for a cell the shapefile leaves out."""
-    z = np.full((len(lat), len(lon)), np.nan)
-    for _, r in gpd.read_file(shapefile).iterrows():
-        i, j = np.argmin(abs(lat - r.lat)), np.argmin(abs(lon - r.lon))
-        if abs(lat[i] - r.lat) < 1e-4 and abs(lon[j] - r.lon) < 1e-4:
-            z[i, j] = r.elev_m
-    return z
+def cell_elevation(path, lat, lon):
+    """(lat, lon) ERA5 surface elevation of the grid points, m."""
+    with Dataset(path) as f:
+        if not (np.allclose(f["latitude"][:], lat, atol=1e-4) and np.allclose(f["longitude"][:], lon, atol=1e-4)):
+            raise SystemExit(f"{path} is not on the grid of raw_data")
+        return np.asarray(f["elevation"][:], dtype="f8")
 
 
 def raster_mean(a, transform, geom):
@@ -115,16 +121,65 @@ def spechum(rh, p, t):
     return e * W_RATIO / (p - (1.0 - W_RATIO) * e)
 
 
-def to_hru(f, dz, lapse):
-    """The cell-weighted forcing (time, hru) carried up dz (m, HRU less cells) at lapse (time,) K m-1."""
-    t = f["airtemp"] - lapse[:, None] * dz[None, :]
-    p = f["airpres"] * np.exp(-G * dz[None, :] / (R_DRY * 0.5 * (f["airtemp"] + t)))
-    rh = np.minimum(1.0, relhum(f["spechum"], f["airpres"], f["airtemp"]))
-    return {**f, "airtemp": t, "airpres": p, "spechum": spechum(rh, p, t),
-            "LWRadAtm": f["LWRadAtm"] * (t / f["airtemp"]) ** 4}
+def column(h, z, floor):
+    """Carries a (time, level) profile to height z (m): linear in the geopotential height h (time, level, rising)
+    between the two levels around z, of those over floor (m); beyond them, along the nearest two."""
+    nl, rows = h.shape[1], np.arange(h.shape[0])
+    above = h > floor
+    first = np.minimum(np.where(above.any(axis=1), np.argmax(above, axis=1), nl - 2), nl - 2)
+    up = np.clip((h <= z).sum(axis=1), first + 1, nl - 1)
+    f = (z - h[rows, up - 1]) / (h[rows, up] - h[rows, up - 1])
+    return lambda x: x[rows, up - 1] + f * (x[rows, up] - x[rows, up - 1])
 
 
-def remap(path, out, w, dz, lapse, hrus, ratio, wind):
+def read_levels(path, after, hours):
+    """A month of pressure levels at hours (h since 1900): temperature (K), relative humidity (-) and height (m) by
+    (time, level, lat, lon), and the logarithm of the levels' pressure (Pa).  Linear in time between the file's
+    fields, the first of the next month's file (after, if there is one) closing the month; held past the last."""
+    names = ("airtemp", "spechum", "height")
+    with Dataset(path) as f:
+        at = np.asarray(f["time"][:], dtype="f8")
+        t, q, h = (np.asarray(f[v][:], dtype="f8") for v in names)
+        p = np.asarray(f["level"][:], dtype="f8") * 100.0
+    if after:
+        with Dataset(after) as f:
+            at = np.append(at, f["time"][0])
+            t, q, h = (np.concatenate([x, np.asarray(f[v][:1], dtype="f8")]) for x, v in zip((t, q, h), names))
+    if hours[0] < at[0] or hours[-1] >= at[-1] + (at[1] - at[0]):
+        raise SystemExit(f"{path} does not hold the hours of raw_data")
+    k = np.clip(np.searchsorted(at, hours, side="right") - 1, 0, len(at) - 2)
+    f = np.clip((hours - at[k]) / (at[k + 1] - at[k]), 0.0, 1.0)[:, None, None, None]
+    step = lambda x: x[k] + f * (x[k + 1] - x[k])
+    return {"t": step(t), "rh": step(relhum(q, p[None, :, None, None], t)), "h": step(h), "lnp": np.log(p)}
+
+
+def to_hru(f, lev, w, zs, z):
+    """The month's forcing (time, hru) from the cells' surface fields f (time, lat, lon) and pressure levels lev,
+    for HRUs at z (m) with cell weights w over cells at zs (m)."""
+    out = {name: np.einsum("tij,kij->tk", f[name], w) for name in ("SWRadAtm", "pptrate", "windspd")}
+    t, p, rh, lw = (np.zeros((len(f["LWRadAtm"]), len(z))) for _ in range(4))
+    for k, i, j in zip(*np.nonzero(w)):
+        h = lev["h"][:, :, i, j]
+        hru, cell = column(h, z[k], zs[i, j] + CLEAR), column(h, zs[i, j], zs[i, j] + CLEAR)
+        tk = hru(lev["t"][:, :, i, j])
+        t[:, k] += w[k, i, j] * tk
+        p[:, k] += w[k, i, j] * np.exp(hru(np.broadcast_to(lev["lnp"], h.shape)))
+        rh[:, k] += w[k, i, j] * np.clip(hru(lev["rh"][:, :, i, j]), 0.01, 1.0)
+        lw[:, k] += w[k, i, j] * f["LWRadAtm"][:, i, j] * (tk / cell(lev["t"][:, :, i, j])) ** 4
+    return {**out, "airtemp": t, "airpres": p, "spechum": spechum(rh, p, t), "LWRadAtm": lw}
+
+
+def free_air_lapse(lev, w, zs, z_low, z_high):
+    """(time,) temperature decrease with height (K m-1) of the free air between z_low and z_high (m), over cell weights w (lat, lon)."""
+    d = np.zeros(lev["h"].shape[0])
+    for i, j in zip(*np.nonzero(w)):
+        h, t = lev["h"][:, :, i, j], lev["t"][:, :, i, j]
+        d += w[i, j] * (column(h, z_low, zs[i, j] + CLEAR)(t) - column(h, z_high, zs[i, j] + CLEAR)(t))
+    return d / (z_high - z_low)
+
+
+def remap(path, levels, after, out, w, zs, hrus, ratio, wind, span):
+    """Write the month's forcing; returns its months (time,) and free-air lapse rate (time,) over span (m, low and high)."""
     with Dataset(path) as src, Dataset(out, "w") as dst:
         dst.createDimension("time", None)
         dst.createDimension("hru", len(hrus))
@@ -140,8 +195,8 @@ def remap(path, out, w, dz, lapse, hrus, ratio, wind):
         v.setncatts({"long_name": "shape ID", "units": "1"})
         v[:] = hrus.HRU_ID.values
         month = np.array([d.month for d in num2date(src["time"][:], src["time"].units)])
-        f = {name: np.einsum("tij,kij->tk", np.asarray(src[name][:], dtype="f8"), w) for name in VARS}
-        f = to_hru(f, dz, lapse[month])
+        lev = read_levels(levels, after, np.asarray(src["time"][:], dtype="f8"))
+        f = to_hru({name: np.asarray(src[name][:], dtype="f8") for name in VARS}, lev, w, zs, hrus.elev_mean.values)
         f["pptrate"] = f["pptrate"] * ratio[None, :]
         f["windspd"] = f["windspd"] * wind[month]
         for name in VARS:
@@ -153,6 +208,8 @@ def remap(path, out, w, dz, lapse, hrus, ratio, wind):
         v.setncatts({"long_name": "data step length in seconds", "units": "s"})
         v.assignValue(3600)
         dst.setncatts({"Conventions": "CF-1.6", "Source": f"remap_forcing.py, area-weighted from {os.path.basename(path)}"})
+    basin = np.einsum("k,kij->ij", hrus.HRU_area.values / hrus.HRU_area.sum(), w)
+    return month, free_air_lapse(lev, basin, zs, *span)
 
 
 def main():
@@ -169,21 +226,30 @@ def main():
     with Dataset(raw[0]) as f:
         lat, lon = f["latitude"][:], f["longitude"][:]
     w = weights(hrus, lat, lon)
-    z = cell_elevation(os.path.join(project, "shapefiles", "forcing", "forcing_ERA5.shp"), lat, lon)
-    if np.isnan(z[w.sum(axis=0) > 0]).any():
-        raise SystemExit("forcing_ERA5.shp has no elevation for a cell an HRU overlaps")
-    dz = hrus.elev_mean.values - np.nansum(w * z, axis=(1, 2))
-    lapse = np.full(13, LAPSE)  # by calendar month, index 0 unused
+    levels = levels_dir(project)
+    level_file = lambda path: os.path.join(levels, os.path.basename(path).replace("_ERA5_merged_", "_ERA5_levels_"))
+    if not all(os.path.exists(level_file(path)) for path in raw):
+        raise SystemExit(f"{levels} lacks months of raw_data; run acquire_era5_levels.py first")
+    zs = cell_elevation(os.path.join(levels, f"domain_{dom}_ERA5_orography.nc"), lat, lon)
+    z = hrus.elev_mean.values
+    span = (z.min(), z.max()) if z.max() - z.min() >= SPAN else (z.mean() - SPAN / 2, z.mean() + SPAN / 2)
+    print("ERA5 surface under each HRU (m):", np.round(np.sum(w * zs, axis=(1, 2))), "HRUs at", np.round(z))
     ratio = precip_ratio(c["precip_climatology"], hrus, lat, lon, w) if "precip_climatology" in c else np.ones(len(hrus))
     print("precipitation ratio by HRU:", np.round(ratio, 3))
     wind = wind_ratio(c["wind_climatology"], hrus, raw, w) if "wind_climatology" in c else np.ones((13, len(hrus)))
     print("wind ratio by HRU, January and July:", np.round(wind[1], 2), np.round(wind[7], 2))
     out_dir = os.path.join(project, "forcing", "SUMMA_input")
     os.makedirs(out_dir, exist_ok=True)
-    for path in raw:
-        remap(path, os.path.join(out_dir, f"{dom}_ERA5_remapped_{os.path.basename(path)}"), w, dz, lapse, hrus, ratio, wind)
+    total, count = np.zeros(13), np.zeros(13)
+    for path, after in zip(raw, raw[1:] + [None]):
+        month, lapse = remap(path, level_file(path), after and level_file(after),
+                             os.path.join(out_dir, f"{dom}_ERA5_remapped_{os.path.basename(path)}"), w, zs, hrus, ratio, wind, span)
+        np.add.at(total, month, lapse)
+        np.add.at(count, month, 1)
+    lapse = total[1:] / count[1:]  # by calendar month
+    print(f"free-air lapse rate {span[0]:.0f}-{span[1]:.0f} m by month (K/km):", np.round(-1000 * lapse, 2))
     with open(os.path.join(out_dir, "remap.csv"), "w") as f:
-        f.write("lapse_rate_K_per_km," + ",".join(f"{-1000 * lapse[m]:.2f}" for m in range(1, 13)) + "\n")
+        f.write("lapse_rate_K_per_km," + ",".join(f"{-1000 * x:.2f}" for x in lapse) + "\n")
         f.write("precip_ratio," + ",".join(f"{r:.4f}" for r in ratio) + "\n")
         for k in range(len(hrus)):
             f.write(f"wind_ratio_hru{k + 1}," + ",".join(f"{x:.3f}" for x in wind[1:, k]) + "\n")

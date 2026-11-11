@@ -64,7 +64,6 @@ LOCAL = ZoneInfo("America/Anchorage")
 G, R_DRY = 9.80665, 287.05                           # m s-2, J kg-1 K-1
 DEFAULT_LAPSE = -0.0065                              # K m-1
 FIT_HOURS = None                                     # (first, last) forcing hours the corrections are fitted on, from --fit-years
-SUMMA_LAPSE = 0.006871                               # K m-1, derivforce's lapse from the HRU to a domain
 COLUMNS = {"site_temp": "T", "RelHum": "RH", "Barom": "P", "ShortwaveIn": "SW", "WindSpeed": "U",
            "Precip_Weighing_Incremental": "PR"}
 CATCH = {"SA": (0.0348, 1.366, 0.779), "UN": (0.0785, 0.729, 0.407)}   # Kochendorfer et al. (2017) Table 2, gauge height
@@ -391,7 +390,7 @@ def main():
         snow = np.maximum(frc["pptrate"], 0.0) * 3600.0 * snow_frac
         if a.precip_grad:
             def snow_at(sel, j, ze):
-                t = frc["airtemp"][sel, j] + offset[wet[sel, j], month[sel], j] - SUMMA_LAPSE * (ze - z[j])
+                t = frc["airtemp"][sel, j] + offset[wet[sel, j], month[sel], j] + lapse[1:].mean() * (ze - z[j])  # SUMMA's tempLapseRate, build_cases.py
                 fr = snow_fraction(t, frc["spechum"][sel, j] * q_ratio[wet[sel, j], month[sel], j],
                                    frc["airpres"][sel, j] * ratio["airpres"][j], a.temp_crit_rain, a.temp_range)
                 return (np.maximum(frc["pptrate"][sel, j], 0.0) * 3600.0 * fr).sum()

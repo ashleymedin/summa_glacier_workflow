@@ -11,8 +11,8 @@ Steps, in order (--steps picks some; the default is all of them):
   bands     make_hrus.py: the HRUs, elevation bands of the surface cut to the basin and the glaciers in it
   hrus      hru_attributes.py: HRU area, centre, elevation, slope and contour length from the polygons and DEM
   zonal     glacier_zonal_stats.py: per-HRU debris, domain-type, elevation, slope and aspect statistics
-  era5      acquire_era5.py over the YAML's forcing_period (months not yet in forcing/raw_data), then
-            remap_forcing.py: forcing/SUMMA_input
+  era5      acquire_era5.py and acquire_era5_levels.py over the YAML's forcing_period (months not yet in
+            forcing/raw_data and raw_levels), then remap_forcing.py: forcing/SUMMA_input
   forcing   spechum_ratio_from_campaign.py (if the YAML names a campaign) and correct_forcing_to_station.py:
             forcing/SUMMA_input/station_corrected
   coldstate glacier_cold_state.py: attributes_glac.nc and coldstate_glac.nc, started from cold_start
@@ -66,7 +66,8 @@ def main():
         run(py, os.path.join(HERE, "glacier_zonal_stats.py"), a.config)
     if "era5" in a.steps:
         if not c.get("seed_from"):  # a seeded domain reads the source domain's raw_data
-            run(py, os.path.join(HERE, "acquire_era5.py"), c["forcing_period"]["first"], c["forcing_period"]["last"], a.config)
+            for script, source in (("acquire_era5.py", ()), ("acquire_era5_levels.py", ()), ("acquire_era5_levels.py", ("--source", "cds"))):
+                run(py, os.path.join(HERE, script), c["forcing_period"]["first"], c["forcing_period"]["last"], a.config, *source)
         run(py, os.path.join(HERE, "remap_forcing.py"), a.config)
     if "forcing" in a.steps:
         forcing = os.path.join(project, "forcing", "SUMMA_input")
