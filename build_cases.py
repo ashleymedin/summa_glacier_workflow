@@ -99,10 +99,13 @@ def set_precip_grad(inputs, source):
         raise SystemExit(f"no lapse_rate_K_per_km in {source}/corrections.csv or remap.csv; rerun remap_forcing.py")
     set_param_line(params, "tempLapseRate", -np.mean(lapse[:12]) / 1000.0, 0.0, 0.0098)
     set_wind_factor(params, wind_exposure_station() if os.path.exists(path) else 1.0)
+    set_param_line(params, "glacierTempReduction", air_cooling_station(), 0.5, 0.9)
 
 
-# glacier wind over the forcing station's, from Gulkana Site B (Wilson et al. 2026), wind_exposure_from_campaign.py
+# glacier wind and air temperature above freezing over the forcing station's, from Gulkana Site B (Wilson et al. 2026),
+# wind_exposure_from_campaign.py and air_cooling_from_campaign.py
 WIND_EXPOSURE_CSV = os.path.join(HERE, "data", "domain_Gulkana", "forcing", "wind_exposure_wilson2024.csv")
+AIR_COOLING_CSV = os.path.join(HERE, "data", "domain_Gulkana", "forcing", "air_cooling_wilson2024.csv")
 
 
 def wind_exposure_station():
@@ -113,12 +116,20 @@ def wind_exposure_station():
     raise SystemExit(f"no campaign ratio in {WIND_EXPOSURE_CSV}")
 
 
+def air_cooling_station():
+    """The campaign's glacier-surface air temperature above freezing as a fraction of the station's (searched on ERA5)."""
+    for row in csv.DictReader(open(AIR_COOLING_CSV)):
+        if row["month"] == "all":
+            return float(row["factor"])
+    raise SystemExit(f"no campaign factor in {AIR_COOLING_CSV}")
+
+
 def set_wind_factor(params, value):
     """glacierWindFactor in localParamInfo.txt, the glacier surface wind over the forcing's: the campaign's
     on station-corrected wind, 1 on ERA5's (where it is searched); windExposure, which it replaces, is dropped."""
     lines = [l for l in open(params) if l.split("|")[0].strip() != "windExposure"]
     open(params, "w").writelines(lines)
-    set_param_line(params, "glacierWindFactor", value, 0.3, 3.0)
+    set_param_line(params, "glacierWindFactor", value, 0.3, 1.5)
 
 
 def merge_netcdf(paths, out, concat, shift, keep=None):

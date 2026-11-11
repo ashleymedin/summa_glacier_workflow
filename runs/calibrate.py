@@ -66,12 +66,13 @@ SEARCHES = {
                           "debrisConc": (0.1, 6.4),             # kg m-3, Anderson and Anderson (2018)
                           "frozenPrecipMultip": (0.3, 2.0),
                           "glacierWindFactor": (0.3, 1.5),    # of the CHELSA-corrected wind; Site B's 0.59 of the station's
+                          "glacierTempReduction": (0.5, 0.9),  # of the air temperature above freezing; Site B's 0.73
                           "precipElevGrad": (0.0, 0.0025)}},   # m-1 above the HRU elevation
 }
 
 # fixed at their defaults on the station-corrected cases: the stakes set the snowfall with SUMMA's default phase split
-# (273.16 K, 2 K), Site B sets the on-ice wind (glacierWindFactor 0.59) and cooling (1.3 K), and the stakes the precipitation
-# gradient within an HRU (build_cases.set_precip_grad); raw ERA5 searches them
+# (273.16 K, 2 K), Site B sets the on-ice wind (glacierWindFactor 0.59) and cooling (glacierTempReduction 0.73), and the
+# stakes the precipitation gradient within an HRU (build_cases.set_precip_grad); raw ERA5 searches them
 STATION_FIXED = ["frozenPrecipMultip", "tempCritRain", "tempRangeTimestep", "glacierWindFactor", "glacierTempReduction",
                  "precipElevGrad"]
 
