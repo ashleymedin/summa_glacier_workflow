@@ -6,7 +6,9 @@ of each grid point is intersected with the HRU polygons of shapefiles/catchment/
 in an equal-area projection.  The variables are then carried from the same weighting of the cells' elevations
 (elev_m of shapefiles/forcing/forcing_ERA5.shp) to the HRU's elev_mean: air temperature by the month's lapse rate,
 pressure hypsometrically at the mean of the two temperatures, specific humidity at the cells' relative humidity, and
-longwave at the cells' sky emissivity (by the fourth power of the temperature ratio).  With precip_climatology
+longwave at the cells' sky emissivity (by the fourth power of the temperature ratio).  With wind_climatology in the
+YAML (acquire_climatology.py), the wind is scaled by month to the climatology's mean over the HRU, over the run's mean
+of the cell-weighted wind for that month.  With precip_climatology
 in the YAML (acquire_climatology.py), precipitation is scaled by the HRU's mean climatology over the same weighting
 of the cells' mean, the climatology's pattern within the ERA5 cells.  Every month of raw_data is written, one file per month, with the names
 the rest of the pipeline reads.  Variables, units and time (hours since 1900-01-01 UTC) pass through.
@@ -80,6 +82,27 @@ def precip_ratio(path, hrus, lat, lon, w):
     return hru / np.sum(w * cell, axis=(1, 2))
 
 
+def wind_ratio(path, hrus, raw, w):
+    """(13, hru) by calendar month (row 0 unused): each HRU's mean of the monthly wind climatology (one band a month)
+    over the overlap-weighted ERA5 wind's mean for that month over the raw files."""
+    with rasterio.open(path) as r:
+        transform = r.transform
+        clim = np.array([[raster_mean(np.where(b.mask, np.nan, b.data * sc + of), transform, g)
+                          for g in hrus.to_crs(4326).geometry]
+                         for b, sc, of in zip((r.read(k, masked=True).astype("f8") for k in range(1, 13)), r.scales, r.offsets)])
+    total, count = np.zeros((13, len(hrus))), np.zeros(13)
+    for path in raw:
+        with Dataset(path) as src:
+            month = np.array([d.month for d in num2date(src["time"][:], src["time"].units)])
+            u = np.einsum("tij,kij->tk", np.asarray(src["windspd"][:], dtype="f8"), w)
+        for m in np.unique(month):
+            total[m] += u[month == m].sum(axis=0)
+            count[m] += (month == m).sum()
+    ratio = np.ones((13, len(hrus)))
+    ratio[1:] = clim / (total[1:] / count[1:, None])
+    return ratio
+
+
 def relhum(q, p, t):
     """Relative humidity (-) from specific humidity, pressure (Pa) and temperature (K), as SUMMA's SPHM2RELHM."""
     e_sat = SATVPFRZ * np.exp(17.27 * (t - TFREEZE) / (237.30 + t - TFREEZE))
@@ -101,7 +124,7 @@ def to_hru(f, dz, lapse):
             "LWRadAtm": f["LWRadAtm"] * (t / f["airtemp"]) ** 4}
 
 
-def remap(path, out, w, dz, lapse, hrus, ratio):
+def remap(path, out, w, dz, lapse, hrus, ratio, wind):
     with Dataset(path) as src, Dataset(out, "w") as dst:
         dst.createDimension("time", None)
         dst.createDimension("hru", len(hrus))
@@ -120,6 +143,7 @@ def remap(path, out, w, dz, lapse, hrus, ratio):
         f = {name: np.einsum("tij,kij->tk", np.asarray(src[name][:], dtype="f8"), w) for name in VARS}
         f = to_hru(f, dz, lapse[month])
         f["pptrate"] = f["pptrate"] * ratio[None, :]
+        f["windspd"] = f["windspd"] * wind[month]
         for name in VARS:
             s = src[name]
             v = dst.createVariable(name, "f8" if name == "airtemp" else "f4", ("time", "hru"), fill_value=FILL)
@@ -152,13 +176,17 @@ def main():
     lapse = np.full(13, LAPSE)  # by calendar month, index 0 unused
     ratio = precip_ratio(c["precip_climatology"], hrus, lat, lon, w) if "precip_climatology" in c else np.ones(len(hrus))
     print("precipitation ratio by HRU:", np.round(ratio, 3))
+    wind = wind_ratio(c["wind_climatology"], hrus, raw, w) if "wind_climatology" in c else np.ones((13, len(hrus)))
+    print("wind ratio by HRU, January and July:", np.round(wind[1], 2), np.round(wind[7], 2))
     out_dir = os.path.join(project, "forcing", "SUMMA_input")
     os.makedirs(out_dir, exist_ok=True)
     for path in raw:
-        remap(path, os.path.join(out_dir, f"{dom}_ERA5_remapped_{os.path.basename(path)}"), w, dz, lapse, hrus, ratio)
+        remap(path, os.path.join(out_dir, f"{dom}_ERA5_remapped_{os.path.basename(path)}"), w, dz, lapse, hrus, ratio, wind)
     with open(os.path.join(out_dir, "remap.csv"), "w") as f:
         f.write("lapse_rate_K_per_km," + ",".join(f"{-1000 * lapse[m]:.2f}" for m in range(1, 13)) + "\n")
         f.write("precip_ratio," + ",".join(f"{r:.4f}" for r in ratio) + "\n")
+        for k in range(len(hrus)):
+            f.write(f"wind_ratio_hru{k + 1}," + ",".join(f"{x:.3f}" for x in wind[1:, k]) + "\n")
     print(f"{len(raw)} months remapped to {out_dir}")
 
 

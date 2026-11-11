@@ -26,6 +26,7 @@ basin_within: huc12                             # clip the basin to the USGS HUC
 
 forcing_period: {first: 2004-10, last: 2026-09}
 precip_climatology: data/external/CHELSA/CHELSA_bio12_1981-2010_V.2.1_Wolverine.tif   # each HRU's raw precipitation scaled by its CHELSA ratio to the ERA5 cells' (acquire_climatology.py)
+wind_climatology: data/external/CHELSA/CHELSA_sfcWind_1981-2010_V.2.1_Wolverine.tif   # by month, each HRU's raw wind scaled to CHELSA's mean over it (acquire_climatology.py)
 start_debris_scenes: [../domain_Wolverine/observations/imagery/imagery_landsat_2004-08-29.tif, ../domain_Wolverine/observations/imagery/imagery_landsat_2005-08-08.tif]  # imagery classes near the start; debris mapped ~2010 that they show as ice starts clean
 cold_start: 2004-10
 soil_offset: 1.5

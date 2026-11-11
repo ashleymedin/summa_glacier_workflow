@@ -16,6 +16,7 @@ def load_config(path):
     c["project_dir"] = resolve(c["project_dir"])
     c.setdefault("domain", os.path.basename(c["project_dir"].rstrip("/")).replace("domain_", "", 1))
     c["data"] = {k: resolve(v) for k, v in c.get("data", {}).items()}
-    if "precip_climatology" in c:
-        c["precip_climatology"] = resolve(c["precip_climatology"])
+    for key in ("precip_climatology", "wind_climatology"):
+        if key in c:
+            c[key] = resolve(c[key])
     return c
