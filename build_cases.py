@@ -98,7 +98,7 @@ def set_precip_grad(inputs, source):
     if lapse is None:
         raise SystemExit(f"no lapse_rate_K_per_km in {source}/corrections.csv or remap.csv; rerun remap_forcing.py")
     set_param_line(params, "tempLapseRate", -np.mean(lapse[:12]) / 1000.0, 0.0, 0.0098)
-    set_wind_exposure(params, wind_exposure_station() if os.path.exists(path) else 1.0)
+    set_wind_factor(params, wind_exposure_station() if os.path.exists(path) else 1.0)
 
 
 # glacier wind over the forcing station's, from Gulkana Site B (Wilson et al. 2026), wind_exposure_from_campaign.py
@@ -113,15 +113,12 @@ def wind_exposure_station():
     raise SystemExit(f"no campaign ratio in {WIND_EXPOSURE_CSV}")
 
 
-def set_wind_exposure(params, value):
-    """windExposure in localParamInfo.txt: the station wind scaled to the glacier surface, 1 on ERA5's own wind."""
-    lines = []
-    for line in open(params):
-        if line.split("|")[0].strip() == "windExposure":
-            lo, hi = (x.strip() for x in line.split("|")[2:4])
-            line = f"{'windExposure':<26}| {value:12.4f} | {lo:>12} | {hi:>12}\n"
-        lines.append(line)
+def set_wind_factor(params, value):
+    """glacierWindFactor in localParamInfo.txt, the glacier surface wind over the forcing's above freezing: the campaign's
+    on station-corrected wind, 1 on ERA5's (where it is searched); windExposure, which it replaces, is dropped."""
+    lines = [l for l in open(params) if l.split("|")[0].strip() != "windExposure"]
     open(params, "w").writelines(lines)
+    set_param_line(params, "glacierWindFactor", value, 0.3, 3.0)
 
 
 def merge_netcdf(paths, out, concat, shift, keep=None):

@@ -37,7 +37,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 GLACIER = os.path.dirname(HERE)
 SUMMA_DIR = os.path.abspath(os.environ.get("SUMMA_DIR", os.path.join(GLACIER, "..", "summa")))
 
-# paper1: one value of each soil parameter for every domain; windExposure is fixed per case, 0.77 on station wind, 1 on ERA5;
+# paper1: one value of each soil parameter for every domain; glacierWindFactor is Site B's on station wind and searched on ERA5;
 # the upland canopy is fixed at Noah-MP's mixed tundra (2.0 and 0.2 m, LAI 1.8)
 PAPER1 = ["k_soil", "theta_sat", "aquiferBaseflowExp", "aquiferBaseflowRate", "qSurfScale", "frozenPrecipMultip",
           "Fcapil", "tempCritRain", "windReductionParam", "vGn_n", "routingGammaScale", "routingGammaShape",
@@ -69,7 +69,7 @@ SEARCHES = {
 }
 
 # fixed at their defaults on the station-corrected cases: the stakes set the snowfall with SUMMA's default phase split
-# (273.16 K, 2 K), Site B sets the on-ice wind (glacierWindFactor 1) and cooling (1.3 K), and the stakes the precipitation
+# (273.16 K, 2 K), Site B sets the on-ice wind (glacierWindFactor 0.59) and cooling (1.3 K), and the stakes the precipitation
 # gradient within an HRU (build_cases.set_precip_grad); raw ERA5 searches them
 STATION_FIXED = ["frozenPrecipMultip", "tempCritRain", "tempRangeTimestep", "glacierWindFactor", "glacierTempReduction",
                  "precipElevGrad"]
