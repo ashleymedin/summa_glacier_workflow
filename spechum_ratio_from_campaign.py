@@ -4,11 +4,12 @@
 The campaign is compared against ARCO-ERA5 2 m humidity at the station's grid cell, and that comparison is
 carried onto each HRU's forcing through the same grid cell over --bridge-years of the forcing record:
 
-  ratio(hru, month) = [q_station / q_ERA5,2m]_campaign / [q_forcing,hru / q_ERA5,2m]_bridge
+  ratio(month) = [q_station / q_ERA5,2m]_campaign / [q_forcing / q_ERA5,2m]_bridge
 
-so the reanalysis-vs-station bias is assumed stable in time, and the bridge absorbs both the forcing's height
-(lowest model level, not 2 m) and its remapping to HRUs.  Months with under --min-days of campaign hours are
-left out.  Station q is from its relative humidity, temperature and own barometer (Bolton 1980, not lapsed);
+with the forcing's humidity interpolated between the HRUs' elevations to the station's, so the reanalysis-vs-station
+bias is assumed stable in time, and the bridge absorbs the forcing's height (lowest model level, not 2 m).  Every HRU
+takes the month's ratio, which keeps the forcing's change of humidity with elevation.  Months with under --min-days of
+campaign hours are left out.  Station q is from its relative humidity, temperature and own barometer (Bolton 1980, not lapsed);
 station values are hourly means of the samples in the hour ending at each ERA5 time.
 
 The station file is a Campbell logger table with UTC TIMESTAMP, AirTC_Avg (degC), RH (%) and BV_BP_Avg (hPa),
@@ -16,7 +17,7 @@ as in Wilson et al.'s Gulkana 2024 data release.  Writes hruId, month, ratio row
 correct_forcing_to_station.py --spechum-ratios.  Needs xarray, gcsfs and zarr; the ERA5 pulls are cached.
 
     ./spechum_ratio_from_campaign.py $S/domain_Gulkana/forcing/SUMMA_input $S/domain_Gulkana/settings/SUMMA/attributes.nc \\
-        $S/domain_Gulkana/observations/campaigns/wilson_2024/1_meteo/gulkanaB_AWS_2024.csv 63.285514 -145.410336 \\
+        $S/domain_Gulkana/observations/campaigns/wilson_2024/1_meteo/gulkanaB_AWS_2024.csv 63.285514 -145.410336 1682 \\
         $S/domain_Gulkana/forcing/spechum_ratios_wilson2024.csv
 """
 
@@ -94,6 +95,7 @@ def main():
     p.add_argument("station", help="campaign station file")
     p.add_argument("lat", type=float, help="station latitude, degrees N")
     p.add_argument("lon", type=float, help="station longitude, degrees E")
+    p.add_argument("elevation", type=float, help="station elevation, m")
     p.add_argument("output", help="CSV of hruId, month, ratio")
     p.add_argument("--bridge-years", default="2020-2022", help="forcing years, first-last, compared to ERA5 2 m")
     p.add_argument("--bridge-stride", type=int, default=3, help="sample every this many bridge hours")
@@ -136,11 +138,13 @@ def main():
             camp = q_st[sel].mean() / q_era[sel].mean()
             bsel = frc_month == m
             print(f"month {m:2d}: {sel.sum():4d} h, station RH {rh_st[sel].mean():.0f}%, station/ERA5 q {camp:.3f}")
-            for j, h in enumerate(hru_ids):
-                bridge = frc_q[bsel, j].mean() / q_bridge[bsel].mean()
+            z = np.array([elev[h] for h in hru_ids])
+            order = np.argsort(z)
+            bridge = np.interp(a.elevation, z[order], frc_q[bsel].mean(axis=0)[order]) / q_bridge[bsel].mean()
+            print(f"    forcing at {a.elevation:.0f} m / ERA5 q {bridge:.3f} -> ratio {camp / bridge:.3f}")
+            for h in hru_ids:
                 w.writerow([h, m, f"{camp / bridge:.4f}", f"{camp:.4f}", f"{bridge:.4f}", int(sel.sum()),
                             f"{rh_st[sel].mean():.1f}"])
-                print(f"    HRU {h} ({elev[h]:.0f} m): forcing/ERA5 q {bridge:.3f} -> ratio {camp / bridge:.3f}")
     print(f"written {a.output}")
 
 

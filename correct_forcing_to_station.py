@@ -369,7 +369,8 @@ def main():
     p_hru = np.where(np.isfinite(p_hru), p_hru, frc["airpres"])
     # humidity (monthly): the station's relative humidity at each HRU's temperature and pressure
     q = specific_humidity(rh[:, None], t_hru - 273.15, p_hru / 1000.0)
-    q_ratio = by_type(lambda ok, j: q[ok, j].mean() / frc["spechum"][ok, j].mean(), lambda j: np.isfinite(q[:, j]), 1.0)
+    has_rh = np.isfinite(rh).sum() > 24 * 365  # a shorter humidity record is left to --spechum-ratios
+    q_ratio = by_type(lambda ok, j: q[ok, j].mean() / frc["spechum"][ok, j].mean(), lambda j: has_rh & np.isfinite(q[:, j]), 1.0)
     if a.spechum_ratios:
         for r in csv.DictReader(open(a.spechum_ratios)):
             j, m = list(hru_ids).index(int(r["hruId"])), int(r["month"])

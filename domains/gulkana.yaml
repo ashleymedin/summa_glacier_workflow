@@ -57,4 +57,5 @@ spechum_campaign:                               # Wilson et al. 2024 Site B, for
   station: observations/campaigns/wilson_2024/1_meteo/gulkanaB_AWS_2024.csv
   latitude: 63.285514
   longitude: -145.410336
+  elevation: 1682                               # m
   ratios: forcing/spechum_ratios_wilson2024.csv

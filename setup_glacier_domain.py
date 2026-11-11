@@ -90,7 +90,8 @@ def main():
         if campaign:
             ratios = os.path.join(project, campaign["ratios"])
             run(py, os.path.join(HERE, "spechum_ratio_from_campaign.py"), forcing, attributes,
-                os.path.join(project, campaign["station"]), campaign["latitude"], campaign["longitude"], ratios)
+                os.path.join(project, campaign["station"]), campaign["latitude"], campaign["longitude"],
+                campaign["elevation"], ratios)
             args += ["--spechum-ratios", ratios]
         run(*args)
     if "coldstate" in a.steps:
