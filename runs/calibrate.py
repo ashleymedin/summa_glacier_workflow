@@ -2,7 +2,8 @@
 """Calibrate a full glacier run, then score its Pareto front on the held-out years.
 
   calibrate  NSGA-II over the case's calibrate years of cases.yaml after a spin-up over the year before, on
-             discharge and the glacier-wide seasonal mass balance, in <case>/<name> (default calibration)
+             discharge and the glacier-wide seasonal mass balance, in <case>/<name> (default calibration);
+             --search stream adds the water temperature where the case has it
   evaluate   each front member rerun from the calibration start to the end of its evaluate years with its
              parameters pinned (both bounds set to its value) and scored over the evaluate years, in
              <case>/<name>_evaluation/sample_<n>; a routed Wolverine run adds its water temperature, which is only
@@ -54,6 +55,9 @@ DOMAIN = [p for p in PAPER1 if p not in ("k_soil", "theta_sat", "vGn_n", "k_macr
 DOMAIN_CHAIN = ["theta_res@upland", "critSoilWilting@upland", "critSoilTranspire@upland", "fieldCapacity@upland",
                 "theta_sat@upland"]
 
+# stream: the domain search with the wetland's outflow time constant and the depth it stops draining at; its area is the imagery's
+STREAM = DOMAIN + ["wetlandStorageK", "wetlandMinDepth"]
+
 SEARCHES = {
     "paper1": {"params": PAPER1, "logs": ["k_soil", "aquiferBaseflowRate", "k_macropore"],
                "chains": [(PAPER1_CHAIN, 0.025)], "bounds": {}},
@@ -69,6 +73,7 @@ SEARCHES = {
                           "glacierTempReduction": (0.5, 0.9),  # of the air temperature above freezing; Site B's 0.73
                           "precipElevGrad": (0.0, 0.0025)}},   # m-1 above the HRU elevation
 }
+SEARCHES["stream"] = dict(SEARCHES["domain"], params=STREAM, logs=SEARCHES["domain"]["logs"] + ["wetlandStorageK"])
 
 # fixed at their defaults on the station-corrected cases: the stakes set the snowfall with SUMMA's default phase split
 # (273.16 K, 2 K), Site B sets the on-ice wind (glacierWindFactor 0.59) and cooling (glacierTempReduction 0.73), and the
@@ -91,14 +96,18 @@ def periods(case):
 
 def search_for(case, name):
     """The named search, without the STATION_FIXED parameters on a station-corrected case, and without the debris
-    ones on a case with no debris-covered domain (domType 4), where they select nothing and debris cannot emerge."""
+    ones on a case with no debris-covered domain (domType 4), where they select nothing and debris cannot emerge,
+    or the wetland ones on a case with no wetland domain (domType 5)."""
     search = dict(SEARCHES[name])
     if case_spec(case).get("forcing") == "station_corrected":
         search["params"] = [q for q in search["params"] if q.split("@")[0] not in STATION_FIXED]
     with nc4.Dataset(os.path.join(HERE, case, "summa_inputs", "coldState.nc")) as d:
-        debris = bool(np.any(np.asarray(d["domType"][:]) == 4))
-    if not debris:
+        types = np.asarray(d["domType"][:])
+    if not np.any(types == 4):
         search["params"] = [q for q in search["params"] if not q.endswith("@glacDbr") and q != "debrisConc"]
+    if not np.any(types == 5):
+        search["params"] = [q for q in search["params"] if not q.startswith("wetland")]
+        search["logs"] = [q for q in search["logs"] if not q.startswith("wetland")]
     return search
 
 
@@ -392,7 +401,8 @@ def main():
     p.add_argument("--ranks", type=int, default=9, help="MPI ranks: one dispatcher and the workers")
     p.add_argument("--jobs", type=int, default=1, help="evaluate: front members rerun at once, each on --ranks ranks")
     p.add_argument("--search", choices=sorted(SEARCHES), default="paper1",
-                   help="calibrate: paper1 (one soil for every domain) or domain (upland soil and debris apart)")
+                   help="calibrate: paper1 (one soil for every domain), domain (upland soil and debris apart) or stream "
+                        "(domain with the wetland's two parameters, scored on the water temperature too)")
     p.add_argument("--name", default="calibration",
                    help="folder of the calibration in <case>; its evaluation is <name>_evaluation")
     a = p.parse_args()
@@ -403,7 +413,7 @@ def main():
     if a.mode == "calibrate":
         work = os.path.join(run_dir, a.name)
         config = config_text(a.case, run_dir, settings, work, cal0, cal1, cal0, cal1,
-                             "nsga2", a.population * a.generations, a.population, temperature=False,
+                             "nsga2", a.population * a.generations, a.population, temperature=a.search == "stream",
                              search=search_for(a.case, a.search))
         run_driver(work, config, settings, a.ranks)
         print(f"calibration written to {calibration_file(work)}")

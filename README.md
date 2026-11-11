@@ -41,7 +41,8 @@ The observation scripts `acquire_streamflow.py`, `acquire_stream_temperature.py`
 form a SUMMA calibration target reads. `add_stream_hru.py` gives a one-GRU domain a stream HRU and a one-reach
 mizuRoute topology; `add_stream_network.py` splits tributary GRUs off it, each with its own reach, from a JSON
 spec such as `wolverine_network.json`, Wolverine Creek's tributary network. `add_wetland.py` gives an HRU a
-wetland domain (a proglacial lake or wetted forefield) copied from the stream domain's column, and
+wetland domain (a proglacial lake or wetted forefield) copied from the stream domain's column, in the HRU's first
+empty domain slot; a case's `stream:` and `wetland:` keys in `cases.yaml` run both from `build_cases.py`, and
 `acquire_lake_area.py` measures open water in a box on every Sentinel-2 or Landsat scene, beside the gauged flow, to size it, and `acquire_velocity.py` puts ITS_LIVE annual speeds on the flow grid. `acquire_observations.py` runs all of them from the YAML.
 
 ## Building
@@ -128,6 +129,7 @@ first month, the year the calibration spins up over:
 | `gulkana_wolverine` | summa `utils/test/test_calibration/gulkana_wolverine` | raw, Oct 2008 – Dec 2011, 2 GRUs | Oct 2009 – Dec 2011, each glacier's mass balance |
 | `{wolverine,gulkana}_general` | `runs/` | raw ERA5, general domain, Oct 2004 – Sep 2026 | calibrated WY2006–2015 and evaluated WY2016–2026 on discharge and the GRACE storage anomaly |
 | `{wolverine,gulkana}_added` | `runs/` | station-corrected ERA5, added-data domain, Oct 2004 – Sep 2026 | calibrated WY2006–2015 and evaluated WY2016–2026 on discharge and the seasonal mass balance (Wolverine's water temperature in the evaluation) |
+| `{wolverine,gulkana}_stream` | `runs/` | station-corrected ERA5, added-data domain with a stream HRU, a reach and a wetland domain in the terminus HRU (Wolverine's lake and delta, Gulkana's braided fan), hyporheic exchange and bedrock layers on, Oct 2015 – Sep 2026 | the stream-temperature runs: calibrated WY2017–2021 and evaluated WY2022–2026 on discharge, the seasonal mass balance and Wolverine's water temperature (`--search stream`) |
 | `{wolverine,gulkana}_{raw,corrected}` | `runs/` | raw or station-corrected, 2008–2022 | the earlier runs: calibrated 2009–2015, evaluated 2016–2022 |
 
 ## The full runs
@@ -143,7 +145,8 @@ spin-up over 2008. `--search paper1` (the default) searches the paper-1 calibrat
 every domain and debrisConc pinned at 1 kg m-3. `--search domain` searches 32: the upland soil and the debris
 apart (`name@upland`, `name@glacDbr`), their sand fractions setting the conductivity of the solids, and debrisConc;
 it needs a SUMMA that reads bounds from `[calibration.parameters]` entries and the debris values that `domain_soil_params.py` writes
-into trialParams.nc. Wall erosion is fixed at 1 mm yr-1. The evaluation reruns each front member
+into trialParams.nc. `--search stream` adds the wetland's `wetlandStorageK` and `wetlandMinDepth` to the domain search
+and scores the water temperature in the calibration, on a case with a wetland domain and a reach. Wall erosion is fixed at 1 mm yr-1. The evaluation reruns each front member
 over 2009–2022 with its parameters pinned and scores 2016–2022, adding Wolverine's water temperature,
 which the gauge records only from 2016. It writes `evaluation/evaluation.csv`. The observations for
 2008–2022 are in each domain's `observations/calibration`.

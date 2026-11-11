@@ -8,9 +8,13 @@ the domain's raw ERA5 (forcing/SUMMA_input) or the station correction (forcing/S
 over the case's months: copied into <dest>/forcing for a test, read in place for a run. The soil parameters
 that differ between the upland soil and the debris are then written into its trialParams.nc (domain_soil_params.py).
 
-  stream  the domain gets a stream HRU and a one-reach topology (add_stream_hru.py), whose forcing
-          and topology are written into <dest>
-  merge   two domains become one, one GRU each, with their HRUs, glacier grids and forcing side by side
+  stream   the domain gets a stream HRU and a one-reach topology (add_stream_hru.py), whose forcing
+           and topology are written into <dest>, with the mizuRoute parameters of `routing`
+           (default tests/wolverine/mizuroute.param), their wscale set to the reach width
+  wetland  a stream case gets a wetland domain (add_wetland.py) of the given area (m2) and elevation (m) in one
+           land HRU, the lowest unless `hru` gives its hruId; `depth` (m) and `temp` (K) start its water
+  merge    two domains become one, one GRU each, with their HRUs, glacier grids and forcing side by side
+  decisions  choices of modelDecisions.txt that differ from the template's
 
     ./build_cases.py cases.yaml gulkana_test wolverine_test
 """
@@ -19,6 +23,7 @@ import argparse
 import csv
 import glob
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -233,10 +238,67 @@ def stream_domain(c, spec, stream, first, last, tmp, files, source):
     return built
 
 
+def set_reach_width(routing, topology, width):
+    """wscale in a one-reach case's mizuRoute parameters, so the reach is as wide as its stream HRU: mizuRoute's width
+    is wscale x the square root of the area above the reach."""
+    with nc4.Dataset(topology) as t:
+        area = float(np.sum(t["area"][:]))
+    text, n = re.subn(r"(?m)^(\s*wscale\s*=\s*)\S+", lambda m: f"{m.group(1)}{width / np.sqrt(area):.6g}", open(routing).read())
+    if n != 1:
+        raise SystemExit(f"{routing} has no wscale")
+    open(routing, "w").write(text)
+
+
+def wetland_domain(inputs, wetland):
+    """A wetland domain in one land HRU of the cold state in inputs (add_wetland.py); returns that HRU's id."""
+    with nc4.Dataset(os.path.join(inputs, "attributes.nc")) as a:
+        ids, elev = np.array(a["hruId"][:]), np.array(a["elevation"][:], float)
+        land = np.array(a["streamSegId"][:]) <= 0
+    if "hru" in wetland:
+        found = np.where((ids == wetland["hru"]) & land)[0]
+        if len(found) != 1:
+            raise SystemExit(f"wetland: no land HRU {wetland['hru']} in {inputs}/attributes.nc")
+        ix = int(found[0])
+    else:
+        ix = int(np.where(land, elev, np.inf).argmin())
+    cold = os.path.join(inputs, "coldState.nc")
+    args = [f"--{k}={wetland[k]}" for k in ("depth", "temp") if k in wetland]
+    subprocess.run([sys.executable, os.path.join(HERE, "add_wetland.py"), cold, cold + ".wet", "--hru", str(ix),
+                    "--area", str(wetland["area"]), "--elev", str(wetland["elevation"]), *args], check=True)
+    os.replace(cold + ".wet", cold)
+    return int(ids[ix])
+
+
+def fit_trial_params(inputs):
+    """trialParams.nc rewritten when it was made for another number of HRUs or domains than the case has."""
+    trial, attributes = os.path.join(inputs, "trialParams.nc"), os.path.join(inputs, "attributes.nc")
+    with nc4.Dataset(trial) as t, nc4.Dataset(attributes) as a, nc4.Dataset(os.path.join(inputs, "coldState.nc")) as s:
+        stale = len(t.dimensions["hru"]) != len(a.dimensions["hru"]) or \
+            ("dom" in t.dimensions and len(t.dimensions["dom"]) != len(s.dimensions["dom"]))
+    if stale:
+        write_trial_params(trial, attributes)
+
+
+def set_decisions(inputs, decisions):
+    """The case's own choices in modelDecisions.txt, each replacing the template's line of that name."""
+    path = os.path.join(inputs, "modelDecisions.txt")
+    lines, left = [], dict(decisions)
+    for line in open(path):
+        key = line.split()[0] if line.split() else ""
+        if key in left:
+            line = f"{key:<32}{left.pop(key):<16}!" + line.split("!", 1)[1]
+        lines.append(line)
+    if left:
+        raise SystemExit(f"{path} has no decision {', '.join(left)}")
+    open(path, "w").writelines(lines)
+
+
 def build(name, spec, cases_dir):
     """A case's inputs, then the soil parameters that differ by domain type (domain_soil_params.py)."""
     build_inputs(name, spec, cases_dir)
     inputs = os.path.join(os.path.abspath(os.path.join(cases_dir, spec["dest"])), "summa_inputs")
+    if "decisions" in spec:
+        set_decisions(inputs, spec["decisions"])
     subprocess.run([sys.executable, os.path.join(HERE, "domain_soil_params.py"), inputs], check=True)
 
 
@@ -260,6 +322,8 @@ def build_inputs(name, spec, cases_dir):
                 if "stream" in part:
                     built = stream_domain(c, spec, part["stream"], spec["first_month"], spec["last_month"], out, files,
                                           forcing_dir_of(c, spec["forcing"]))
+                    if "wetland" in part:
+                        wetland_domain(os.path.join(built, "summa_inputs"), part["wetland"])
                     parts.append((c, os.path.join(built, "summa_inputs"), sorted(glob.glob(os.path.join(built, "forcing", "*.nc"))),
                                   os.path.join(built, "topology.nc")))
                 else:
@@ -295,24 +359,29 @@ def build_inputs(name, spec, cases_dir):
         source = forcing_dir_of(c, spec["forcing"])
         files = forcing_files(source, months)
         if "stream" in spec:
+            set_precip_grad(inputs, source)
             built = stream_domain(c, spec, spec["stream"], spec["first_month"], spec["last_month"], tmp, files, source)
             for f in ("attributes.nc", "coldState.nc", "forcingFileList.txt"):
                 shutil.copy(os.path.join(built, "summa_inputs", f), os.path.join(inputs, f))
             shutil.copy(os.path.join(built, "topology.nc"), os.path.join(dest, "topology.nc"))
+            routing = os.path.join(dest, "mizuroute.param")
+            if not os.path.exists(routing):
+                shutil.copy(os.path.join(cases_dir, spec.get("routing", "tests/wolverine/mizuroute.param")), routing)
+            set_reach_width(routing, os.path.join(dest, "topology.nc"), spec["stream"]["width"])
             if os.path.isdir(os.path.join(dest, "forcing")):
                 shutil.rmtree(os.path.join(dest, "forcing"))
             shutil.copytree(os.path.join(built, "forcing"), os.path.join(dest, "forcing"))
-            print(f"{name}: stream HRU added, {len(files)} forcing files in {dest}/forcing")
+            wet = f", wetland in HRU {wetland_domain(inputs, spec['wetland'])}" if "wetland" in spec else ""
+            fit_trial_params(inputs)
+            print(f"{name}: stream HRU added{wet}, {len(files)} forcing files in {dest}/forcing")
             return
+        if "wetland" in spec:
+            raise SystemExit(f"{name}: a wetland needs a stream, whose water column it copies")
 
         set_precip_grad(inputs, source)
         shutil.copy(os.path.join(tmp, "attributes_glac.nc"), os.path.join(inputs, "attributes.nc"))
         shutil.copy(os.path.join(tmp, "coldstate_glac.nc"), os.path.join(inputs, "coldState.nc"))
-        trial, attributes = os.path.join(inputs, "trialParams.nc"), os.path.join(inputs, "attributes.nc")
-        with nc4.Dataset(trial) as t, nc4.Dataset(attributes) as a:
-            stale = len(t.dimensions["hru"]) != len(a.dimensions["hru"])
-        if stale:  # the template is a case with another number of HRUs, as with a stream HRU
-            write_trial_params(trial, attributes)
+        fit_trial_params(inputs)  # the template may be a case with another number of HRUs, as with a stream HRU
         write_file_list(os.path.join(inputs, "forcingFileList.txt"), [os.path.basename(f) for f in files])
         if copy_forcing:
             forcing = os.path.join(dest, "forcing")

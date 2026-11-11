@@ -92,6 +92,39 @@ gulkana_added:
   evaluate: [2015-10-01, 2026-09-30]
   targets: [discharge, mass_balance]
 
+# the stream-temperature runs: the added setup with a stream HRU, a reach and a wetland domain in the terminus HRU, which takes the
+# glacier's runoff and releases it to the reach; hyporheic exchange and the bedrock layers on. Oct 2015 - Sep 2026: spin-up WY2016,
+# calibrated WY2017-2021, evaluated WY2022-2026 (Wolverine's water temperature starts in 2016)
+# wetland: area is the water and wetted gravel at summer flow, elevation the bed DEM's there. Wolverine's is the lake (0.035-0.057 km2
+# since 2015) and its delta; Gulkana's the braided fan, 1.4 km of threads wetting 40 m, its reach the 1.2 km of moraine above it
+wolverine_stream:
+  domain: wolverine
+  dest: runs/wolverine_stream
+  template: tests/wolverine/summa_inputs
+  first_month: 2015-10
+  last_month: 2026-09
+  forcing: station_corrected
+  stream: {length: 2100, slope: 0.03, width: 5, elevation: 390, latitude: 60.374, longitude: -148.912}
+  wetland: {area: 80000, elevation: 425}
+  decisions: {deepTherml: bedrockLyrs, hyporhTdyn: proxy}
+  calibrate: [2016-10-01, 2021-09-30]
+  evaluate: [2021-10-01, 2026-09-30]
+  targets: [discharge, mass_balance, stream_temperature]
+
+gulkana_stream:
+  domain: gulkana
+  dest: runs/gulkana_stream
+  template: tests/gulkana/summa_inputs
+  first_month: 2015-10
+  last_month: 2026-09
+  forcing: station_corrected
+  stream: {length: 1200, slope: 0.03, width: 3.5, elevation: 1220, latitude: 63.247, longitude: -145.455}
+  wetland: {area: 56000, elevation: 1170}
+  decisions: {deepTherml: bedrockLyrs, hyporhTdyn: proxy}
+  calibrate: [2016-10-01, 2021-09-30]
+  evaluate: [2021-10-01, 2026-09-30]
+  targets: [discharge, mass_balance]
+
 # the earlier full runs of glacier.tex: spin-up 2008, calibrated 2009-2015, evaluated 2016-2022
 wolverine_raw:
   calibrate: [2009-01-01, 2015-12-31]
