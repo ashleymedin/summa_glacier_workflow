@@ -6,10 +6,12 @@ One panel per basin (rows) and setup (columns), on the setup's UTM surface grid,
   model glacier and debris   the trial's last annual state: ice thicker than thick4area (0.1 m), debris of 2 cm or more
                              (compare_glacier_change.py's rule), on each glacier's own grid
   start outline              the trial's cold-state glaciers, thin
-  observed outline           the main glacier's last USGS survey outline (the YAML's later_outline)
-  observed debris            the start-debris rule of glacier_rasters.py on the last two late-summer scenes
-                             (check_glacier_imagery.py classes of the added-data domain): inside the observed outline, cells
-                             mostly not ice in the scenes, less its edge unless the setup started them as debris
+  last survey outline        the main glacier's last USGS survey outline (the YAML's later_outline), thin
+  observed outline           that outline brought to the last two late-summer scenes (check_glacier_imagery.py classes of
+                             the added-data domain): less the cells mostly not ice in the scenes that join the ground outside
+                             through such cells, but for those the added-data setup started as debris, whose ice the scenes cannot see
+  observed debris            the start-debris rule of glacier_rasters.py on the same scenes: inside the observed outline, cells
+                             mostly not ice, less its edge unless the added-data setup started them as debris
 
     ./plot_glacier_end.py figs/glacier_end.pdf \\
         wolverine:general:runs/wolverine_general/calibration_rerun_nov11/sample_396:396 \\
@@ -33,7 +35,7 @@ from matplotlib.colors import LightSource
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch, Rectangle
 from rasterio.features import geometry_mask
-from scipy.ndimage import binary_erosion
+from scipy.ndimage import binary_erosion, label
 
 from compare_glacier_change import MIN_DEBRIS, THICK4AREA, yearly
 from domain_config import load_config
@@ -67,7 +69,7 @@ def model_end(c, run):
 
 
 def observed(c, o, like, start_debris):
-    """The observed outline (GeoSeries, in the grid's crs), its date, the scene dates, and the observed debris on the grid."""
+    """The last survey outline (GeoSeries, in the grid's crs), its date, the scene dates, and the observed glacier and debris on the grid."""
     later, usgs = o["later_outline"], o["usgs_outline"]
     surveys = gpd.read_file(os.path.join(HERE, o["data"]["usgs_outlines"]))
     outline = surveys[(surveys.Glacier == usgs["glacier"]) & (surveys.Date == later["date"])].to_crs(like.crs).geometry
@@ -75,9 +77,12 @@ def observed(c, o, like, start_debris):
     scenes = sorted(glob.glob(os.path.join(o["project_dir"], "observations", "imagery", "imagery_*.tif")))[-2:]
     frac = image_ice_fraction(scenes, like, like.shape)
     bare = inside & (frac < 0.5)
-    debris = bare & (binary_erosion(inside) | start_debris)
+    parts, _ = label(~inside | (bare & ~start_debris))
+    ground = np.isin(parts, np.unique(parts[~inside])) & inside  # ice-free cells joined to the ground outside the outline
+    glacier = inside & ~ground
+    debris = glacier & bare & (binary_erosion(glacier) | start_debris)
     dates = [os.path.basename(s)[:-4].split("_")[-1] for s in scenes]
-    return outline, later["date"], dates, debris
+    return outline, later["date"], dates, glacier, debris
 
 
 def panel(ax, config, obs_config, run, label, a, letter):
@@ -87,8 +92,8 @@ def panel(ax, config, obs_config, run, label, a, letter):
     with rasterio.open(os.path.join(project, "attributes", "elevation", "dem", f"domain_{name}_glacier_elv_utm.tif")) as like:
         dem = like.read(1, masked=True).filled(np.nan).astype(float)
         tr, shape = like.transform, like.shape
-        start_debris = on_grid(os.path.join(glaciers, f"domain_{name}_domain_type.tif"), like) == 4
-        outline, outline_date, scene_dates, obs_debris = observed(c, o, like, start_debris)
+        start_debris = on_grid(os.path.join(o["project_dir"], "attributes", "glaciers", f"domain_{o['domain']}_domain_type.tif"), like) == 4  # the added-data start, so both setups face the same observation
+        outline, outline_date, scene_dates, obs_glacier, obs_debris = observed(c, o, like, start_debris)
     year, grids = model_end(c, run)
     xs = tr.c + tr.a * (np.arange(shape[1]) + 0.5)
     ys = tr.f + tr.e * (np.arange(shape[0]) + 0.5)
@@ -107,11 +112,12 @@ def panel(ax, config, obs_config, run, label, a, letter):
         if deb.any():
             ax.contourf(gx, gy, soft(deb), levels=[0.5, 1.5], colors=[BROWN], alpha=0.85, zorder=4)
         ax.contour(gx, gy, soft(ice0), levels=[0.5], colors=[PURPLE], linewidths=0.8, linestyles=":", zorder=5)
-    gpd.GeoSeries(outline.map(chaikin)).boundary.plot(ax=ax, color=OBS, linewidth=1.4, linestyle="--", zorder=6)
+    gpd.GeoSeries(outline.map(chaikin)).boundary.plot(ax=ax, color="#555555", linewidth=0.7, linestyle="--", zorder=6)
+    ax.contour(xs, ys, soft(obs_glacier), levels=[0.5], colors=[OBS], linewidths=1.4, linestyles="--", zorder=6)
     if obs_debris.any():
         ax.contour(xs, ys, soft(obs_debris), levels=[0.5], colors=["#4a2508"], linewidths=1.3, zorder=7)
 
-    rows, cols = np.nonzero(start_debris | obs_debris)
+    rows, cols = np.nonzero(obs_glacier | start_debris)
     pad = 400.0
     left, right = tr.c + tr.a * cols.min() - pad, tr.c + tr.a * (cols.max() + 1) + pad
     top, bottom = tr.f + tr.e * rows.min() + pad, tr.f + tr.e * (rows.max() + 1) - pad
@@ -143,8 +149,8 @@ def panel(ax, config, obs_config, run, label, a, letter):
     ax.annotate("N", (nx0, ny0 + 0.09 * (top - bottom)), (nx0, ny0), ha="center", va="bottom", fontsize=8,
                 arrowprops=dict(arrowstyle="-|>", color="black"), zorder=11)
     cell = abs(tr.a * tr.e) / 1e6
-    print(f"{name} {label}: model end of {year}; observed outline {outline_date}, scenes {', '.join(scene_dates)}; "
-          f"observed debris {obs_debris.sum() * cell:.2f} km2")
+    print(f"{name} {label}: model end of {year}; survey {outline_date} {outline.area.sum() / 1e6:.2f} km2, "
+          f"observed glacier {obs_glacier.sum() * cell:.2f} km2 and debris {obs_debris.sum() * cell:.2f} km2 from {', '.join(scene_dates)}")
     return year, outline_date, scene_dates
 
 
@@ -166,7 +172,8 @@ def main():
         axes[i, j].set_title(f"{basin.capitalize()}, {'general' if setup == 'general' else 'added-data'} setup ({label})", fontsize=10)
     handles = [Patch(fc=ICE, ec=ICE_EDGE, label=f"model glacier, end of {year}"), Patch(fc=BROWN, alpha=0.85, label="model debris, 2 cm or more"),
                Line2D([], [], color=PURPLE, lw=0.9, ls=":", label="glacier outline at the start"),
-               Line2D([], [], color=OBS, lw=1.4, ls="--", label="observed outline, last USGS survey"),
+               Line2D([], [], color="#555555", lw=0.7, ls="--", label="last USGS survey outline"),
+               Line2D([], [], color=OBS, lw=1.4, ls="--", label="observed outline, late-summer imagery"),
                Line2D([], [], color="#4a2508", lw=1.3, label="observed debris, late-summer imagery")]
     fig.legend(handles=handles, loc="lower center", ncol=3, fontsize=7.5, frameon=False)
     fig.tight_layout(rect=(0, 0.06, 1, 1), h_pad=2.0)
