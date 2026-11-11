@@ -9,6 +9,7 @@ before the calibration start, to the end of the evaluation years), but with writ
     ./rerun_trials.py gulkana_corrected calibration_paper1 384 --set wallErosionRate=0 --label wall0
     ./rerun_trials.py gulkana_corrected calibration_paper1 384 --pin windExposure=0.77 --forcing <dir> --label f1
     ./rerun_trials.py gulkana_corrected calibration_paper1 384 --massbal gulkana_balance_profile.txt --label usgsmb
+    ./rerun_trials.py gulkana_general calibration 370 --targets discharge,mass_balance,wgms_amce --aligned --label aligned
 """
 
 import argparse
@@ -60,6 +61,11 @@ def main():
     p.add_argument("--forcing", help="forcing folder to rerun on, default the case's forcing_path.txt")
     p.add_argument("--extra", action="append", default=[], metavar="VAR", help="another daily-mean output variable")
     p.add_argument("--label", help="appended to each folder, sample_<n>_<label>")
+    p.add_argument("--targets", help="comma-separated calibration targets to score, default the case's")
+    p.add_argument("--aligned", action="store_true",
+                   help="write each target's aligned simulated and observed series, scored from the calibration start")
+    p.add_argument("--calibration-years", action="store_true",
+                   help="run and score the calibration years only, as the search ran each trial")
     p.add_argument("--inputs", help="summa_inputs folder to rerun on, default <case>/summa_inputs")
     p.add_argument("--massbal", help="glacierMassBalFile of balance profiles the flow model is given instead of the simulated "
                    "(acquire_balance_profile.py)")
@@ -84,10 +90,15 @@ def main():
         with open(os.path.join(pinned, "outputControl.txt"), "a") as f:
             f.writelines(f"{v:<26}| day | mean\n" for v in OUTPUTS + a.extra)
             f.writelines(f"{v:<26}| annual\n" for v in GRIDS)
-        cal0, _, ev0, ev1 = periods(a.case)
-        config = config_text(a.case, run_dir, pinned, work, cal0, ev1, ev0, ev1,
-                             "dds", 1, 1, temperature=True, search=search, pinned=values[s]).replace("write_timeseries = false", "write_timeseries = true") \
+        cal0, cal1, ev0, ev1 = periods(a.case)
+        if a.calibration_years:
+            ev0, ev1 = cal0, cal1
+        config = config_text(a.case, run_dir, pinned, work, cal0, ev1, cal0 if a.aligned else ev0, ev1,
+                             "dds", 1, 1, temperature=True, search=search, pinned=values[s],
+                             targets=a.targets.split(",") if a.targets else None).replace("write_timeseries = false", "write_timeseries = true") \
             .replace("write_Qreach = false", "write_Qreach = true")
+        if a.aligned:
+            config = config.replace("write_aligned = false", "write_aligned = true")
         if a.massbal:
             shutil.copy(a.massbal, os.path.join(pinned, "glacierMassBal.txt"))
             config = re.sub(r'^(noahmp_table *= *".*")$', r'\1\nglacier_massbal  = "glacierMassBal.txt"', config, flags=re.M)

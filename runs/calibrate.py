@@ -120,14 +120,14 @@ def search_of(calibration):
 
 
 def config_text(case, run_dir, settings, work, start, end, score_start, score_end, algorithm, n_samples,
-                population, temperature, search=SEARCHES["paper1"], pinned=None):
+                population, temperature, search=SEARCHES["paper1"], pinned=None, targets=None):
     """The calibration driver's TOML for one search or one pinned trial; pinned name@domainType values are
     held by equal bounds, the parameter files holding the rest (pin_settings).
     Every member of an ordered chain is searched."""
     bounds = dict(search["bounds"])
     bounds.update({k: (v, v) for k, v in (pinned or {}).items() if "@" in k})
     c = CASES[case.split("_")[0]]
-    targets = case_spec(case).get("targets", ["discharge", "mass_balance", "stream_temperature"])
+    targets = targets or case_spec(case).get("targets", ["discharge", "mass_balance", "stream_temperature"])
     routed = os.path.exists(os.path.join(run_dir, "topology.nc"))
     forcing_file = os.path.join(run_dir, "forcing_path.txt")
     forcing = open(forcing_file).read().strip() if os.path.exists(forcing_file) else os.path.join(run_dir, "forcing") + "/"
