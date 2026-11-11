@@ -86,17 +86,6 @@ def set_precip_grad(inputs, source):
     set_wind_exposure(params, wind_exposure_station() if os.path.exists(path) else 1.0)
 
 
-def set_forcing_elev(attributes, c):
-    """forcingElev in attributes.nc, the ERA5 cells' elevation, so precipElevGrad grades raw precipitation from there."""
-    from remap_forcing import forcing_elevation
-    ids, z = forcing_elevation(c)
-    with nc4.Dataset(attributes, "a") as a:
-        hru = np.asarray(a["hruId"][:]).astype(int)
-        v = a["forcingElev"] if "forcingElev" in a.variables else a.createVariable("forcingElev", "f8", ("hru",))
-        v.setncatts({"long_name": "elevation the forcing applies at, reference height of precipElevGrad", "units": "m"})
-        v[:] = np.array([z[list(ids).index(h)] for h in hru])
-
-
 # glacier wind over the forcing station's, from Gulkana Site B (Wilson et al. 2026), wind_exposure_from_campaign.py
 WIND_EXPOSURE_CSV = os.path.join(HERE, "data", "domain_Gulkana", "forcing", "wind_exposure_wilson2024.csv")
 
@@ -296,8 +285,6 @@ def build_inputs(name, spec, cases_dir):
         set_precip_grad(inputs, source)
         shutil.copy(os.path.join(tmp, "attributes_glac.nc"), os.path.join(inputs, "attributes.nc"))
         shutil.copy(os.path.join(tmp, "coldstate_glac.nc"), os.path.join(inputs, "coldState.nc"))
-        if spec["forcing"] == "raw":
-            set_forcing_elev(os.path.join(inputs, "attributes.nc"), c)
         trial, attributes = os.path.join(inputs, "trialParams.nc"), os.path.join(inputs, "attributes.nc")
         with nc4.Dataset(trial) as t, nc4.Dataset(attributes) as a:
             stale = len(t.dimensions["hru"]) != len(a.dimensions["hru"])
