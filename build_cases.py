@@ -69,20 +69,35 @@ def forcing_dir_of(c, forcing):
     return base if forcing == "raw" else os.path.join(base, "station_corrected")
 
 
-def set_precip_grad(inputs, source):
-    """precipElevGrad in the case's localParamInfo.txt, from the station correction's corrections.csv (0 without one)."""
-    grad = 0.0
-    path = os.path.join(source, "corrections.csv")
+def csv_row(path, key):
+    """The values after key in the first column of a corrections.csv or remap.csv, or None."""
     if os.path.exists(path):
         for row in csv.reader(open(path)):
-            if row and row[0] == "precipElevGrad_per_m":
-                grad = float(row[1])
-    params = os.path.join(inputs, "localParamInfo.txt")
-    lines = [l for l in open(params) if l.split("|")[0].strip() != "precipElevGrad"]
+            if row and row[0] == key:
+                return [float(x) for x in row[1:]]
+    return None
+
+
+def set_param_line(params, name, value, lower, upper):
+    lines = [l for l in open(params) if l.split("|")[0].strip() != name]
     if lines and not lines[-1].endswith("\n"):
         lines[-1] += "\n"
-    lines.append(f"{'precipElevGrad':<26}| {grad:12.5f} | {0.0:12.4f} | {0.005:12.4f}\n")
+    lines.append(f"{name:<26}| {value:12.6f} | {lower:12.4f} | {upper:12.4f}\n")
     open(params, "w").writelines(lines)
+
+
+def set_precip_grad(inputs, source):
+    """precipElevGrad and tempLapseRate in the case's localParamInfo.txt: the gradient from the station correction's
+    corrections.csv (0 without one), the lapse rate the year's mean of the monthly ones the forcing was carried to the
+    HRUs with (corrections.csv, else remap_forcing's remap.csv)."""
+    path = os.path.join(source, "corrections.csv")
+    params = os.path.join(inputs, "localParamInfo.txt")
+    grad = csv_row(path, "precipElevGrad_per_m")
+    set_param_line(params, "precipElevGrad", grad[0] if grad else 0.0, 0.0, 0.005)
+    lapse = csv_row(path, "lapse_rate_K_per_km") or csv_row(os.path.join(source, "remap.csv"), "lapse_rate_K_per_km")
+    if lapse is None:
+        raise SystemExit(f"no lapse_rate_K_per_km in {source}/corrections.csv or remap.csv; rerun remap_forcing.py")
+    set_param_line(params, "tempLapseRate", -np.mean(lapse[:12]) / 1000.0, 0.0, 0.0098)
     set_wind_exposure(params, wind_exposure_station() if os.path.exists(path) else 1.0)
 
 

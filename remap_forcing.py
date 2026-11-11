@@ -156,6 +156,9 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
     for path in raw:
         remap(path, os.path.join(out_dir, f"{dom}_ERA5_remapped_{os.path.basename(path)}"), w, dz, lapse, hrus, ratio)
+    with open(os.path.join(out_dir, "remap.csv"), "w") as f:
+        f.write("lapse_rate_K_per_km," + ",".join(f"{-1000 * lapse[m]:.2f}" for m in range(1, 13)) + "\n")
+        f.write("precip_ratio," + ",".join(f"{r:.4f}" for r in ratio) + "\n")
     print(f"{len(raw)} months remapped to {out_dir}")
 
 

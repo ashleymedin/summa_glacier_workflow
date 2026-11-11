@@ -50,7 +50,7 @@ PAPER1_CHAIN = ["theta_res", "critSoilWilting", "critSoilTranspire", "fieldCapac
 # frac_sand (with frac_clay fixed) sets the conductivity of the solids, which thCondSoil = funcSoilWet uses; frac_silt is their remainder
 DOMAIN = [p for p in PAPER1 if p not in ("k_soil", "theta_sat", "vGn_n", "k_macropore", "thCond_soil")] + \
          ["k_soil@upland", "k_macropore@upland", "theta_sat@upland", "vGn_n@upland", "frac_sand@upland",
-          "theta_sat@glacDbr", "frac_sand@glacDbr", "debrisConc"]
+          "theta_sat@glacDbr", "frac_sand@glacDbr", "debrisConc", "precipElevGrad"]
 DOMAIN_CHAIN = ["theta_res@upland", "critSoilWilting@upland", "critSoilTranspire@upland", "fieldCapacity@upland",
                 "theta_sat@upland"]
 
@@ -64,13 +64,15 @@ SEARCHES = {
                           "frac_sand@upland": (0.0, 0.9),       # up to what the fixed clay (0.1) leaves
                           "frac_sand@glacDbr": (0.0, 0.9),
                           "debrisConc": (0.1, 6.4),             # kg m-3, Anderson and Anderson (2018)
-                          "frozenPrecipMultip": (0.3, 2.0)}},
+                          "frozenPrecipMultip": (0.3, 2.0),
+                          "precipElevGrad": (0.0, 0.0025)}},   # m-1 above the HRU elevation
 }
 
 # fixed at their defaults on the station-corrected cases: the stakes set the snowfall with SUMMA's default phase split
-# (273.16 K, 2 K) and Site B sets the on-ice wind (glacierWindFactor 1) and cooling (1.3 K); raw ERA5 searches them.
-# precipElevGrad is not searched: the stakes set it on station-corrected cases (build_cases.set_precip_grad), CHELSA on raw ones (remap_forcing)
-STATION_FIXED = ["frozenPrecipMultip", "tempCritRain", "tempRangeTimestep", "glacierWindFactor", "glacierTempReduction"]
+# (273.16 K, 2 K), Site B sets the on-ice wind (glacierWindFactor 1) and cooling (1.3 K), and the stakes the precipitation
+# gradient within an HRU (build_cases.set_precip_grad); raw ERA5 searches them
+STATION_FIXED = ["frozenPrecipMultip", "tempCritRain", "tempRangeTimestep", "glacierWindFactor", "glacierTempReduction",
+                 "precipElevGrad"]
 
 
 def case_spec(case):
