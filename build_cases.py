@@ -114,7 +114,7 @@ def wind_exposure_station():
 
 
 def set_wind_factor(params, value):
-    """glacierWindFactor in localParamInfo.txt, the glacier surface wind over the forcing's above freezing: the campaign's
+    """glacierWindFactor in localParamInfo.txt, the glacier surface wind over the forcing's: the campaign's
     on station-corrected wind, 1 on ERA5's (where it is searched); windExposure, which it replaces, is dropped."""
     lines = [l for l in open(params) if l.split("|")[0].strip() != "windExposure"]
     open(params, "w").writelines(lines)
