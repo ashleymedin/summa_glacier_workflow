@@ -5,7 +5,7 @@ then every front member's held-out scores (calibrate.py evaluate), the balanced 
 (rerun_trials.py --aligned, through the held-out years and over the calibration years alone) and its glacier against
 the surveys and imagery (compare_glacier_change.py). Waits for <case>/calibration to finish first.
 
-    ./post_cal.py wolverine_general
+    ./post_cal.py wolverine_general [log folder under runs/logs, default 2026-11-11]
 """
 import glob
 import os
@@ -20,6 +20,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 GLACIER = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 RUNS = os.path.join(GLACIER, "runs")
 PY = sys.executable
+LOGS = os.path.join(RUNS, "logs", sys.argv[2] if len(sys.argv) > 2 else "2026-11-11")
 VELOCITY = {"wolverine_added": "data/domain_Wolverine/observations/storage/velocity/itslive_annual.npz",
             "gulkana_added": "data/domain_Gulkana/observations/storage/velocity/itslive_annual.npz",
             "wolverine_general": "data/domain_Wolverine_general/observations/storage/velocity/itslive_annual.npz",
@@ -45,8 +46,8 @@ def picks(case):
 
 def main():
     case = sys.argv[1]
-    log = os.path.join(RUNS, "logs", "2026-11-11", f"post_{case}.log")
-    cal_log = os.path.join(RUNS, "logs", "2026-11-11", f"calibrate_{case}.log")
+    log = os.path.join(LOGS, f"post_{case}.log")
+    cal_log = os.path.join(LOGS, f"calibrate_{case}.log")
     while True:
         text = open(cal_log).read() if os.path.exists(cal_log) else ""
         if "calibration written" in text:
