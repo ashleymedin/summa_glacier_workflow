@@ -52,6 +52,18 @@ def cell_elevation(shapefile, lat, lon):
     return z
 
 
+def forcing_elevation(c):
+    """Each HRU's (HRU_ID, ascending) overlap-weighted ERA5 cell elevation, m: the height the raw precipitation applies at."""
+    dom, project = c["domain"], c["project_dir"]
+    raw = sorted(glob.glob(os.path.join(project, "forcing", "raw_data", f"domain_{dom}_ERA5_merged_*.nc")))
+    hrus = gpd.read_file(os.path.join(project, "shapefiles", "catchment", f"{dom}_HRUs_elevation.shp")).sort_values("HRU_ID")
+    with Dataset(raw[0]) as f:
+        lat, lon = f["latitude"][:], f["longitude"][:]
+    w = weights(hrus, lat, lon)
+    z = cell_elevation(os.path.join(project, "shapefiles", "forcing", "forcing_ERA5.shp"), lat, lon)
+    return hrus.HRU_ID.values, np.nansum(w * z, axis=(1, 2))
+
+
 def remap(path, out, w, dT, hrus):
     with Dataset(path) as src, Dataset(out, "w") as dst:
         dst.createDimension("time", None)
