@@ -9,7 +9,8 @@ copies of the forcing.  Longwave is copied unchanged.
             precipitation against --wet-threshold): the mean station-minus-forcing difference, with the
             station moved to each HRU's elevation by that month's lapse rate between the two stations
   spechum   multiplied, per HRU, calendar month and hour type: the ratio of mean station to mean forcing
-            specific humidity, the station's computed from its relative humidity, temperature and pressure (not lapsed).
+            specific humidity, the station's from its relative humidity at the HRU's temperature (above) and
+            pressure (below, or the forcing's without a barometer).
             Where the station has no humidity, --spechum-ratios supplies them (spechum_ratio_from_campaign.py)
   SWRadAtm  multiplied, per HRU: the ratio of summed station to summed forcing incoming shortwave
   airpres   multiplied, per HRU: the ratio of mean station pressure, carried hypsometrically to the HRU
@@ -362,10 +363,13 @@ def main():
         ok = np.isfinite(sw)
         if ok.sum() > 24 * 365:
             ratio["SWRadAtm"][j] = sw[ok].sum() / frc["SWRadAtm"][ok, j].sum()
-    # humidity (monthly) and pressure need the main station's barometer and hygrometer
+    # station pressure carried to each HRU, the forcing's where the station has no barometer
     rh, pk = on_hours(st_main.get("RH", {})), on_hours(st_main.get("P", {}))
-    q = specific_humidity(rh, t_main, pk)
-    q_ratio = by_type(lambda ok, j: q[ok].mean() / frc["spechum"][ok, j].mean(), lambda j: np.isfinite(q), 1.0)
+    p_hru = pk[:, None] * 1000.0 * (t_hru / (t_main[:, None] + 273.15)) ** (-G / (R_DRY * lapse[month][:, None]))
+    p_hru = np.where(np.isfinite(p_hru), p_hru, frc["airpres"])
+    # humidity (monthly): the station's relative humidity at each HRU's temperature and pressure
+    q = specific_humidity(rh[:, None], t_hru - 273.15, p_hru / 1000.0)
+    q_ratio = by_type(lambda ok, j: q[ok, j].mean() / frc["spechum"][ok, j].mean(), lambda j: np.isfinite(q[:, j]), 1.0)
     if a.spechum_ratios:
         for r in csv.DictReader(open(a.spechum_ratios)):
             j, m = list(hru_ids).index(int(r["hruId"])), int(r["month"])
@@ -374,9 +378,7 @@ def main():
     for j in range(nh):
         ok = np.isfinite(pk) & np.isfinite(t_hru[:, j])
         if ok.sum() > 24 * 365:
-            lap = lapse[month][ok]
-            p_hru = pk[ok] * 1000.0 * (t_hru[ok, j] / (t_main[ok] + 273.15)) ** (-G / (R_DRY * lap))
-            ratio["airpres"][j] = p_hru.mean() / frc["airpres"][ok, j].mean()
+            ratio["airpres"][j] = p_hru[ok, j].mean() / frc["airpres"][ok, j].mean()
 
     # precipitation: stake winter balance against the corrected forcing's snowfall
     used, cover, gamma = [[] for _ in z], np.zeros(13), 0.0
