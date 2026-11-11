@@ -25,6 +25,7 @@ stream_network: wolverine_network.json            # the tributary network of the
 basin_within: huc12                             # clip the basin to the USGS HUC12 of the gauge (acquire_nhd.py), US only
 
 forcing_period: {first: 2004-10, last: 2026-09}
+precip_climatology: data/external/CHELSA/CHELSA_bio12_1981-2010_V.2.1_Wolverine.tif   # each HRU's raw precipitation scaled by its CHELSA ratio to the ERA5 cells' (acquire_climatology.py)
 start_debris_scenes: [../domain_Wolverine/observations/imagery/imagery_landsat_2004-08-29.tif, ../domain_Wolverine/observations/imagery/imagery_landsat_2005-08-08.tif]  # imagery classes near the start; debris mapped ~2010 that they show as ice starts clean
 cold_start: 2004-10
 soil_offset: 1.5

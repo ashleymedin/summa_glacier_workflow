@@ -4,7 +4,9 @@
 Each HRU takes the mean of the ERA5 cells it overlaps, weighted by the overlap area: the 0.25-degree cell
 of each grid point is intersected with the HRU polygons of shapefiles/catchment/<domain>_HRUs_elevation.shp
 in an equal-area projection.  Air temperature is then lapsed at 6.5 K km-1 from the same weighting of the
-cells' elevations (elev_m of shapefiles/forcing/forcing_ERA5.shp) to the HRU's elev_mean.  Every month of raw_data is written, one file per month, with the names
+cells' elevations (elev_m of shapefiles/forcing/forcing_ERA5.shp) to the HRU's elev_mean.  With precip_climatology
+in the YAML (acquire_climatology.py), precipitation is scaled by the HRU's mean climatology over the same weighting
+of the cells' mean, the climatology's pattern within the ERA5 cells.  Every month of raw_data is written, one file per month, with the names
 the rest of the pipeline reads.  Variables, units and time (hours since 1900-01-01 UTC) pass through.
 
     ./remap_forcing.py domains/gulkana.yaml
@@ -16,6 +18,8 @@ import os
 
 import geopandas as gpd
 import numpy as np
+import rasterio
+from rasterio.features import geometry_mask
 from netCDF4 import Dataset
 from shapely.geometry import box
 
@@ -64,7 +68,27 @@ def forcing_elevation(c):
     return hrus.HRU_ID.values, np.nansum(w * z, axis=(1, 2))
 
 
-def remap(path, out, w, dT, hrus):
+def raster_mean(a, transform, geom):
+    """Mean of the raster cells whose centres the polygon holds, or that it touches when it holds none."""
+    m = ~geometry_mask([geom], a.shape, transform)
+    if not m.any():
+        m = ~geometry_mask([geom], a.shape, transform, all_touched=True)
+    return np.nanmean(a[m])
+
+
+def precip_ratio(path, hrus, lat, lon, w):
+    """Each HRU's mean of the climatology raster over the overlap-weighted mean of its ERA5 cells'."""
+    with rasterio.open(path) as r:
+        a = r.read(1, masked=True).astype("f8").filled(np.nan)
+        transform = r.transform
+    cell = np.zeros((len(lat), len(lon)))
+    for i, j in zip(*np.nonzero(w.sum(axis=0))):
+        cell[i, j] = raster_mean(a, transform, box(lon[j] - HALF, lat[i] - HALF, lon[j] + HALF, lat[i] + HALF))
+    hru = np.array([raster_mean(a, transform, g) for g in hrus.to_crs(4326).geometry])
+    return hru / np.sum(w * cell, axis=(1, 2))
+
+
+def remap(path, out, w, dT, hrus, ratio):
     with Dataset(path) as src, Dataset(out, "w") as dst:
         dst.createDimension("time", None)
         dst.createDimension("hru", len(hrus))
@@ -83,7 +107,8 @@ def remap(path, out, w, dT, hrus):
             s = src[name]
             v = dst.createVariable(name, "f8" if name == "airtemp" else "f4", ("time", "hru"), fill_value=FILL)
             v.setncatts({k: s.getncattr(k) for k in ("long_name", "units") if k in s.ncattrs()})
-            v[:] = np.einsum("tij,kij->tk", np.asarray(s[:], dtype="f8"), w) + (dT if name == "airtemp" else 0.0)
+            v[:] = np.einsum("tij,kij->tk", np.asarray(s[:], dtype="f8"), w) * (ratio if name == "pptrate" else 1.0) + \
+                (dT if name == "airtemp" else 0.0)
         v = dst.createVariable("data_step", "i8")
         v.setncatts({"long_name": "data step length in seconds", "units": "s"})
         v.assignValue(3600)
@@ -108,10 +133,12 @@ def main():
     if np.isnan(z[w.sum(axis=0) > 0]).any():
         raise SystemExit("forcing_ERA5.shp has no elevation for a cell an HRU overlaps")
     dT = LAPSE * (np.nansum(w * z, axis=(1, 2)) - hrus.elev_mean.values)
+    ratio = precip_ratio(c["precip_climatology"], hrus, lat, lon, w) if "precip_climatology" in c else np.ones(len(hrus))
+    print("precipitation ratio by HRU:", np.round(ratio, 3))
     out_dir = os.path.join(project, "forcing", "SUMMA_input")
     os.makedirs(out_dir, exist_ok=True)
     for path in raw:
-        remap(path, os.path.join(out_dir, f"{dom}_ERA5_remapped_{os.path.basename(path)}"), w, dT, hrus)
+        remap(path, os.path.join(out_dir, f"{dom}_ERA5_remapped_{os.path.basename(path)}"), w, dT, hrus, ratio)
     print(f"{len(raw)} months remapped to {out_dir}")
 
 
