@@ -99,7 +99,8 @@ gulkana_added:
 # wetland: elevation is the bed DEM's there. Wolverine's is the lake, shut under the ice at the start: it opens as the glacier
 # leaves the lowest bed cells of the lake box (mask) and its area follows its volume up to the imagery's largest (0.057 km2);
 # the bed filled to that area holds it 2.25 m deep on average, its stage as the area to the 0.59 (scratch/2026-11-13/lake_depth.py)
-# and it fills with sediment at 5.6e-5 m3 per m3 of glacier runoff, fitted to its 2020-2026 shrinking (scratch/2026-11-13/infill_fit.py)
+# and it fills with fine silt (settling 1e-5 m/s) carried at 7.5e-4 m3 of deposit per m3 of glacier runoff, the share that settles
+# 1 - exp(-w_s A/Q), fitted to its July-August area since 2013 (scratch/2026-11-13/infill_fit.py)
 # Gulkana's is the braided fan at a fixed area, 1.4 km of threads wetting 40 m, its reach the 1.2 km of moraine above it
 wolverine_stream:
   domain: wolverine
@@ -109,7 +110,7 @@ wolverine_stream:
   last_month: 2026-09
   forcing: station_corrected
   stream: {length: 2100, slope: 0.03, width: 5, elevation: 390, latitude: 60.374, longitude: -148.912}
-  wetland: {area: 0, max_area: 57000, mask: 0, elevation: 425, outlet_depth: 2.25, shape: 0.59, sed_conc: 5.6e-5}
+  wetland: {area: 0, max_area: 57000, mask: 0, elevation: 425, outlet_depth: 2.25, shape: 0.59, sed_conc: 7.5e-4, settle_vel: 1.0e-5}
   decisions: {deepTherml: bedrockLyrs, hyporhTdyn: proxy}
   calibrate: [2005-10-01, 2019-09-30]
   evaluate: [2019-10-01, 2026-09-30]

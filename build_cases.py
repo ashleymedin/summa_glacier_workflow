@@ -16,8 +16,8 @@ that differ between the upland soil and the debris are then written into its tri
            `outlet_depth` is wetlandMinDepth, its mean depth filled to the outlet (m): [value, lower, upper] to search
            it, one value to fix it. `max_area` (m2) lets its area follow its volume up to that, `shape` is wetlandShape
            (stage as area to that power below the outlet), `mask` (an index of the domain's observations.lake_area
-           boxes) writes the cells it fills once free of ice (wetland_mask.py), and `sed_conc` is wetlandSedConc, the
-           sediment it traps per volume of glacier runoff (m3 m-3)
+           boxes) writes the cells it fills once free of ice (wetland_mask.py), `sed_conc` is wetlandSedConc, the
+           sediment its inflow carries (m3 of deposit per m3), and `settle_vel` is wetlandSettleVel, how fast it settles (m s-1)
   merge    two domains become one, one GRU each, with their HRUs, glacier grids and forcing side by side
   decisions  choices of modelDecisions.txt that differ from the template's
 
@@ -284,6 +284,8 @@ def wetland_domain(inputs, wetland, domain):
         set_param_line(params, "wetlandShape", wetland["shape"], 0.1, 10.0)
     if "sed_conc" in wetland:
         set_param_line(params, "wetlandSedConc", wetland["sed_conc"], 0.0, 0.01)
+    if "settle_vel" in wetland:
+        set_param_line(params, "wetlandSettleVel", wetland["settle_vel"], 0.0, 1.0)
     if "mask" in wetland:
         if max_area <= 0:
             raise SystemExit("wetland: a mask needs max_area")
