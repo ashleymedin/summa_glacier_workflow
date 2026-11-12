@@ -13,6 +13,7 @@ elsewhere.
 | `data/domain_*/observations/` | `calibration` (the NetCDF targets `runs/calibrate.py` reads), `stations` (USGS weather stations, for the forcing correction), `storage/{mass_balance,grace,velocity}`, `streamflow`, `stream_temperature`, `lake_area`, `imagery`, `firn` and `campaigns` |
 | `data/external/` | RGI 6.0, Herreid and Pellicciotti debris extent, Rounce debris thickness, Millan ice thickness, the USGS survey DEMs and outlines (`GlacierDEM`) and Hugonnet dh/dt (the domain YAMLs' `data:` paths); not in git |
 | `domains/{wolverine,gulkana}.yaml` | each basin's added-data setup: bounding box, gauge, data paths, the USGS surveys, stations and stakes |
+| `domains/lemon_creek.yaml`, `upland_domain.py` | Lemon Creek, the first basin built without SYMFLUENCE: its `upland:` block has `upland_domain.py` make the surface DEM (Copernicus GLO-30 on a 3 arc-second grid), MODIS land and SoilGrids soil classes, and the upland `attributes.nc`, `coldState.nc` and `trialParams.nc`, with SUMMA settings copied from a template domain |
 | `run_study.py` | the whole study of a basin, both setups: `./run_study.py gulkana`, with `--steps observations domain cases calibrate evaluate checks` and `--setups general added`; calls the scripts below |
 | `domains/{wolverine,gulkana}_general.yaml`, `seed_domain.py` | the general setup of each basin: global data only, in its own `data/domain_<Name>_general`, seeded from the added-data domain |
 | `acquire_observations.py` | fetches the domain YAML's `observations:` block over `forcing_period` |
@@ -52,6 +53,7 @@ empty domain slot; a case's `stream:` and `wetland:` keys in `cases.yaml` run bo
 ./setup_glacier_domain.py domains/gulkana_general.yaml # seed rasters extend hrus zonal coldstate (the forcing is linked)
 ./run_study.py gulkana                               # all of it, both setups: observations domain cases calibrate evaluate checks
 ./setup_glacier_domain.py domains/wolverine.yaml
+./setup_glacier_domain.py domains/lemon_creek.yaml   # nhd surface rasters extend bands upland hrus zonal era5 forcing coldstate, no SYMFLUENCE
 ./build_cases.py cases.yaml                          # every test and run, or name some
 ```
 

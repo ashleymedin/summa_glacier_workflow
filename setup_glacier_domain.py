@@ -5,10 +5,12 @@ Steps, in order (--steps picks some; the default is all of them):
 
   seed      seed_domain.py: a domain with seed_from (the general setup) starts from its source's static files
   nhd       acquire_nhd.py: the USGS watershed (HUC12), flowlines and lakes around the domain, for basin_within and the plots
+  surface   upland_domain.py surface (YAML with upland:): surface DEM, land and soil classes, SUMMA settings
   rasters   glacier_rasters.py: domain type, RGI id, debris thickness and bed rasters
   extend    glacier_extend.py: basin on the bed, glacier-capable cells downstream (needs pysheds)
-            -- then, in SYMFLUENCE: elevation-band HRUs, upland attributes.nc and coldState.nc --
   bands     make_hrus.py: the HRUs, elevation bands of the surface cut to the basin and the glaciers in it
+  upland    upland_domain.py upland (YAML with upland:): upland attributes.nc, coldState.nc and trialParams.nc of the HRUs;
+            Wolverine and Gulkana keep the ones SYMFLUENCE made
   hrus      hru_attributes.py: HRU area, centre, elevation, slope and contour length from the polygons and DEM
   zonal     glacier_zonal_stats.py: per-HRU debris, domain-type, elevation, slope and aspect statistics
   era5      acquire_era5.py and acquire_era5_levels.py over the YAML's forcing_period (months not yet in
@@ -30,7 +32,7 @@ import sys
 from domain_config import load_config
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-STEPS = ("seed", "nhd", "rasters", "extend", "bands", "hrus", "zonal", "era5", "forcing", "coldstate")
+STEPS = ("seed", "nhd", "surface", "rasters", "extend", "bands", "upland", "hrus", "zonal", "era5", "forcing", "coldstate")
 SEEDED = ("seed", "rasters", "extend", "bands", "hrus", "zonal", "era5", "coldstate")  # raw ERA5 is read from the source domain; no station correction
 
 
@@ -54,12 +56,16 @@ def main():
         run(py, os.path.join(HERE, "seed_domain.py"), a.config)
     if "nhd" in a.steps and c.get("basin_within") and not c.get("seed_from"):
         run(py, os.path.join(HERE, "acquire_nhd.py"), a.config)
+    if "surface" in a.steps and c.get("upland"):
+        run(py, os.path.join(HERE, "upland_domain.py"), a.config, "surface")
     if "rasters" in a.steps:
         run(py, os.path.join(HERE, "glacier_rasters.py"), a.config)
     if "extend" in a.steps:
         run(py, os.path.join(HERE, "glacier_extend.py"), a.config)
     if "bands" in a.steps:
         run(py, os.path.join(HERE, "make_hrus.py"), a.config)
+    if "upland" in a.steps and c.get("upland"):
+        run(py, os.path.join(HERE, "upland_domain.py"), a.config, "upland")
     if "hrus" in a.steps:
         run(py, os.path.join(HERE, "hru_attributes.py"), a.config)
     if "zonal" in a.steps:
