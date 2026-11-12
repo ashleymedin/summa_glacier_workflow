@@ -18,6 +18,9 @@ that differ between the upland soil and the debris are then written into its tri
            (stage as area to that power below the outlet), `mask` (an index of the domain's observations.lake_area
            boxes) writes the cells it fills once free of ice (wetland_mask.py), `sed_conc` is wetlandSedConc, the
            sediment its inflow carries (m3 of deposit per m3), and `settle_vel` is wetlandSettleVel, how fast it settles (m s-1)
+  delta    a second wetland in the lake's HRU, the braided delta above it (area, elevation, and the wetland keys above plus
+           flat_area, storage_k and fetch): it takes the glacier runoff and drains to the lake once the lake is open; the two
+           take their own parameter values by domain in trialParams.nc
   merge    two domains become one, one GRU each, with their HRUs, glacier grids and forcing side by side
   decisions  choices of modelDecisions.txt that differ from the template's
 
