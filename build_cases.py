@@ -12,7 +12,10 @@ that differ between the upland soil and the debris are then written into its tri
            and topology are written into <dest>, with the mizuRoute parameters of `routing`
            (default tests/wolverine/mizuroute.param), their wscale set to the reach width
   wetland  a stream case gets a wetland domain (add_wetland.py) of the given area (m2) and elevation (m) in one
-           land HRU, the lowest unless `hru` gives its hruId; `depth` (m) and `temp` (K) start its water
+           land HRU, the lowest unless `hru` gives its hruId; `depth` (m) and `temp` (K) start its water.
+           `outlet_depth` [value, lower, upper] is wetlandMinDepth, its mean depth filled to the outlet (m);
+           `max_area` (m2) lets its area follow its volume up to that, and `mask` (an index of the domain's
+           observations.lake_area boxes) writes the cells it fills once free of ice (wetland_mask.py)
   merge    two domains become one, one GRU each, with their HRUs, glacier grids and forcing side by side
   decisions  choices of modelDecisions.txt that differ from the template's
 
@@ -249,7 +252,7 @@ def set_reach_width(routing, topology, width):
     open(routing, "w").write(text)
 
 
-def wetland_domain(inputs, wetland):
+def wetland_domain(inputs, wetland, domain):
     """A wetland domain in one land HRU of the cold state in inputs (add_wetland.py); returns that HRU's id."""
     with nc4.Dataset(os.path.join(inputs, "attributes.nc")) as a:
         ids, elev = np.array(a["hruId"][:]), np.array(a["elevation"][:], float)
@@ -263,9 +266,23 @@ def wetland_domain(inputs, wetland):
         ix = int(np.where(land, elev, np.inf).argmin())
     cold = os.path.join(inputs, "coldState.nc")
     args = [f"--{k}={wetland[k]}" for k in ("depth", "temp") if k in wetland]
+    max_area = float(wetland.get("max_area", 0))
+    if max_area > 0:
+        args.append(f"--contour={np.sqrt(max(max_area, wetland['area']))}")
     subprocess.run([sys.executable, os.path.join(HERE, "add_wetland.py"), cold, cold + ".wet", "--hru", str(ix),
                     "--area", str(wetland["area"]), "--elev", str(wetland["elevation"]), *args], check=True)
     os.replace(cold + ".wet", cold)
+    params = os.path.join(inputs, "localParamInfo.txt")
+    if "outlet_depth" in wetland:
+        set_param_line(params, "wetlandMinDepth", *wetland["outlet_depth"])
+    if max_area > 0:
+        set_param_line(params, "wetlandMaxArea", max_area, 0.0, 1e9)
+    if "mask" in wetland:
+        if max_area <= 0:
+            raise SystemExit("wetland: a mask needs max_area")
+        subprocess.run([sys.executable, os.path.join(HERE, "wetland_mask.py"), os.path.join(inputs, "attributes.nc"),
+                        os.path.join(HERE, "domains", f"{domain}.yaml"), str(max_area), str(int(ids[ix])),
+                        "--box", str(wetland["mask"])], check=True)
     return int(ids[ix])
 
 
@@ -323,7 +340,7 @@ def build_inputs(name, spec, cases_dir):
                     built = stream_domain(c, spec, part["stream"], spec["first_month"], spec["last_month"], out, files,
                                           forcing_dir_of(c, spec["forcing"]))
                     if "wetland" in part:
-                        wetland_domain(os.path.join(built, "summa_inputs"), part["wetland"])
+                        wetland_domain(os.path.join(built, "summa_inputs"), part["wetland"], part["domain"])
                     parts.append((c, os.path.join(built, "summa_inputs"), sorted(glob.glob(os.path.join(built, "forcing", "*.nc"))),
                                   os.path.join(built, "topology.nc")))
                 else:
@@ -371,7 +388,7 @@ def build_inputs(name, spec, cases_dir):
             if os.path.isdir(os.path.join(dest, "forcing")):
                 shutil.rmtree(os.path.join(dest, "forcing"))
             shutil.copytree(os.path.join(built, "forcing"), os.path.join(dest, "forcing"))
-            wet = f", wetland in HRU {wetland_domain(inputs, spec['wetland'])}" if "wetland" in spec else ""
+            wet = f", wetland in HRU {wetland_domain(inputs, spec['wetland'], spec['domain'])}" if "wetland" in spec else ""
             fit_trial_params(inputs)
             print(f"{name}: stream HRU added{wet}, {len(files)} forcing files in {dest}/forcing")
             return

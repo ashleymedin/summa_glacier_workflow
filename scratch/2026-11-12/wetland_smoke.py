@@ -4,6 +4,8 @@ wetland domain is read, takes the glacier's runoff and releases it to the reach.
 outflow and temperature beside the stream domain's.
 
     SUMMA_DIR=<summa> ./wetland_smoke.py OUT [case ...]      default wolverine_stream gulkana_stream
+
+SMOKE_FIRST and SMOKE_LAST (YYYY-MM) change the water year it runs.
 """
 
 import glob
@@ -22,8 +24,9 @@ sys.path[:0] = [GLACIER, os.path.join(GLACIER, "runs")]
 import build_cases  # noqa: E402
 from calibrate import SUMMA_DIR, config_text  # noqa: E402
 
-FIRST, LAST = "2015-10", "2016-09"
-OUTPUT = ["scalarStreamLatInflow", "scalarStreamLatInflowTemp", "scalarStreamOutflow", "scalarStreamTemp", "DOMarea"]
+FIRST, LAST = os.environ.get("SMOKE_FIRST", "2015-10"), os.environ.get("SMOKE_LAST", "2016-09")
+OUTPUT = ["scalarStreamLatInflow", "scalarStreamLatInflowTemp", "scalarStreamOutflow", "scalarStreamTemp", "DOMarea",
+          "scalarWetlandFullArea"]
 WETLAND, STREAM = 5, 6
 
 

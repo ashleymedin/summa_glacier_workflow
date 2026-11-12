@@ -27,7 +27,8 @@ def main():
     p.add_argument('src', help='cold state or restart to read')
     p.add_argument('dst', help='file to write')
     p.add_argument('--hru', type=int, default=0, help='0-based index of the HRU that gets the wetland')
-    p.add_argument('--area', type=float, required=True, help='wetland area (m2)')
+    p.add_argument('--area', type=float, required=True, help='wetland area (m2), 0 for one that opens later')
+    p.add_argument('--contour', type=float, help='contour length (m), default the square root of the area')
     p.add_argument('--elev', type=float, required=True, help='wetland elevation (m)')
     p.add_argument('--depth', type=float, default=0.3, help='starting liquid depth (m), cold state only')
     p.add_argument('--temp', type=float, default=274.15, help='starting column temperature (K), cold state only')
@@ -76,7 +77,7 @@ def main():
             else:
                 setv('domType', WETLAND)
             setv('DOMarea', a.area); setv('DOMelev', a.elev)
-            setv('DOMtan_slope', 0.01); setv('DOMcontourLength', np.sqrt(a.area)); setv('scalarAblFrac', 0.0)
+            setv('DOMtan_slope', 0.01); setv('DOMcontourLength', a.contour if a.contour else np.sqrt(a.area)); setv('scalarAblFrac', 0.0)
             for k in ('glacMass4AreaChange', 'scalarGlceWE', 'scalarSWE', 'scalarSnowDepth', 'scalarSfcMeltPond'):
                 setv(k, 0.0)
             if restart:

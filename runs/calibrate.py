@@ -55,7 +55,7 @@ DOMAIN = [p for p in PAPER1 if p not in ("k_soil", "theta_sat", "vGn_n", "k_macr
 DOMAIN_CHAIN = ["theta_res@upland", "critSoilWilting@upland", "critSoilTranspire@upland", "fieldCapacity@upland",
                 "theta_sat@upland"]
 
-# stream: the domain search with the wetland's outflow time constant and the depth it stops draining at; its area is the imagery's
+# stream: the domain search with the wetland's outflow time constant and its mean depth filled to the outlet; its area is the imagery's
 STREAM = DOMAIN + ["wetlandStorageK", "wetlandMinDepth"]
 
 SEARCHES = {
@@ -116,7 +116,7 @@ CASES = {  # domain, observation files and gauge of each run
                   "mb": "wolverine_mass_balance_seasonal.nc", "temp": "USGS_15236900_daily_temperature.nc",
                   "grace": "wolverine_grace_tws.nc", "wgms_amce": "wolverine_wgms_amce.nc"},
     "gulkana": {"obs": "data/domain_Gulkana/observations/calibration", "flow": "USGS_15478040_daily_flow.nc",
-                "mb": "gulkana_mass_balance_seasonal.nc", "grace": "gulkana_grace_tws.nc", "wgms_amce": "gulkana_wgms_amce.nc"},
+                "mb": "gulkana_mass_balance_seasonal.nc", "temp": "USGS_15478040_daily_temperature.nc", "grace": "gulkana_grace_tws.nc", "wgms_amce": "gulkana_wgms_amce.nc"},
 }
 
 
