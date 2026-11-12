@@ -34,8 +34,8 @@ def times(d):
     return pd.Timestamp("1990-01-01") + pd.to_timedelta(np.round(np.array(d["time"][:], float)), unit="s")
 
 
-def load(runs_dir, label):
-    out = os.path.join(runs_dir, f"sample_459_{label}", "output")
+def load(runs_dir, label, wet=WET):
+    out = os.path.join(glob.glob(os.path.join(runs_dir, f"sample_*_{label}"))[0], "output")
     with nc4.Dataset(glob.glob(os.path.join(out, "*sample000001_timestep.nc"))[0]) as d:
         hourly = pd.DataFrame({"Q": np.array(d["Q_reach"][:, 0, 0], float), "T": np.array(d["T_reach"][:, 0], float)},
                               index=times(d))
@@ -43,8 +43,8 @@ def load(runs_dir, label):
     day = hourly.resample("24h", offset="9h").mean()
     day.index = day.index + pd.Timedelta("24h")
     with nc4.Dataset(glob.glob(os.path.join(out, "*sample000001_day.nc"))[0]) as d:
-        g = lambda v: np.ma.filled(d[v][:, WET[0], WET[1]].astype(float), np.nan)
-        wet = pd.DataFrame({"area": g("DOMarea_mean"), "full": g("scalarWetlandFullArea_mean"), "Tw": g("scalarStreamTemp_mean"),
+        g = lambda v: np.ma.filled(d[v][:, wet[0], wet[1]].astype(float), np.nan)
+        wet = pd.DataFrame({"area": g("DOMarea_mean"), "Tw": g("scalarStreamTemp_mean"),
                             "qin": g("scalarStreamLatInflow_mean"), "qout": g("scalarStreamOutflow_mean")}, index=times(d))
     return day, wet
 
