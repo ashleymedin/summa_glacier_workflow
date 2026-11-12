@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Write a wetlandMask grid into a case's attributes.nc: the lowest valid-bed cells inside a domain's lake box whose
-area adds up to the lake's largest area, so SUMMA opens the wetland as the glacier leaves those cells.
+"""Write a wetlandMask grid into a case's attributes.nc: the lowest valid-bed cells of the wetland's HRU inside a
+domain's lake box, as many as make up the lake's largest area, so SUMMA opens the wetland as the glacier leaves them.
 
-    ./wetland_mask.py ATTRIBUTES DOMAIN_YAML MAX_AREA_M2 [--box N]      N indexes observations.lake_area (default 0)
+    ./wetland_mask.py ATTRIBUTES DOMAIN_YAML MAX_AREA_M2 HRU_ID [--box N]     N indexes observations.lake_area (default 0)
 """
 
 import argparse
@@ -13,8 +13,7 @@ import netCDF4 as nc4
 import numpy as np
 from pyproj import Transformer
 
-GLACIER = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
-sys.path.insert(0, GLACIER)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from domain_config import load_config  # noqa: E402
 from glacier_cold_state import grid_transforms  # noqa: E402
 
@@ -24,6 +23,7 @@ def main():
     ap.add_argument("attributes")
     ap.add_argument("domain")
     ap.add_argument("max_area", type=float)
+    ap.add_argument("hru", type=int, help="hruId of the wetland's HRU")
     ap.add_argument("--box", type=int, default=0)
     a = ap.parse_args()
     c = load_config(a.domain)
@@ -41,7 +41,8 @@ def main():
             bed = np.ma.filled(at["bed_elev"][:ny, :nx, g, 0].astype(float), np.nan)
             jj, ii = np.mgrid[0:ny, 0:nx]
             lon, lat = ll.transform(*(tr[gid] * (ii + 0.5, jj + 0.5)))
-            inbox = (lon >= box[0]) & (lon <= box[2]) & (lat >= box[1]) & (lat <= box[3]) & np.isfinite(bed)
+            inbox = (lon >= box[0]) & (lon <= box[2]) & (lat >= box[1]) & (lat <= box[3]) & np.isfinite(bed) \
+                & (np.ma.filled(at["cell2hruId"][:ny, :nx, g, 0], -1) == a.hru)
             n = min(int(round(a.max_area/(dx*dy))), int(inbox.sum()))
             if n == 0:
                 continue
@@ -50,6 +51,8 @@ def main():
             mask[:ny, :nx, g, 0] = m.reshape(bed.shape)
             print(f"grid {gid}: {n} cells, {n*dx*dy:.0f} m2, bed {np.sort(bed.ravel()[pick])[[0, -1]].round()} m")
         at["wetlandMask"][:] = mask
+    if not mask.any():
+        raise SystemExit(f"{a.attributes}: no cell of HRU {a.hru} with a bed inside the lake box")
 
 
 if __name__ == "__main__":
