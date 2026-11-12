@@ -32,6 +32,7 @@ basin_within: huc12                             # clip the basin to the USGS HUC
 forcing_period: {first: 2004-10, last: 2026-09}
 observations:
   streamflow: {source: usgs, gauge: "15052000"}
+  stream_temperature: {site: "15052000", instantaneous: true}   # 15-minute values from Nov 2017; the published daily means start in 2020
   grace: true
   wgms_amce: {release: data/external/wgms-amce-2026-02-10, region: ALA, outlines: [RGI60-01.01104]}
   mass_balance: {release: storage/mass_balance/Output_LemonCreek_Glacier_Wide_solutions_calibrated.csv, balance: seasonal}

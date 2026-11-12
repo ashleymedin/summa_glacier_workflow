@@ -20,6 +20,12 @@ hourly values, and a day with fewer than --min-hours is left NaN.  Phelan Creek 
 
     ./acquire_stream_temperature.py 15478040 2006-02-23 2006-08-12 USGS_15478040_daily_temperature.nc \
         --model-utc-offset 0 --aquarius data/domain_Gulkana/observations/stream_temperature/raw_data/<export>.xlsx
+
+With --instantaneous the days are the means of the USGS instantaneous (15-minute) values instead, daylight time
+taken back to standard, for a site whose published daily means start late.  Lemon Creek, from November 2017:
+
+    ./acquire_stream_temperature.py 15052000 2017-11-01 2026-09-30 USGS_15052000_daily_temperature.nc \
+        --model-utc-offset 0 --instantaneous
 """
 
 import argparse
@@ -54,6 +60,28 @@ def fetch_usgs_temperature(site, start, end):
     return temps
 
 
+def fetch_usgs_instantaneous(site, start, end, gauge_offset, min_hours):
+    """Daily mean (degC) by site-standard-time date from USGS instantaneous (15-minute) values; a day needs values in
+    min_hours of its hours."""
+    import io
+    import urllib.request
+    import pandas as pd
+    url = (f"https://waterservices.usgs.gov/nwis/iv/?format=rdb&sites={site}&parameterCd=00010"
+           f"&startDT={start - dt.timedelta(days=1)}&endDT={end + dt.timedelta(days=1)}")
+    with urllib.request.urlopen(url, timeout=600) as r:
+        lines = [l for l in r.read().decode().splitlines() if l.startswith("USGS\t")]
+    if not lines:
+        return {}
+    table = pd.read_csv(io.StringIO("\n".join(lines)), sep="\t", header=None, dtype=str)
+    zones = {"AKST": -9, "AKDT": -8, "PST": -8, "PDT": -7, "MST": -7, "MDT": -6, "CST": -6, "CDT": -5, "EST": -5, "EDT": -4, "UTC": 0}
+    local = pd.to_datetime(table[2])
+    standard = local + pd.to_timedelta([gauge_offset - zones[z] for z in table[3]], unit="h")  # daylight time back to standard
+    values = pd.Series(pd.to_numeric(table[4], errors="coerce").to_numpy(), index=standard).dropna()
+    hours = values.groupby(values.index.floor("h")).size().groupby(lambda t: t.date()).size()
+    means = values.groupby(values.index.date).mean()
+    return {day: float(v) for day, v in means.items() if hours.get(day, 0) >= min_hours and start <= day <= end}
+
+
 def read_aquarius(path, min_hours):
     """Daily mean (degC) by site-standard-time date from an AQUARIUS export's hourly values."""
     import pandas as pd
@@ -77,7 +105,9 @@ def main():
     parser.add_argument("--gauge-utc-offset", type=float,
                         help="standard-time UTC offset, hours, of the site's days, when it cannot be looked up")
     parser.add_argument("--aquarius", help="AQUARIUS export of hourly values to read in place of the USGS daily means")
-    parser.add_argument("--min-hours", type=int, default=20, help="hourly values a day needs, with --aquarius")
+    parser.add_argument("--instantaneous", action="store_true",
+                        help="average the USGS instantaneous (15-minute) values, for a site whose daily means are missing or short")
+    parser.add_argument("--min-hours", type=int, default=20, help="hours with values a day needs, with --aquarius or --instantaneous")
     args = parser.parse_args()
 
     gauge_offset = args.gauge_utc_offset
@@ -86,7 +116,12 @@ def main():
     if gauge_offset is None:
         sys.exit(f"the time zone of {args.site} could not be looked up; give it with --gauge-utc-offset")
 
-    temps = read_aquarius(args.aquarius, args.min_hours) if args.aquarius else fetch_usgs_temperature(args.site, args.start, args.end)
+    if args.aquarius:
+        temps = read_aquarius(args.aquarius, args.min_hours)
+    elif args.instantaneous:
+        temps = fetch_usgs_instantaneous(args.site, args.start, args.end, gauge_offset, args.min_hours)
+    else:
+        temps = fetch_usgs_temperature(args.site, args.start, args.end)
     if not temps:
         sys.exit(f"no daily mean water temperature for {args.site} between {args.start} and {args.end}")
 
@@ -105,7 +140,8 @@ def main():
         attrs={
             "title": f"Daily mean water temperature at USGS {args.site}, for SUMMA calibration",
             "source": f"AQUARIUS export {os.path.basename(args.aquarius)}, hourly values, approval level Working"
-                      if args.aquarius else SOURCES["usgs"]["name"],
+                      if args.aquarius else "USGS NWIS instantaneous values (waterservices.usgs.gov/nwis/iv)"
+                      if args.instantaneous else SOURCES["usgs"]["name"],
             "comment": f"Daily means over the site's standard-time days (UTC{gauge_offset:+g}), "
                        f"on a clock at UTC{args.model_utc_offset:+g}, each stamped at the end of its day.",
             "history": f"created {dt.date.today()} by acquire_stream_temperature.py",

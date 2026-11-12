@@ -4,8 +4,9 @@
 Every key is optional, so a basin without the data leaves it out (the mass balance is the USGS benchmark glaciers' only):
 
   streamflow          {source: usgs|wsc, gauge}                  calibration/<source>_<gauge>_daily_flow.nc
-  stream_temperature  {site, aquarius?}                          calibration/USGS_<site>_daily_temperature.nc; aquarius
-                                                                 is an hourly export under observations/ in place of USGS's daily means
+  stream_temperature  {site, aquarius?, instantaneous?}          calibration/USGS_<site>_daily_temperature.nc; aquarius
+                                                                 is an hourly export under observations/ in place of USGS's daily means,
+                                                                 instantaneous: true averages USGS's 15-minute values instead
   grace               true                                       calibration/<domain>_grace_tws.nc, the cell holding GRU 1
   wgms_amce         {release, region, outlines: [RGI ids]}     calibration/<domain>_wgms_amce.nc, the annual mass change of the WGMS annual mass-change estimates (Dussaillant et al., 2025)
                                                                  from the unzipped WGMS release (a by-hand download), mean of the glaciers by area
@@ -122,6 +123,8 @@ def main():
                     os.path.join(cal, f"USGS_{s['site']}_daily_temperature.nc"), "--model-utc-offset", 0]
             if s.get("aquarius"):
                 args += ["--aquarius", os.path.join(obs, s["aquarius"])]
+            elif s.get("instantaneous"):
+                args += ["--instantaneous"]
             run(*args)
         elif kind == "grace":
             run(py, os.path.join(HERE, "acquire_grace_tws.py"), "--attributes",
