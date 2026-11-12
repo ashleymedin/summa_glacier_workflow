@@ -15,7 +15,7 @@ import pandas as pd
 
 from lake_heat import RHOC, kge, load, obs_series
 
-RUNS = [("nowet", "no wetland"), ("fan", "fan 0.056 km2"), ("wide", "fan 0.21 km2"), ("scale", "fan area with flow")]
+RUNS = [("nowet", "no wetland"), ("scale", "fan area with flow"), ("drop", "fan with flow, reach drop 100 m"), ("wind05", "fan with flow, half wind"), ("cool1", "fan with flow, glacier-cooled air")]
 EVAL = ("2019-10-01", "2026-09-30")
 T06 = ("2006-06-01", "2006-08-31")
 

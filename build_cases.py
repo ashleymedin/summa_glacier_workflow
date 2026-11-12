@@ -10,7 +10,9 @@ that differ between the upland soil and the debris are then written into its tri
 
   stream   the domain gets a stream HRU and a one-reach topology (add_stream_hru.py), whose forcing
            and topology are written into <dest>, with the mizuRoute parameters of `routing`
-           (default tests/wolverine/mizuroute.param), their wscale set to the reach width
+           (default tests/wolverine/mizuroute.param), their wscale set to the reach width;
+           `outlet_elevation` (m, the domain DEM's at the gauge) makes the reach's friction heat that of the fall
+           from the glacier front to it rather than its slope times its length
   wetland  a stream case gets a wetland domain (add_wetland.py) of the given area (m2) and elevation (m) in one
            land HRU, the lowest unless `hru` gives its hruId; `depth` (m) and `temp` (K) start its water.
            `outlet_depth` is wetlandMinDepth, its mean depth filled to the outlet (m): [value, lower, upper] to search
@@ -456,6 +458,9 @@ def build_inputs(name, spec, cases_dir):
             if not os.path.exists(routing):
                 shutil.copy(os.path.join(cases_dir, spec.get("routing", "tests/wolverine/mizuroute.param")), routing)
             set_reach_width(routing, os.path.join(dest, "topology.nc"), spec["stream"]["width"])
+            if "outlet_elevation" in spec["stream"]:  # the reach falls from the glacier front to its outlet
+                set_param_line(os.path.join(inputs, "localParamInfo.txt"), "reachOutletElev",
+                               spec["stream"]["outlet_elevation"], 0.0, 9000.0)
             if os.path.isdir(os.path.join(dest, "forcing")):
                 shutil.rmtree(os.path.join(dest, "forcing"))
             shutil.copytree(os.path.join(built, "forcing"), os.path.join(dest, "forcing"))
