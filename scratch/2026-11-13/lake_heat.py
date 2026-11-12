@@ -21,9 +21,10 @@ import pandas as pd
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-RUNS = [("nolake", "no lake"), ("lake", "lake, 0.057 km$^2$"), ("lake_z0", "lake, 0.057 km$^2$, $z_0$ 5$\\times$10$^{-5}$ m"),
-        ("lake_med", "lake, 0.034 km$^2$")]
-COLORS = ["#1b6ca8", "#e07b39", "#3a923a", "#9b59b6"]  # the paper's plot_forcing_runs.py order
+RUNS = [("nolake", "no lake"), ("lake", "lake held full"), ("infill", "filling, all sediment trapped"),
+        ("settle", "filling with settling silt"), ("fetch", "settling, roughness from wind and fetch")]
+COLORS = ["#1b6ca8", "#e07b39", "#3a923a", "#9b59b6", "#c0392b"]
+AREA_RUNS = ["lake", "infill", "settle", "fetch"]
 CAL, EVAL = ("2015-10-01", "2019-09-30"), ("2019-10-01", "2026-09-30")
 MONTHS = [5, 6, 7, 8, 9, 10]
 RHOC = 1000.0 * 4181.0
@@ -65,12 +66,9 @@ def kge(s, o):
 
 
 def lake_imagery(lake_dir):
-    frames = []
-    for f in ("wolverine_lake_landsat.csv", "wolverine_lake_sentinel2.csv"):
-        x = pd.read_csv(os.path.join(lake_dir, f), parse_dates=["date"])
-        frames.append(x[(x.bad < 0.05) & (x.snow < 0.05) & x.date.dt.month.isin([7, 8])])
-    x = pd.concat(frames).groupby("date").water_km2.median()
-    return x.groupby(x.index.year).median()
+    """July-August median open water by year from 2013, scenes under half snow or ice (infill_fit.py)."""
+    from infill_fit import imagery
+    return imagery(lake_dir)
 
 
 def main():
@@ -104,13 +102,13 @@ def main():
 
     img = lake_imagery(lake_dir)
     area = {}
-    for label in ("lake", "lake_med"):
+    for label in AREA_RUNS:
         wet = res[label]["wet"]
         jja = wet[wet.index.month.isin([7, 8])]
         area[label] = jja.area.groupby(jja.index.year).median() / 1e6
-    print("\nJul-Aug lake area (km2): year 0.057-lake 0.034-lake imagery")
+    print("\nJul-Aug lake area (km2): year " + " ".join(AREA_RUNS) + " imagery")
     for y in sorted(set(area["lake"].index) | set(img.index)):
-        print(f"  {y} {area['lake'].get(y, np.nan):.4f} {area['lake_med'].get(y, np.nan):.4f} {img.get(y, np.nan):.4f}")
+        print(f"  {y} " + " ".join(f"{area[k].get(y, np.nan):.4f}" for k in AREA_RUNS) + f" {img.get(y, np.nan):.4f}")
 
     with open(tab_out, "w") as f:
         for label, name in RUNS:
@@ -120,11 +118,11 @@ def main():
                     + " \\\\\n")
     print("wrote", tab_out)
 
-    fig, (a, b) = plt.subplots(1, 2, figsize=(11, 4.6))
-    w = 0.2
+    fig, (a, b) = plt.subplots(1, 2, figsize=(12, 5.2))
+    w = 0.16
     for k, (label, name) in enumerate(RUNS):
         m = res[label]["month"]
-        a.bar(np.arange(len(MONTHS)) + (k - 1.5) * w, m.values, w * 0.92, color=COLORS[k],
+        a.bar(np.arange(len(MONTHS)) + (k - 2) * w, m.values, w * 0.92, color=COLORS[k],
               label=f"{name}: RMSE {res[label]['cal']:.2f} / {res[label]['eval']:.2f} K")
     a.axhline(0, color="k", lw=0.6)
     a.set_xticks(np.arange(len(MONTHS)), ["May", "Jun", "Jul", "Aug", "Sep", "Oct"])
@@ -132,17 +130,18 @@ def main():
     a.legend(fontsize=8, loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=2, frameon=False,
              title="RMSE WY2016–19 / WY2020–26", title_fontsize=8)
     a.set_title("(a) mean error by month, 2016–2026", fontsize=10)
-    years = np.arange(2005, 2027)
-    b.plot(img.index, img.values, "o", color="k", ms=5, label="imagery, Jul–Aug median")
-    for label, k in (("lake", 1), ("lake_med", 3)):
-        b.plot(area[label].index, area[label].values, "-", color=COLORS[k], lw=2, label=f"{RUNS[k][1]}, Jul–Aug median")
-    b.set_xlim(years[0], years[-1]); b.set_ylim(0, 0.08)
-    b.set_xticks(range(2006, 2027, 4))
-    b.set_ylabel("lake area (km$^2$)"); b.legend(fontsize=8, loc="lower right")
-    b.set_title("(b) the lake as the glacier leaves its basin", fontsize=10)
+    years = np.arange(2004, 2027)
+    b.plot(img.index, img.values, "o", color="k", ms=5, label="imagery, Jul–Aug median (from 2013)")
+    for label in AREA_RUNS:
+        k = [r[0] for r in RUNS].index(label)
+        b.plot(area[label].index, area[label].values, "-", color=COLORS[k], lw=1.8, label=RUNS[k][1])
+    b.set_xlim(years[0] + 0.5, years[-1] + 0.5); b.set_ylim(0, 0.07)
+    b.set_xticks(range(2005, 2027, 3))
+    b.set_ylabel("lake area (km$^2$)"); b.legend(fontsize=7.5, loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=2, frameon=False)
+    b.set_title("(b) July–August lake area, model from October 2004", fontsize=10)
     for ax in (a, b):
         ax.spines[["top", "right"]].set_visible(False)
-    fig.tight_layout(); fig.savefig(fig_out); print("wrote", fig_out)
+    fig.tight_layout(); fig.savefig(fig_out, bbox_inches="tight"); print("wrote", fig_out)
 
 
 if __name__ == "__main__":
