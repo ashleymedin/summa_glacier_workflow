@@ -78,14 +78,17 @@ def main():
     p.add_argument("out_dir")
     p.add_argument("--first", default="2017-06-01")
     p.add_argument("--last", default="2026-09-30")
+    p.add_argument("--max-cloud", type=float, default=30, help="scene cloud cover to search below, percent")
     a = p.parse_args()
     cfg = SITES[a.site]
     os.makedirs(a.out_dir, exist_ok=True)
     src = SOURCES["sentinel2"]
-    items = [i for i in search(src, cfg["box"], a.first, a.last, 60) if int(i["properties"]["datetime"][5:7]) in (6, 7, 8, 9)]
+    items = [i for i in search(src, cfg["box"], a.first, a.last, a.max_cloud) if int(i["properties"]["datetime"][5:7]) in (6, 7, 8, 9)]
     q = fetch_usgs(cfg["site"], a.first, a.last)
-    grid, scenes = None, []
+    grid, scenes, seen = None, [], set()
     for it in items:
+        if it["properties"]["datetime"][:10] in seen:  # one tile of each day
+            continue
         try:
             g = window(it, cfg["box"])
         except Exception:
@@ -101,6 +104,7 @@ def main():
             continue
         bands = {k: band(it, k, grid, h) for k in ("blue", "green", "red", "nir", "swir16")}
         scenes.append((it, bands, bad, snow))
+        seen.add(it["properties"]["datetime"][:10])
         print(it["id"], f"bad {bad:.2f} snow {snow:.2f}", flush=True)
     transform, shape, crs, _ = grid
     z = np.full(shape, np.nan, np.float32)

@@ -309,8 +309,8 @@ def delta_domain(inputs, delta, lake):
     ix = int(np.where(ids == lake["hru"])[0][0]) if "hru" in lake else int(np.where(land, elev, np.inf).argmin())
     cold = os.path.join(inputs, "coldState.nc")
     args = [f"--{k}={delta[k]}" for k in ("depth", "temp") if k in delta]
-    if "contour" in delta:
-        args.append(f"--contour={delta['contour']}")
+    if "contour" in delta or float(delta.get("max_area", 0)) > 0:
+        args.append(f"--contour={delta.get('contour', np.sqrt(max(float(delta.get('max_area', 0)), delta['area'])))}")
     subprocess.run([sys.executable, os.path.join(HERE, "add_wetland.py"), cold, cold + ".wet", "--hru", str(ix),
                     "--area", str(delta["area"]), "--elev", str(delta["elevation"]), *args], check=True)
     os.replace(cold + ".wet", cold)

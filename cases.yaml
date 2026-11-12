@@ -116,6 +116,27 @@ wolverine_stream:
   evaluate: [2019-10-01, 2026-09-30]
   targets: [discharge, mass_balance, stream_temperature]
 
+# Wolverine with its braided delta as a second wetland above the lake: Sentinel-2 has it 0.008-0.016 km2 (median 0.012) at the
+# lake's head with little change with flow, and its flat ground under the tongue until 2012 (scratch/2026-11-13/forefield_wetted.py),
+# so it opens on the lake's basin cells with it, up to 12,000 m2, takes the glacier runoff and drains to the lake. The lake takes
+# the fetch roughness; bedrock layers off as the added-data calibration ran
+wolverine_stream_delta:
+  domain: wolverine
+  dest: runs/wolverine_stream_delta
+  template: tests/wolverine/summa_inputs
+  first_month: 2004-10
+  last_month: 2026-09
+  forcing: station_corrected
+  stream: {length: 2100, slope: 0.03, width: 5, elevation: 390, latitude: 60.374, longitude: -148.912, outlet_elevation: 377}
+  wetland: {area: 0, max_area: 57000, mask: 0, elevation: 425, outlet_depth: 2.25, shape: 0.59, sed_conc: 7.5e-4, settle_vel: 1.0e-5,
+            fetch: 200}
+  delta: {area: 0, max_area: 12000, elevation: 430, outlet_depth: 0.1, shape: 1.0, sed_conc: 0.0, settle_vel: 1.0, fetch: 0,
+          use_mask: 1, feeds_next: 1}
+  decisions: {deepTherml: none, hyporhTdyn: proxy}
+  calibrate: [2005-10-01, 2019-09-30]
+  evaluate: [2019-10-01, 2026-09-30]
+  targets: [discharge, mass_balance, stream_temperature]
+
 gulkana_stream:
   domain: gulkana
   dest: runs/gulkana_stream
