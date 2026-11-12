@@ -60,7 +60,7 @@ def main():
     samples = sorted({q, bal, mb})
     run([PY, "rerun_trials.py", case, "calibration", *map(str, samples), "--jobs", str(len(samples)), "--ranks", "2"], log)
     run([PY, os.path.join(GLACIER, "glen_factor.py"), os.path.join(RUNS, case, "calibration_rerun", f"sample_{bal}"),
-         os.path.join(GLACIER, VELOCITY[case])], log)
+         os.path.join(GLACIER, VELOCITY.get(case, VELOCITY["_".join(case.split("_")[:2])]))], log)
     run([PY, "calibrate.py", "evaluate", case, "--name", "calibration", "--ranks", "2", "--jobs", "3"], log)
     aligned = ["--targets", "discharge,mass_balance,wgms_amce", "--aligned", "--extra", "scalarGlceMelt", "--ranks", "2"]
     run([PY, "rerun_trials.py", case, "calibration", str(bal), *aligned, "--label", "aligned"], log)

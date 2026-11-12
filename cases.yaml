@@ -169,3 +169,53 @@ gulkana_corrected:
   last_month: 2022-12
   forcing: station_corrected
   copy_forcing: false
+
+# katabatic-fetch branch test: glacier cooling constant (glacierCoolLength 0) or by fetch (5281 m), frozen forcing
+wolverine_added_const:
+  domain: wolverine
+  dest: runs/wolverine_added_const
+  template: tests/wolverine/summa_inputs
+  first_month: 2004-10
+  last_month: 2026-09
+  forcing: station_corrected
+  copy_forcing: false
+  calibrate: [2005-10-01, 2015-09-30]
+  evaluate: [2015-10-01, 2026-09-30]
+  targets: [discharge, mass_balance, stream_temperature]
+
+wolverine_added_fetch:
+  domain: wolverine
+  dest: runs/wolverine_added_fetch
+  template: tests/wolverine/summa_inputs
+  first_month: 2004-10
+  last_month: 2026-09
+  forcing: station_corrected
+  copy_forcing: false
+  calibrate: [2005-10-01, 2015-09-30]
+  evaluate: [2015-10-01, 2026-09-30]
+  targets: [discharge, mass_balance, stream_temperature]
+
+gulkana_added_const:
+  domain: gulkana
+  dest: runs/gulkana_added_const
+  template: tests/gulkana/summa_inputs
+  first_month: 2004-10
+  last_month: 2026-09
+  forcing: station_corrected
+  copy_forcing: false
+  calibrate: [2005-10-01, 2015-09-30]
+  evaluate: [2015-10-01, 2026-09-30]
+  targets: [discharge, mass_balance]
+
+gulkana_added_fetch:
+  domain: gulkana
+  dest: runs/gulkana_added_fetch
+  template: tests/gulkana/summa_inputs
+  first_month: 2004-10
+  last_month: 2026-09
+  forcing: station_corrected
+  copy_forcing: false
+  calibrate: [2005-10-01, 2015-09-30]
+  evaluate: [2015-10-01, 2026-09-30]
+  targets: [discharge, mass_balance]
+
