@@ -13,9 +13,10 @@ that differ between the upland soil and the debris are then written into its tri
            (default tests/wolverine/mizuroute.param), their wscale set to the reach width
   wetland  a stream case gets a wetland domain (add_wetland.py) of the given area (m2) and elevation (m) in one
            land HRU, the lowest unless `hru` gives its hruId; `depth` (m) and `temp` (K) start its water.
-           `outlet_depth` [value, lower, upper] is wetlandMinDepth, its mean depth filled to the outlet (m);
-           `max_area` (m2) lets its area follow its volume up to that, and `mask` (an index of the domain's
-           observations.lake_area boxes) writes the cells it fills once free of ice (wetland_mask.py)
+           `outlet_depth` is wetlandMinDepth, its mean depth filled to the outlet (m): [value, lower, upper] to search
+           it, one value to fix it. `max_area` (m2) lets its area follow its volume up to that, `shape` is wetlandShape
+           (stage as area to that power below the outlet), and `mask` (an index of the domain's observations.lake_area
+           boxes) writes the cells it fills once free of ice (wetland_mask.py)
   merge    two domains become one, one GRU each, with their HRUs, glacier grids and forcing side by side
   decisions  choices of modelDecisions.txt that differ from the template's
 
@@ -274,9 +275,12 @@ def wetland_domain(inputs, wetland, domain):
     os.replace(cold + ".wet", cold)
     params = os.path.join(inputs, "localParamInfo.txt")
     if "outlet_depth" in wetland:
-        set_param_line(params, "wetlandMinDepth", *wetland["outlet_depth"])
+        depth = wetland["outlet_depth"]
+        set_param_line(params, "wetlandMinDepth", *(depth if isinstance(depth, list) else [depth, 0.01, 50.0]))
     if max_area > 0:
         set_param_line(params, "wetlandMaxArea", max_area, 0.0, 1e9)
+    if "shape" in wetland:
+        set_param_line(params, "wetlandShape", wetland["shape"], 0.1, 10.0)
     if "mask" in wetland:
         if max_area <= 0:
             raise SystemExit("wetland: a mask needs max_area")

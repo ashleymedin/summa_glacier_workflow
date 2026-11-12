@@ -108,6 +108,8 @@ def search_for(case, name):
     if not np.any(types == 5):
         search["params"] = [q for q in search["params"] if not q.startswith("wetland")]
         search["logs"] = [q for q in search["logs"] if not q.startswith("wetland")]
+    elif not isinstance(case_spec(case).get("wetland", {}).get("outlet_depth", []), list):
+        search["params"] = [q for q in search["params"] if q != "wetlandMinDepth"]  # fixed from the bed
     return search
 
 
