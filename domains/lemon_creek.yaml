@@ -37,6 +37,8 @@ observations:
   wgms_amce: {release: data/external/wgms-amce-2026-02-10, region: ALA, outlines: [RGI60-01.01104]}
   mass_balance: {release: storage/mass_balance/Output_LemonCreek_Glacier_Wide_solutions_calibrated.csv, balance: seasonal}
   velocity: true
+  lake_area:
+    - {name: lake_thomas, box: [-134.392, 58.398, -134.366, 58.414], usgs_site: "15052000"}   # the NHD lakes before the north terminus, with room for the retreat
 
 cold_start: 2004-10
 soil_offset: 1.5
