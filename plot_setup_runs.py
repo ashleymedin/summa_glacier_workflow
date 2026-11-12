@@ -3,7 +3,11 @@
 
     plot_setup_runs.py <basin> <out.pdf> <case>:<name>:<sample>:<label> [...]
 
-    ./plot_setup_runs.py wolverine figs/wolverine_best.pdf wolverine_added:calibration:459:added wolverine_general:calibration_rerun_nov11:396:general
+    ./plot_setup_runs.py wolverine figs/wolverine_best.pdf wolverine_added:calibration:459:added wolverine_general:calibration_rerun_nov11:396:general \
+        temp:wolverine_stream:calibration_added_rerun:459_nolake:"added, no lake"
+
+A spec starting with temp: is a rerun of the stream case (case:rerun folder:sample folder suffix:label), whose reach
+temperature at the gauge is drawn in a last row (e) against the gauge's daily water temperature.
 
 Each trial is the output of runs/rerun_trials.py --aligned, with and without --calibration-years (see trial), so every
 score and every simulated balance is the calibration driver's own (its evaluation group in the timestep file). Rows:
@@ -25,6 +29,9 @@ import pandas as pd
 WORKFLOW = os.path.dirname(os.path.abspath(__file__))
 OBS = {"gulkana": ("data/domain_Gulkana/observations/calibration", "USGS_15478040_daily_flow.nc"),
        "wolverine": ("data/domain_Wolverine/observations/calibration", "USGS_15236900_daily_flow.nc")}
+TEMP = {"gulkana": "USGS_15478040_daily_temperature.nc", "wolverine": "USGS_15236900_daily_temperature.nc"}
+TEMP_COLORS = ["#7f7f7f", "#c0392b", "#9b59b6", "#16a085"]
+TEMP_HELD = "2019-10-01"  # the stream cases calibrate WY2006-2019 and hold out WY2020-2026
 COLORS = ["#1b6ca8", "#e07b39", "#3a923a", "#9b59b6"]
 START, HELD, END = "2005-10-01", "2015-10-01", "2026-09-30"  # run, held-out and end dates
 
@@ -77,6 +84,18 @@ def trial(case, name, sample):
     return daily, ev
 
 
+def reach_temperature(case, rerun, suffix):
+    """Daily mean reach temperature at the gauge (deg C) of a stream-case rerun, over the gauge's Alaska days."""
+    out = os.path.join(WORKFLOW, "runs", case, rerun, f"sample_{suffix}", "output")
+    h = nc.Dataset([f for f in glob.glob(os.path.join(out, "*_timestep.nc")) if "spinup" not in f][0])
+    th = pd.to_datetime(nc.num2date(h["time"][:], h["time"].units, only_use_cftime_datetimes=False,
+                                    only_use_python_datetimes=True)).round("h")
+    t = pd.Series(np.ma.filled(h["T_reach"][:, 0].astype(float), np.nan) - 273.15, index=th)
+    t = t.resample("24h", offset="9h", label="right", closed="right").mean()
+    t.index = pd.to_datetime(t.index.strftime("%Y-%m-%d"))
+    return t
+
+
 def kge(df):
     r = np.corrcoef(df.sim, df.obs)[0, 1]
     return 1 - np.sqrt((r - 1) ** 2 + (df.sim.std() / df.obs.std() - 1) ** 2 + (df.sim.mean() / df.obs.mean() - 1) ** 2)
@@ -119,11 +138,14 @@ def bars(ax, sims, target, obs_label, title):
 
 def main():
     basin, pdf, specs = sys.argv[1], sys.argv[2], [x.split(":") for x in sys.argv[3:]]
+    temps = [x[1:] for x in specs if x[0] == "temp"]
+    specs = [x for x in specs if x[0] != "temp"]
     folder, flow = OBS[basin]
     q = series(os.path.join(WORKFLOW, folder, flow), "q_obs")[START:END]
     sims = [(label, *trial(case, name, sample)) for case, name, sample, label in specs]
 
-    fig, ax = plt.subplots(4, 1, figsize=(10, 14), gridspec_kw={"height_ratios": [1.1, 1, 1, 1]})
+    rows = 5 if temps else 4
+    fig, ax = plt.subplots(rows, 1, figsize=(10, 3.5 * rows), gridspec_kw={"height_ratios": [1.1] + [1] * (rows - 1)})
     ax[0].plot(q.index, q.values, color="k", lw=0.8, label="USGS gauge")
     for (label, s, ev), c in zip(sims, COLORS):
         cal, hold = split(ev["discharge"], kge)
@@ -153,6 +175,26 @@ def main():
          "(c) Seasonal balances by water year, winter up and summer down (RMSE calibration / held out)")
     bars(ax[3], sims, "wgms_amce", "WGMS estimate",
          "(d) Annual balances by water year (RMSE calibration / held out)")
+    if temps:
+        to = series(os.path.join(WORKFLOW, folder, TEMP[basin]), "t_obs").dropna()
+        if to.max() > 200:
+            to = to - 273.15
+        span = (to.index.min() - pd.Timedelta(days=10), to.index.max() + pd.Timedelta(days=10))
+        ax[4].plot(to.index, to.values, ".", color="k", ms=2.5, label="USGS gauge")
+        for (case, rerun, suffix, label), c in zip(temps, TEMP_COLORS):
+            t = reach_temperature(case, rerun, suffix)
+            e = (t.reindex(to.index) - to).dropna()
+            cal, hold = np.sqrt((e[e.index < TEMP_HELD] ** 2).mean()), np.sqrt((e[e.index >= TEMP_HELD] ** 2).mean())
+            score = f"RMSE {cal:.2f} / {hold:.2f} K" if len(e[e.index >= TEMP_HELD]) else f"RMSE {cal:.2f} K"
+            t = t[span[0]:span[1]]
+            t = t.where(t.index.month.isin(to.index.month.unique()))  # only the months the gauge records
+            ax[4].plot(t.index, t.values, color=c, lw=0.8, label=f"{label}: {score}", zorder=3)
+        ax[4].set_xlim(*span)
+        ax[4].set_ylabel("Water temperature (°C)")
+        ax[4].legend(fontsize=8, loc="upper left", ncol=2)
+        ax[4].set_title("(e) Daily water temperature at the gauge, stream-case reruns of the added-data trial "
+                        + ("(RMSE WY2016–19 / WY2020–26)" if to.index.max() >= pd.Timestamp(TEMP_HELD) else
+                           f"(RMSE over {to.index.min():%b}–{to.index.max():%b %Y})"), loc="left", fontsize=10)
     fig.tight_layout()
     fig.savefig(pdf)
     print(f"wrote {pdf}")

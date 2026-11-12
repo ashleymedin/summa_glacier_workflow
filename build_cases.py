@@ -295,6 +295,23 @@ def wetland_domain(inputs, wetland, domain):
     return int(ids[ix])
 
 
+def delta_domain(inputs, delta, lake):
+    """A second wetland domain in the lake's HRU (add_wetland.py), the braided delta above the lake: it takes the glacier
+    runoff and drains to the lake once the lake is open (wetland_trial_params sets its parameters by domain)."""
+    with nc4.Dataset(os.path.join(inputs, "attributes.nc")) as a:
+        ids, elev = np.array(a["hruId"][:]), np.array(a["elevation"][:], float)
+        land = np.array(a["streamSegId"][:]) <= 0
+    ix = int(np.where(ids == lake["hru"])[0][0]) if "hru" in lake else int(np.where(land, elev, np.inf).argmin())
+    cold = os.path.join(inputs, "coldState.nc")
+    args = [f"--{k}={delta[k]}" for k in ("depth", "temp") if k in delta]
+    if "contour" in delta:
+        args.append(f"--contour={delta['contour']}")
+    subprocess.run([sys.executable, os.path.join(HERE, "add_wetland.py"), cold, cold + ".wet", "--hru", str(ix),
+                    "--area", str(delta["area"]), "--elev", str(delta["elevation"]), *args], check=True)
+    os.replace(cold + ".wet", cold)
+    return int(ids[ix])
+
+
 def fit_trial_params(inputs):
     """trialParams.nc rewritten when it was made for another number of HRUs or domains than the case has."""
     trial, attributes = os.path.join(inputs, "trialParams.nc"), os.path.join(inputs, "attributes.nc")
@@ -326,6 +343,48 @@ def build(name, spec, cases_dir):
     if "decisions" in spec:
         set_decisions(inputs, spec["decisions"])
     subprocess.run([sys.executable, os.path.join(HERE, "domain_soil_params.py"), inputs], check=True)
+    if "delta" in spec:
+        wetland_trial_params(inputs, spec["wetland"], spec["delta"])
+
+
+# wetland keys of cases.yaml and the SUMMA parameters they set
+WETLAND_PARAMS = {"outlet_depth": "wetlandMinDepth", "max_area": "wetlandMaxArea", "shape": "wetlandShape",
+                  "flat_area": "wetlandFlatArea", "storage_k": "wetlandStorageK", "sed_conc": "wetlandSedConc",
+                  "settle_vel": "wetlandSettleVel", "fetch": "lakeFetch", "feeds_next": "wetlandFeedsNext",
+                  "use_mask": "wetlandUseMask"}
+
+
+def wetland_trial_params(inputs, lake, delta):
+    """The lake's and the delta's own values of the wetland parameters in trialParams.nc, by domain: the delta is the
+    later wetland domain of their HRU. A key one of them lacks takes localParamInfo.txt's value, which the lake set."""
+    with nc4.Dataset(os.path.join(inputs, "coldState.nc")) as c:
+        dom_type = np.asarray(c["domType"][0], int)  # (hru, dom)
+    hru, dom = np.where(dom_type == 5)
+    if len(hru) != 2 or hru[0] != hru[1]:
+        raise SystemExit(f"delta: expected the lake and the delta in one HRU, found wetlands at {list(zip(hru, dom))}")
+    default = {}
+    for line in open(os.path.join(inputs, "localParamInfo.txt")):
+        if "|" in line and not line.lstrip().startswith(("!", "'")):
+            parts = line.split("|")
+            default[parts[0].strip()] = float(parts[1].strip().replace("d", "e").replace("D", "e"))
+    lake = dict(lake, feeds_next=lake.get("feeds_next", 0), use_mask=lake.get("use_mask", 1))
+    delta = dict(delta, feeds_next=delta.get("feeds_next", 1), use_mask=delta.get("use_mask", 0))
+    first = lambda v: v[0] if isinstance(v, list) else v
+    with nc4.Dataset(os.path.join(inputs, "trialParams.nc"), "a") as t:
+        if "dom" not in t.dimensions:
+            t.createDimension("dom", dom_type.shape[1])
+        for key, name in WETLAND_PARAMS.items():
+            if key not in lake and key not in delta:
+                continue
+            base = default.get(name, {"wetlandFeedsNext": 0.0, "wetlandUseMask": 1.0, "lakeFetch": 0.0}.get(name))
+            if base is None:
+                raise SystemExit(f"delta: {name} has no value in localParamInfo.txt to fill the other domains")
+            value = np.full(dom_type.T.shape, base)
+            value[dom[0], hru[0]] = float(first(lake.get(key, base)))
+            value[dom[1], hru[1]] = float(first(delta.get(key, base)))
+            var = t[name] if name in t.variables else t.createVariable(name, "f8", ("dom", "hru"))
+            var[:] = value
+    print(f"{inputs}/trialParams.nc: lake (dom {dom[0] + 1}) and delta (dom {dom[1] + 1}) wetland parameters by domain")
 
 
 def build_inputs(name, spec, cases_dir):
@@ -398,6 +457,8 @@ def build_inputs(name, spec, cases_dir):
                 shutil.rmtree(os.path.join(dest, "forcing"))
             shutil.copytree(os.path.join(built, "forcing"), os.path.join(dest, "forcing"))
             wet = f", wetland in HRU {wetland_domain(inputs, spec['wetland'], spec['domain'])}" if "wetland" in spec else ""
+            if "delta" in spec:  # after the lake, so it takes the next domain slot of the same HRU
+                wet += f", delta in HRU {delta_domain(inputs, spec['delta'], spec['wetland'])}"
             fit_trial_params(inputs)
             print(f"{name}: stream HRU added{wet}, {len(files)} forcing files in {dest}/forcing")
             return
