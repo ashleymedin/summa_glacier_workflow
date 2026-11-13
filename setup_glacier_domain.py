@@ -12,6 +12,7 @@ Steps, in order (--steps picks some; the default is all of them):
   upland    upland_domain.py upland (YAML with upland:): upland attributes.nc, coldState.nc and trialParams.nc of the HRUs;
             Wolverine and Gulkana keep the ones SYMFLUENCE made
   hrus      hru_attributes.py: HRU area, centre, elevation, slope and contour length from the polygons and DEM
+  vegetation upland_domain.py vegetation (YAML with landclass:): each HRU's vegetation class and forcing height
   zonal     glacier_zonal_stats.py: per-HRU debris, domain-type, elevation, slope and aspect statistics
   era5      acquire_era5.py and acquire_era5_levels.py over the YAML's forcing_period (months not yet in
             forcing/raw_data and raw_levels), then remap_forcing.py: forcing/SUMMA_input
@@ -32,8 +33,8 @@ import sys
 from domain_config import load_config
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-STEPS = ("seed", "nhd", "surface", "rasters", "extend", "bands", "upland", "hrus", "zonal", "era5", "forcing", "coldstate")
-SEEDED = ("seed", "rasters", "extend", "bands", "hrus", "zonal", "era5", "coldstate")  # raw ERA5 is read from the source domain; no station correction
+STEPS = ("seed", "nhd", "surface", "rasters", "extend", "bands", "upland", "hrus", "vegetation", "zonal", "era5", "forcing", "coldstate")
+SEEDED = ("seed", "rasters", "extend", "bands", "hrus", "vegetation", "zonal", "era5", "coldstate")  # raw ERA5 is read from the source domain; no station correction
 
 
 def run(*args):
@@ -68,6 +69,8 @@ def main():
         run(py, os.path.join(HERE, "upland_domain.py"), a.config, "upland")
     if "hrus" in a.steps:
         run(py, os.path.join(HERE, "hru_attributes.py"), a.config)
+    if "vegetation" in a.steps and (c.get("landclass") or c.get("upland", {}).get("landclass")):
+        run(py, os.path.join(HERE, "upland_domain.py"), a.config, "vegetation")
     if "zonal" in a.steps:
         run(py, os.path.join(HERE, "glacier_zonal_stats.py"), a.config)
     if "era5" in a.steps:

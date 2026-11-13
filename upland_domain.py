@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Build the non-glacier pieces of a new domain from global data, in place of the SYMFLUENCE domain.
 
-Two parts, run by setup_glacier_domain.py around the glacier steps when the domain YAML has an `upland:` block:
+Three parts, run by setup_glacier_domain.py around the glacier steps; surface and upland when the domain YAML has an
+`upland:` block:
 
   surface   before the rasters step, over the YAML's bounding_box on a 3 arc-second grid (MERIT Hydro's spacing):
               attributes/elevation/dem/domain_<name>_elv.tif        upland:dem tiles (Copernicus GLO-30), cell means, m
@@ -17,10 +18,13 @@ Two parts, run by setup_glacier_domain.py around the glacier steps when the doma
   upland    after the bands step, for the HRUs of shapefiles/catchment/<name>_HRUs_elevation.shp:
               settings/SUMMA/attributes.nc   ids, the HRU's majority land and soil class over its ice-free cells (the
                                              upland domain's), snow and ice only where it holds more than half of them;
-                                             slopeTypeIndex of settings_from; mHeight settings_from's above the class's
+                                             slopeTypeIndex of settings_from; mHeight MHEIGHT_ABOVE over the class's
                                              canopy top (HVT); area, centre, elevation and slope are hru_attributes.py's
               settings/SUMMA/coldState.nc    settings_from's first HRU column for every HRU
               settings/SUMMA/trialParams.nc  hruId and settings_from's first maxstep
+  vegetation  for any domain with a landclass: block (top level, or under upland:): the land class raster again on the
+              domain's DEM grid, and only vegTypeIndex and mHeight rewritten, as above, in settings/SUMMA/attributes.nc
+              and attributes_glac.nc, so a SYMFLUENCE domain's vegetation is chosen as a new domain's
 
 MODIS tiles come from NASA Earthdata (a urs.earthdata.nasa.gov login in ~/.netrc) into data/external/MODIS_MCD12Q1. They are
 HDF4: if this Python's GDAL cannot read HDF4, the gdal_translate named by GDAL_TRANSLATE_HDF4 converts them (default the ngen
@@ -28,6 +32,7 @@ conda env's). WorldCover is read from the Microsoft Planetary Computer and SoilG
 
     ./upland_domain.py domains/lemon_creek.yaml surface
     ./upland_domain.py domains/lemon_creek.yaml upland
+    ./upland_domain.py domains/wolverine.yaml vegetation
 """
 
 import argparse
@@ -62,11 +67,17 @@ SOIL_DEPTHS = {"0-5cm": 5, "5-15cm": 10, "15-30cm": 15, "30-60cm": 30, "60-100cm
 ROSETTA = {"clay": 1, "clay loam": 2, "loam": 3, "loamy sand": 4, "sand": 5, "sandy clay": 6, "sandy clay loam": 7,
            "sandy loam": 8, "silt": 9, "silty clay": 10, "silty clay loam": 11, "silt loam": 12}
 SNOW_ICE = 15  # IGBP permanent snow and ice
+MHEIGHT_ABOVE = 1.5  # forcing height above the canopy top, m
 WORLDCOVER_IGBP = {10: 1, 20: 7, 30: 10, 40: 12, 50: 13, 60: 16, 70: SNOW_ICE, 80: 17, 90: 11, 95: 11, 100: 19}  # tree as
 # evergreen needleleaf, shrub open shrubland, moss and lichen mixed tundra; landclass:igbp overrides any of these
 PC_STAC = "https://planetarycomputer.microsoft.com/api/stac/v1/search"
 PC_TOKEN = "https://planetarycomputer.microsoft.com/api/sas/v1/token/{collection}"
 TEMPLATE_SKIP =("attributes*.nc", "coldState*.nc", "coldstate*.nc", "trialParams*.nc", "forcingFileList.txt", "fileManager*.txt")
+
+
+def landclass_config(c):
+    """The YAML's landclass: block, top-level or under upland:."""
+    return c.get("landclass") or c.get("upland", {}).get("landclass", {})
 
 
 def usda_texture(sand, clay):
@@ -188,7 +199,7 @@ def worldcover_classes(c, transform, shape, path):
             reproject(rasterio.band(s, 1), part, src_transform=s.transform, src_crs=s.crs, src_nodata=0,
                       dst_transform=transform, dst_crs="EPSG:4326", dst_nodata=0, resampling=Resampling.mode)
             wc = np.where(part > 0, part, wc)
-    table = {**WORLDCOVER_IGBP, **{int(k): int(v) for k, v in c["upland"]["landclass"].get("igbp", {}).items()}}
+    table = {**WORLDCOVER_IGBP, **{int(k): int(v) for k, v in landclass_config(c).get("igbp", {}).items()}}
     igbp = np.zeros(shape, dtype=np.int16)
     for k, v in table.items():
         igbp[wc == k] = v
@@ -198,9 +209,9 @@ def worldcover_classes(c, transform, shape, path):
 
 
 def land_classes(c, transform, shape, path):
-    if c["upland"]["landclass"].get("source", "modis") == "worldcover":
+    if landclass_config(c).get("source", "modis") == "worldcover":
         return worldcover_classes(c, transform, shape, path)
-    first, last = c["upland"]["landclass"].get("years", [2001, 2020])
+    first, last = landclass_config(c).get("years", [2001, 2020])
     stack = []
     for year, tifs in sorted(modis_tiles(c, range(first, last + 1)).items()):
         lc = np.zeros(shape, dtype=np.uint8)
@@ -322,9 +333,7 @@ def upland(c, project, name):
         ice_free = s.read(1) <= 1  # on the DEM grid, as the class rasters
     veg = majority(os.path.join(project, "attributes", "landclass", f"domain_{name}_land_classes.tif"), hrus, ice_free)
     soil = majority(os.path.join(project, "attributes", "soilclass", f"domain_{name}_soil_classes.tif"), hrus)
-    with nc4.Dataset(os.path.join(template, "attributes.nc")) as s:
-        m_above = float(s["mHeight"][0])
-    m_height = canopy_top(os.path.join(settings, "TBL_MPTABLE.TBL"), veg) + m_above  # forcing height above the canopy top
+    m_height = canopy_top(os.path.join(settings, "TBL_MPTABLE.TBL"), veg) + MHEIGHT_ABOVE
     print(f"HRU vegTypeIndex {veg}, soilTypeIndex {soil}, mHeight {list(m_height)} m")
     write_like(os.path.join(template, "attributes.nc"), os.path.join(settings, "attributes.nc"), n,
                {"hruId": ids, "gruId": [1], "hru2gruId": np.ones(n, int), "downHRUindex": np.zeros(n, int),
@@ -338,16 +347,44 @@ def upland(c, project, name):
                {"hruId": ids, "gruId": [1]}, skip=keep)
 
 
+def vegetation(c, project, name):
+    """The land class raster again from landclass:, on the domain's DEM grid, and each HRU's vegTypeIndex and mHeight
+    rewritten in place in settings/SUMMA/attributes.nc and attributes_glac.nc; nothing else in them changes."""
+    dem_dir = os.path.join(project, "attributes", "elevation", "dem")
+    with rasterio.open(os.path.join(dem_dir, f"domain_{name}_elv.tif")) as s:
+        transform, shape = s.transform, s.shape
+    path = os.path.join(project, "attributes", "landclass", f"domain_{name}_land_classes.tif")
+    land_classes(c, transform, shape, path)
+    with rasterio.open(os.path.join(project, "attributes", "glaciers", f"domain_{name}_domain_type.tif")) as s:
+        ice_free = s.read(1) <= 1
+    hrus = gpd.read_file(os.path.join(project, "shapefiles", "catchment", f"{name}_HRUs_elevation.shp")).sort_values("HRU_ID")
+    settings = os.path.join(project, "settings", "SUMMA")
+    veg = dict(zip(hrus["HRU_ID"].astype(int), majority(path, hrus, ice_free)))
+    top = dict(zip(veg, canopy_top(os.path.join(settings, "TBL_MPTABLE.TBL"), list(veg.values()))))
+    for f in ("attributes.nc", "attributes_glac.nc"):
+        if not os.path.exists(os.path.join(settings, f)):
+            continue
+        with nc4.Dataset(os.path.join(settings, f), "a") as d:
+            ids = np.asarray(d["hruId"][:]).astype(int)
+            old_v, old_m = np.asarray(d["vegTypeIndex"][:]), np.asarray(d["mHeight"][:])
+            d["vegTypeIndex"][:] = [veg.get(h, v) for h, v in zip(ids, old_v)]  # HRUs not in the shapefile (a stream) keep theirs
+            d["mHeight"][:] = [top[h] + MHEIGHT_ABOVE if h in veg else m for h, m in zip(ids, old_m)]
+            print(f"{f}: vegTypeIndex {list(old_v)} -> {list(d['vegTypeIndex'][:])}, mHeight {list(old_m)} -> {list(d['mHeight'][:])}")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
-    p.add_argument("config", help="domain YAML in domains/ with an upland: block")
-    p.add_argument("part", choices=("surface", "upland"))
+    p.add_argument("config", help="domain YAML in domains/ with an upland: block, or a landclass: one for vegetation")
+    p.add_argument("part", choices=("surface", "upland", "vegetation"))
     p.add_argument("--only", nargs="+", choices=("dem", "land", "soil", "settings"), help="surface pieces to make, default all")
     a = p.parse_args()
     c = load_config(a.config)
     project, name = c["project_dir"], c["domain"]
     if a.part == "upland":
         upland(c, project, name)
+        return
+    if a.part == "vegetation":
+        vegetation(c, project, name)
         return
     transform, shape = grid(c)
     attrs = os.path.join(project, "attributes")
