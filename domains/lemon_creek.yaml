@@ -11,7 +11,7 @@ min_debris_thickness: 0.04
 # the pieces SYMFLUENCE made for Wolverine and Gulkana (upland_domain.py)
 upland:
   dem: "data/external/Copernicus_GLO30/Copernicus_DSM_COG_10_N58_00_W13[45]_00_DEM.tif"   # cell means on a 3 arc-second grid
-  landclass_years: [2001, 2020]                 # MODIS MCD12Q1.061, mode of the years
+  landclass: {source: worldcover, igbp: {30: 19}}   # ESA WorldCover 2021; its grassland is alpine meadow here, as mixed tundra (MODIS 500 m calls the forested valley grassland)
   settings_from: data/domain_Wolverine/settings/SUMMA
 
 data:

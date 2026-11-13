@@ -5,21 +5,26 @@ Two parts, run by setup_glacier_domain.py around the glacier steps when the doma
 
   surface   before the rasters step, over the YAML's bounding_box on a 3 arc-second grid (MERIT Hydro's spacing):
               attributes/elevation/dem/domain_<name>_elv.tif        upland:dem tiles (Copernicus GLO-30), cell means, m
-              attributes/landclass/domain_<name>_land_classes.tif   MODIS MCD12Q1.061 IGBP class (LC_Type1), the mode of
-                                                                    the years upland:landclass_years, nearest cell
+              attributes/landclass/domain_<name>_land_classes.tif   IGBP class (MODIFIED_IGBP_MODIS_NOAH) from
+                                                                    upland:landclass: ESA WorldCover 2021 (10 m, the mode in
+                                                                    each cell, its classes mapped by WORLDCOVER_IGBP and
+                                                                    landclass:igbp) or MODIS MCD12Q1.061 LC_Type1 (the mode
+                                                                    of the years landclass:years, nearest cell)
               attributes/soilclass/domain_<name>_soil_classes.tif   ROSETTA class 1-12 of TBL_SOILPARM.TBL, the USDA texture
                                                                     of SoilGrids 2.0 sand and clay averaged over 0-100 cm;
                                                                     cells it leaves bare (ice, water) take the nearest class
               settings/SUMMA                                        upland:settings_from's tables, decisions and parameters
   upland    after the bands step, for the HRUs of shapefiles/catchment/<name>_HRUs_elevation.shp:
-              settings/SUMMA/attributes.nc   ids, the HRU's majority land and soil class, slopeTypeIndex and mHeight of
-                                             settings_from; area, centre, elevation and slope are hru_attributes.py's
+              settings/SUMMA/attributes.nc   ids, the HRU's majority land and soil class over its ice-free cells (the
+                                             upland domain's), snow and ice only where it holds more than half of them;
+                                             slopeTypeIndex of settings_from; mHeight settings_from's above the class's
+                                             canopy top (HVT); area, centre, elevation and slope are hru_attributes.py's
               settings/SUMMA/coldState.nc    settings_from's first HRU column for every HRU
               settings/SUMMA/trialParams.nc  hruId and settings_from's first maxstep
 
 MODIS tiles come from NASA Earthdata (a urs.earthdata.nasa.gov login in ~/.netrc) into data/external/MODIS_MCD12Q1. They are
 HDF4: if this Python's GDAL cannot read HDF4, the gdal_translate named by GDAL_TRANSLATE_HDF4 converts them (default the ngen
-conda env's). SoilGrids is read from the ISRIC WCS, no key.
+conda env's). WorldCover is read from the Microsoft Planetary Computer and SoilGrids from the ISRIC WCS, no key.
 
     ./upland_domain.py domains/lemon_creek.yaml surface
     ./upland_domain.py domains/lemon_creek.yaml upland
@@ -56,7 +61,12 @@ SOILGRIDS = "https://maps.isric.org/mapserv?map=/map/{var}.map"
 SOIL_DEPTHS = {"0-5cm": 5, "5-15cm": 10, "15-30cm": 15, "30-60cm": 30, "60-100cm": 40}  # layer, thickness (cm)
 ROSETTA = {"clay": 1, "clay loam": 2, "loam": 3, "loamy sand": 4, "sand": 5, "sandy clay": 6, "sandy clay loam": 7,
            "sandy loam": 8, "silt": 9, "silty clay": 10, "silty clay loam": 11, "silt loam": 12}
-TEMPLATE_SKIP = ("attributes*.nc", "coldState*.nc", "coldstate*.nc", "trialParams*.nc", "forcingFileList.txt", "fileManager*.txt")
+SNOW_ICE = 15  # IGBP permanent snow and ice
+WORLDCOVER_IGBP = {10: 1, 20: 7, 30: 10, 40: 12, 50: 13, 60: 16, 70: SNOW_ICE, 80: 17, 90: 11, 95: 11, 100: 19}  # tree as
+# evergreen needleleaf, shrub open shrubland, moss and lichen mixed tundra; landclass:igbp overrides any of these
+PC_STAC = "https://planetarycomputer.microsoft.com/api/stac/v1/search"
+PC_TOKEN = "https://planetarycomputer.microsoft.com/api/sas/v1/token/{collection}"
+TEMPLATE_SKIP =("attributes*.nc", "coldState*.nc", "coldstate*.nc", "trialParams*.nc", "forcingFileList.txt", "fileManager*.txt")
 
 
 def usda_texture(sand, clay):
@@ -162,8 +172,35 @@ def modis_tiles(c, years):
     return files
 
 
+def worldcover_classes(c, transform, shape, path):
+    """ESA WorldCover 2021 over the grid, the mode of its 10 m classes in each cell, as IGBP classes."""
+    lat_max, lon_min, lat_min, lon_max = (float(v) for v in c["bounding_box"].split("/"))
+    query = json.dumps({"collections": ["esa-worldcover"], "bbox": [lon_min, lat_min, lon_max, lat_max], "limit": 50,
+                        "query": {"esa_worldcover:product_version": {"eq": "2.0.0"}}}).encode()
+    with urllib.request.urlopen(urllib.request.Request(PC_STAC, query, {"Content-Type": "application/json"})) as r:
+        items = json.load(r)["features"]
+    with urllib.request.urlopen(PC_TOKEN.format(collection="esa-worldcover")) as r:
+        token = json.load(r)["token"]
+    wc = np.zeros(shape, dtype=np.uint8)
+    for item in items:
+        with rasterio.open(item["assets"]["map"]["href"] + "?" + token) as s:
+            part = np.zeros(shape, dtype=np.uint8)
+            reproject(rasterio.band(s, 1), part, src_transform=s.transform, src_crs=s.crs, src_nodata=0,
+                      dst_transform=transform, dst_crs="EPSG:4326", dst_nodata=0, resampling=Resampling.mode)
+            wc = np.where(part > 0, part, wc)
+    table = {**WORLDCOVER_IGBP, **{int(k): int(v) for k, v in c["upland"]["landclass"].get("igbp", {}).items()}}
+    igbp = np.zeros(shape, dtype=np.int16)
+    for k, v in table.items():
+        igbp[wc == k] = v
+    print(f"WorldCover 2021 ({', '.join(i['id'] for i in items)}) as IGBP: "
+          + ", ".join(f"{k}: {int((igbp == k).sum())}" for k in np.unique(igbp)))
+    write(path, igbp, transform, "int16", 0)
+
+
 def land_classes(c, transform, shape, path):
-    first, last = c["upland"].get("landclass_years", [2001, 2020])
+    if c["upland"]["landclass"].get("source", "modis") == "worldcover":
+        return worldcover_classes(c, transform, shape, path)
+    first, last = c["upland"]["landclass"].get("years", [2001, 2020])
     stack = []
     for year, tifs in sorted(modis_tiles(c, range(first, last + 1)).items()):
         lc = np.zeros(shape, dtype=np.uint8)
@@ -228,10 +265,28 @@ def copy_settings(c, settings):
     print(f"copied the SUMMA settings of {src} to {settings}")
 
 
-def majority(path, polygons):
+def majority(path, polygons, ice_free=None):
+    """Each polygon's most common class over the cells of ice_free (all cells if None); snow and ice only where it
+    holds more than half of them."""
     with rasterio.open(path) as s:
         data, affine, nodata = s.read(1), s.transform, s.nodata
-    return [int(z["majority"]) for z in zonal_stats(polygons.to_crs(4326), data, affine=affine, nodata=nodata, stats="majority")]
+    if ice_free is not None:
+        data = np.where(ice_free, data, nodata)
+    out = []
+    for z in zonal_stats(polygons.to_crs(4326), data, affine=affine, nodata=nodata, categorical=True):
+        z = {int(k): v for k, v in z.items() if k != nodata}
+        rest = {k: v for k, v in z.items() if k != SNOW_ICE}
+        out.append(SNOW_ICE if not rest or z.get(SNOW_ICE, 0) > sum(z.values()) / 2 else max(rest, key=rest.get))
+    return out
+
+
+def canopy_top(mptable, veg):
+    """Canopy top height (m), HVT of the noah_mp_modis_parameters block of TBL_MPTABLE.TBL, for each IGBP class."""
+    with open(mptable) as f:
+        text = f.read().split("&noah_mp_modis_parameters", 1)[1]
+    hvt = next(l for l in text.splitlines() if l.strip().startswith("HVT"))
+    heights = [float(v) for v in hvt.split("=", 1)[1].replace(",", " ").split()]
+    return np.array([heights[v - 1] for v in veg])
 
 
 def write_like(src, path, n_hru, values, skip=()):
@@ -263,12 +318,17 @@ def upland(c, project, name):
     hrus = gpd.read_file(os.path.join(project, "shapefiles", "catchment", f"{name}_HRUs_elevation.shp")).sort_values("HRU_ID")
     n = len(hrus)
     ids = hrus["HRU_ID"].astype(int).values
-    veg = majority(os.path.join(project, "attributes", "landclass", f"domain_{name}_land_classes.tif"), hrus)
+    with rasterio.open(os.path.join(project, "attributes", "glaciers", f"domain_{name}_domain_type.tif")) as s:
+        ice_free = s.read(1) <= 1  # on the DEM grid, as the class rasters
+    veg = majority(os.path.join(project, "attributes", "landclass", f"domain_{name}_land_classes.tif"), hrus, ice_free)
     soil = majority(os.path.join(project, "attributes", "soilclass", f"domain_{name}_soil_classes.tif"), hrus)
-    print("HRU vegTypeIndex " + str(veg) + ", soilTypeIndex " + str(soil))
+    with nc4.Dataset(os.path.join(template, "attributes.nc")) as s:
+        m_above = float(s["mHeight"][0])
+    m_height = canopy_top(os.path.join(settings, "TBL_MPTABLE.TBL"), veg) + m_above  # forcing height above the canopy top
+    print(f"HRU vegTypeIndex {veg}, soilTypeIndex {soil}, mHeight {list(m_height)} m")
     write_like(os.path.join(template, "attributes.nc"), os.path.join(settings, "attributes.nc"), n,
                {"hruId": ids, "gruId": [1], "hru2gruId": np.ones(n, int), "downHRUindex": np.zeros(n, int),
-                "vegTypeIndex": veg, "soilTypeIndex": soil, "HRUarea": hrus["HRU_area"].values,
+                "vegTypeIndex": veg, "soilTypeIndex": soil, "mHeight": m_height, "HRUarea": hrus["HRU_area"].values,
                 "latitude": hrus["center_lat"].values, "longitude": hrus["center_lon"].values,
                 "elevation": hrus["elev_mean"].values})
     write_like(os.path.join(template, "coldState.nc"), os.path.join(settings, "coldState.nc"), n, {"hruId": ids})
