@@ -31,6 +31,9 @@ basin_within: huc12                             # clip the basin to the USGS HUC
 
 forcing_period: {first: 2004-10, last: 2026-09}
 observations:
+  station_weather:                              # hourly, for the forcing correction (acquire_station_weather.py)
+    - {source: isd, station: "70381025309", name: juneau_airport}                          # Juneau Airport, 6 m, 10 m wind
+    - {source: nwis, station: "582202134215701", name: lemoncreek1280, first: 2026-07}     # USGS glacier station, from 17 Jul 2026, beside the 2014-19 record
   streamflow: {source: usgs, gauge: "15052000"}
   stream_temperature: {site: "15052000", instantaneous: true}   # 15-minute values from Nov 2017; the published daily means start in 2020
   grace: true
@@ -47,3 +50,7 @@ ice_temp: -1.0
 stations: observations/stations
 stakes: observations/storage/mass_balance/Input_LemonCreek_Glaciological_Data.csv
 precip_grad: true
+correct: [pptrate]                              # temperature stays the pressure-level forcing's; check it against the 1280 m station
+gauge_shield: SA                                # Juneau Airport's ASOS all-weather gauge, single Alter assumed
+gauge_rain: true                                # precipitation the stakes leave scaled to the airport's undercatch-corrected catch, by month
+wind_10m: [6]                                   # the airport anemometer is at 10 m

@@ -3,6 +3,8 @@
 
 Every key is optional, so a basin without the data leaves it out (the mass balance is the USGS benchmark glaciers' only):
 
+  station_weather     [{source: isd|nwis, station, name,         stations/<elevation>/LVL2/<name>_hourly_LVL2_<year>.csv, hourly weather
+                        elevation?, first?, last?}]              for the forcing correction (acquire_station_weather.py)
   streamflow          {source: usgs|wsc, gauge}                  calibration/<source>_<gauge>_daily_flow.nc
   stream_temperature  {site, aquarius?, instantaneous?}          calibration/USGS_<site>_daily_temperature.nc; aquarius
                                                                  is an hourly export under observations/ in place of USGS's daily means,
@@ -31,7 +33,7 @@ from concurrent.futures import ThreadPoolExecutor
 from domain_config import load_config
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-KINDS = ("streamflow", "stream_temperature", "grace", "wgms_amce", "mass_balance", "velocity", "lake_area")
+KINDS = ("station_weather", "streamflow","stream_temperature", "grace", "wgms_amce", "mass_balance", "velocity", "lake_area")
 
 
 DRY = False
@@ -115,7 +117,12 @@ def main():
             print(f"{kind}: not in the YAML, skipped")
             continue
         s = spec[kind]
-        if kind == "streamflow":
+        if kind == "station_weather":
+            for st in s:
+                run(py, os.path.join(HERE, "acquire_station_weather.py"), st["source"], st["station"], st["name"],
+                    st.get("first", start[:7]), st.get("last", end[:7]), os.path.join(obs, "stations"),
+                    *(["--elevation", st["elevation"]] if "elevation" in st else []))
+        elif kind == "streamflow":
             run(py, os.path.join(HERE, "acquire_streamflow.py"), s["source"], s["gauge"], start, end,
                 os.path.join(cal, f"{s['source'].upper()}_{s['gauge']}_daily_flow.nc"), "--model-utc-offset", 0)
         elif kind == "stream_temperature":

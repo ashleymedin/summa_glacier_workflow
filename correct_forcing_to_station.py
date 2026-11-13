@@ -37,6 +37,11 @@ copies of the forcing.  Longwave is copied unchanged.
             each gauge's corrected catch over the forcing's precipitation at its elevation, interpolated in
             elevation between the gauges and held at the end gauges beyond them.
 
+--correct names the variables to correct (default all); the rest are copied unchanged and the precipitation phase sees
+them unchanged. A station folder holds 15-minute files, or hourly ones (*_hourly_LVL2_*.csv, read only where it has no
+15-minute files), from acquire_station_weather.py for stations outside the USGS records. --wind-10m lists the stations
+whose wind is at 10 m (an airport's), carried to a 2 m gauge orifice by a log profile for the catch efficiency.
+
 A correction is applied only where the data exist; the others stay at 0 or 1.  Station values are hourly
 means of the 15-minute samples in the hour ending at each forcing time, precipitation the sum of all four.  The corrections are written to
 corrections.csv beside the corrected files.
@@ -64,10 +69,12 @@ LOCAL = ZoneInfo("America/Anchorage")
 G, R_DRY = 9.80665, 287.05                           # m s-2, J kg-1 K-1
 DEFAULT_LAPSE = -0.0065                              # K m-1
 FIT_HOURS = None                                     # (first, last) forcing hours the corrections are fitted on, from --fit-years
-COLUMNS = {"site_temp": "T", "RelHum": "RH", "Barom": "P", "ShortwaveIn": "SW", "WindSpeed": "U",
-           "Precip_Weighing_Incremental": "PR"}
+COLUMNS = {"site_temp": "T", "site_temp_USGS": "T", "RelHum": "RH", "Barom": "P", "ShortwaveIn": "SW", "WindSpeed": "U",
+           "Precip_Weighing_Incremental": "PR", "Precip_Incremental": "PR"}
+WIND_10M_TO_GAUGE = np.log(2.0 / 0.01) / np.log(10.0 / 0.01)  # log profile, z0 0.01 m: 10 m wind to a 2 m gauge orifice
 CATCH = {"SA": (0.0348, 1.366, 0.779), "UN": (0.0785, 0.729, 0.407)}   # Kochendorfer et al. (2017) Table 2, gauge height
 U_CATCH_MAX = 7.2                                                      # m s-1, where those fits end
+VARIABLES = ("airtemp", "spechum", "SWRadAtm", "airpres", "windspd", "pptrate")
 
 
 def parse_time(text):
@@ -81,10 +88,12 @@ def parse_time(text):
 
 
 def read_station(folder):
-    """Hourly means {variable: {hour: value}} of one station's 15-minute records; T degC, RH %, P kPa, SW W m-2,
-    U m s-1; PR is the hour's total in mm, kept only where all four samples exist."""
-    sums, counts = {}, {}
-    for f in sorted(glob.glob(os.path.join(folder, "LVL2", "*_15min_LVL2_*.csv"))):
+    """Hourly means {variable: {hour: value}} of one station's 15-minute records, or of its hourly ones where it has
+    none; T degC, RH %, P kPa, SW W m-2, U m s-1; PR is the hour's total in mm, kept only where all its samples exist."""
+    sums, counts, need = {}, {}, {}
+    files = [(f, 4) for f in sorted(glob.glob(os.path.join(folder, "LVL2", "*_15min_LVL2_*.csv")))]
+    files = files or [(f, 1) for f in sorted(glob.glob(os.path.join(folder, "LVL2", "*_hourly_LVL2_*.csv")))]
+    for f, per_hour in files:
         with open(f) as fh:
             rows = csv.reader(fh)
             head = next(rows)
@@ -102,8 +111,9 @@ def read_station(folder):
                     if last is not None and t <= last:
                         t = naive.replace(tzinfo=LOCAL, fold=1).astimezone(timezone.utc)
                     last = t
-                    t = t + timedelta(minutes=15)  # these stamp the start of the sample, the others its end
+                    t = t + timedelta(minutes=60 // per_hour)  # these stamp the start of the sample, the others its end
                 hour = int(np.ceil((t - EPOCH).total_seconds() / 3600.0))
+                need[hour] = per_hour
                 for v, i in cols.items():
                     try:
                         x = float(r[i])
@@ -117,7 +127,7 @@ def read_station(folder):
                     counts[v][hour] = counts[v].get(hour, 0) + 1
     out = {v: {h: s / counts[v][h] for h, s in d.items()} for v, d in sums.items() if v != "PR"}
     if "PR" in sums:
-        out["PR"] = {h: s for h, s in sums["PR"].items() if counts["PR"][h] == 4}
+        out["PR"] = {h: s for h, s in sums["PR"].items() if counts["PR"][h] == need[h]}
     return out
 
 
@@ -267,6 +277,10 @@ def main():
     p.add_argument("--gauge-rain", action="store_true",
                    help="scale the precipitation the stakes leave by every gauge's monthly catch (needs --gauge-shield)")
     p.add_argument("--spechum-ratios", help="CSV of hruId, month, ratio for the months the station has no humidity for")
+    p.add_argument("--correct", nargs="+", choices=VARIABLES, default=list(VARIABLES),
+                   help="the variables to correct, default all; the others are copied unchanged")
+    p.add_argument("--wind-10m", type=int, nargs="+", default=[], metavar="ELEV",
+                   help="stations (folder elevation) whose wind is at 10 m, carried to the gauge's 2 m for the catch efficiency")
     p.add_argument("--fit-years", type=int, nargs=2, metavar=("FIRST", "LAST"),
                    help="fit every correction on water years FIRST to LAST (1 Oct to 30 Sep) only; it is applied to all of the forcing")
     a = p.parse_args()
@@ -380,6 +394,21 @@ def main():
         if ok.sum() > 24 * 365:
             ratio["airpres"][j] = p_hru[ok, j].mean() / frc["airpres"][ok, j].mean()
 
+    # variables left out of --correct keep the forcing's values, here and in the precipitation phase below
+    if "airtemp" not in a.correct:
+        offset[:] = 0.0
+        remap = os.path.join(a.forcing, "remap.csv")  # the forcing's own lapse, for the snowfall phase and SUMMA's tempLapseRate
+        if os.path.exists(remap):
+            row = next(r for r in csv.reader(open(remap)) if r and r[0] == "lapse_rate_K_per_km")
+            lapse[1:] = np.array(row[1:13], float) / 1000.0
+    if "spechum" not in a.correct:
+        q_ratio[:] = 1.0
+    for v in ("SWRadAtm", "airpres"):
+        if v not in a.correct:
+            ratio[v][:] = 1.0
+    if "windspd" not in a.correct:
+        wind[:] = 1.0
+
     # precipitation: stake winter balance against the corrected forcing's snowfall
     used, cover, gamma = [[] for _ in z], np.zeros(13), 0.0
     if a.stakes:
@@ -411,6 +440,7 @@ def main():
     if a.gauge_shield:
         gz = max(stations, key=lambda s: len(stations[s].get("PR", {})))
         pr, u, tg = (on_hours(stations[gz].get(v, {})) for v in ("PR", "U", "T"))
+        u = u * (WIND_10M_TO_GAUGE if gz in a.wind_10m else 1.0)
         ok = np.isfinite(pr) & np.isfinite(u) & np.isfinite(tg)
         if ok.sum() > 24 * 365:
             caught = pr[ok] / catch_efficiency(u[ok], tg[ok], a.gauge_shield)
@@ -430,6 +460,7 @@ def main():
         zs, rs = [], []
         for gz in sorted(stations):
             pr, u, tg = (on_hours(stations[gz].get(v, {})) for v in ("PR", "U", "T"))
+            u = u * (WIND_10M_TO_GAUGE if gz in a.wind_10m else 1.0)
             ok = np.isfinite(pr) & np.isfinite(u) & np.isfinite(tg)
             if ok.sum() <= 24 * 365:
                 continue
@@ -482,7 +513,7 @@ def main():
                 elif name == "windspd":
                     x = x * wind[m_file]
                 elif name == "pptrate":
-                    x = x * p_mult
+                    x = x * p_mult if "pptrate" in a.correct else x
                 elif name in ratio:
                     x = x * ratio[name][None, :]
                 o[:] = x
@@ -501,6 +532,7 @@ def main():
         w.writerow([])
         w.writerow(["lapse_rate_K_per_km"] + [f"{1000 * lapse[m]:.2f}" for m in range(1, 13)])
         w.writerow(["wet_threshold_mm_per_h", f"{a.wet_threshold}"])
+        w.writerow(["corrected", *a.correct])
         if a.precip_grad:
             w.writerow(["precipElevGrad_per_m", f"{gamma:.5f}"])
         if staked.any():

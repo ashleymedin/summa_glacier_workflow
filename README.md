@@ -37,6 +37,10 @@ place of the simulated balance (USGS heights are ellipsoidal, 16.1 m above the m
 Landsat or Sentinel-2 scene with the least cloud and snow, writing areas, classes and a figure per date to
 `observations/imagery`.
 
+`acquire_station_weather.py` writes hourly weather from a NOAA ISD station (an airport) or a USGS NWIS weather station in the
+station-folder layout `correct_forcing_to_station.py` reads; its `--correct` picks the variables to correct, so Lemon Creek
+corrects only precipitation, to Juneau Airport and the stakes.
+
 The observation scripts `acquire_streamflow.py`, `acquire_stream_temperature.py`, `acquire_grace_tws.py` and
 `acquire_groundwater_level.py` fetch records from the web and write them with `observation_netcdf.py`, in the
 form a SUMMA calibration target reads. `add_stream_hru.py` gives a one-GRU domain a stream HRU and a one-reach
