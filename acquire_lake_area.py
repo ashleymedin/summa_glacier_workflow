@@ -138,8 +138,8 @@ def main():
                 token = fetch_token(src['token'])
             try:
                 r = scene_water(it, src, box, (a.ndwi, a.mndwi, a.max_blue), token)
-            except rasterio.errors.RasterioIOError as e:
-                print('skipped', it['id'], e); continue
+            except (rasterio.errors.RasterioIOError, KeyError) as e:  # unreadable, or a band missing from the catalogue
+                print('skipped', it['id'], repr(e)); continue
             if r is None:
                 continue
             day = it['properties']['datetime'][:10]

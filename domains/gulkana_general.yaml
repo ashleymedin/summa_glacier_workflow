@@ -11,6 +11,8 @@ rgi6_region: 01Alaska
 min_glacier_size_km2: 1
 min_debris_thickness: 0.04
 
+landclass: {source: worldcover, igbp: {30: 19}}   # ESA WorldCover 2021, majority of each HRU's ice-free cells (upland_domain.py vegetation), as Lemon Creek
+
 data:
   rgi: data/external/RGI_data
   debris_extent: data/external/Debris_data

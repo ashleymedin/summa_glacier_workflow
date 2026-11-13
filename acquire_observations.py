@@ -3,9 +3,12 @@
 
 Every key is optional, so a basin without the data leaves it out (the mass balance is the USGS benchmark glaciers' only):
 
+  station_weather     [{source: isd|nwis, station, name,         stations/<elevation>/LVL2/<name>_hourly_LVL2_<year>.csv, hourly weather
+                        elevation?, first?, last?}]              for the forcing correction (acquire_station_weather.py)
   streamflow          {source: usgs|wsc, gauge}                  calibration/<source>_<gauge>_daily_flow.nc
-  stream_temperature  {site, aquarius?}                          calibration/USGS_<site>_daily_temperature.nc; aquarius
-                                                                 is an hourly export under observations/ in place of USGS's daily means
+  stream_temperature  {site, aquarius?, instantaneous?}          calibration/USGS_<site>_daily_temperature.nc; aquarius
+                                                                 is an hourly export under observations/ in place of USGS's daily means,
+                                                                 instantaneous: true averages USGS's 15-minute values instead
   grace               true                                       calibration/<domain>_grace_tws.nc, the cell holding GRU 1
   wgms_amce         {release, region, outlines: [RGI ids]}     calibration/<domain>_wgms_amce.nc, the annual mass change of the WGMS annual mass-change estimates (Dussaillant et al., 2025)
                                                                  from the unzipped WGMS release (a by-hand download), mean of the glaciers by area
@@ -30,7 +33,7 @@ from concurrent.futures import ThreadPoolExecutor
 from domain_config import load_config
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-KINDS = ("streamflow", "stream_temperature", "grace", "wgms_amce", "mass_balance", "velocity", "lake_area")
+KINDS = ("station_weather", "streamflow","stream_temperature", "grace", "wgms_amce", "mass_balance", "velocity", "lake_area")
 
 
 DRY = False
@@ -114,7 +117,12 @@ def main():
             print(f"{kind}: not in the YAML, skipped")
             continue
         s = spec[kind]
-        if kind == "streamflow":
+        if kind == "station_weather":
+            for st in s:
+                run(py, os.path.join(HERE, "acquire_station_weather.py"), st["source"], st["station"], st["name"],
+                    st.get("first", start[:7]), st.get("last", end[:7]), os.path.join(obs, "stations"),
+                    *(["--elevation", st["elevation"]] if "elevation" in st else []))
+        elif kind == "streamflow":
             run(py, os.path.join(HERE, "acquire_streamflow.py"), s["source"], s["gauge"], start, end,
                 os.path.join(cal, f"{s['source'].upper()}_{s['gauge']}_daily_flow.nc"), "--model-utc-offset", 0)
         elif kind == "stream_temperature":
@@ -122,6 +130,8 @@ def main():
                     os.path.join(cal, f"USGS_{s['site']}_daily_temperature.nc"), "--model-utc-offset", 0]
             if s.get("aquarius"):
                 args += ["--aquarius", os.path.join(obs, s["aquarius"])]
+            elif s.get("instantaneous"):
+                args += ["--instantaneous"]
             run(*args)
         elif kind == "grace":
             run(py, os.path.join(HERE, "acquire_grace_tws.py"), "--attributes",

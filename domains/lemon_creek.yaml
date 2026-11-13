@@ -1,0 +1,57 @@
+# Lemon Creek Glacier, Alaska: USGS 15052000 Lemon Creek near Juneau, 1 GRU of elevation-band HRUs; built without SYMFLUENCE (upland:)
+project_dir: data/domain_LemonCreek
+bounding_box: 58.45/-134.47/58.34/-134.27       # lat_max/lon_min/lat_min/lon_max
+pour_point: 58.3915312/-134.4226873             # lat/lon of the gauge
+utm_crs: EPSG:32608                             # UTM 8N
+utm_epsg: 32608
+rgi6_region: 01Alaska
+min_glacier_size_km2: 1
+min_debris_thickness: 0.04
+
+# the pieces SYMFLUENCE made for Wolverine and Gulkana (upland_domain.py)
+upland:
+  dem: "data/external/Copernicus_GLO30/Copernicus_DSM_COG_10_N58_00_W13[45]_00_DEM.tif"   # cell means on a 3 arc-second grid
+  settings_from: data/domain_Wolverine/settings/SUMMA
+
+landclass: {source: worldcover, igbp: {30: 19}}   # ESA WorldCover 2021, majority of each HRU's ice-free cells; grassland as mixed tundra, alpine meadow here (MODIS 500 m calls the forested valley grassland)
+
+data:
+  rgi: data/external/RGI_data
+  debris_extent: data/external/Debris_data
+  debris_thickness: data/external/Debris_thick
+  ice_thickness: data/external/Thickness_data
+  usgs_outlines: data/external/GlacierDEM/USGS_Glacier_Boundaries_shp/USGS_Glacier_Boundaries.shp
+ice_thickness_source: farinotti                 # Millan's RGI-1 tiles here stop at 136 W; Veitch et al. (2021) find the upper glacier up to 150 m thicker
+usgs_outline: {glacier: LemonCreek Glacier, date: 2004/10/01, outlines: [1999/08/27, 2007/08/11], dems: [data/external/GlacierDEM/JuneauIcefield_20181001_DEM/JuneauIcefield_20181001_DEM.tif], dhdt: "data/external/Hugonnet/01_02_rgi60_2000-01-01_2020-01-01/dhdt/N58W13[45]*.tif"}  # 2018 survey carried back at the 2000-19 rates; no public DEM 1990-2017
+millan_reference: {date: 2018/09/02, dem: data/external/GlacierDEM/JuneauIcefield_20181001_DEM/JuneauIcefield_20181001_DEM.tif}  # outline 2 Sep, DEM 1 Oct 2018
+glacier_dem: {dems: "data/external/Copernicus_GLO30/Copernicus_DSM_COG_10_N58_00_W13[45]_00_DEM.tif", date: 2012/07/01, dhdt: "data/external/Hugonnet/01_02_rgi60_2000-01-01_2020-01-01/dhdt/N58W13[45]*.tif"}
+usgs_datum: -7.3                                # m added to USGS heights (WGS84 ellipsoid) to give the model DEM's: Copernicus less the 2018 survey on ice-free ground under 20 deg
+
+hru_bands: [600, 1000]                         # elevation band edges, m, of the HRUs (make_hrus.py)
+basin_within: huc12                             # clip the basin to the USGS HUC12 of the gauge (acquire_nhd.py)
+
+forcing_period: {first: 2004-10, last: 2026-09}
+observations:
+  station_weather:                              # hourly, for the forcing correction (acquire_station_weather.py)
+    - {source: isd, station: "70381025309", name: juneau_airport}                          # Juneau Airport, 6 m, 10 m wind
+    - {source: nwis, station: "582202134215701", name: lemoncreek1280, first: 2026-07}     # USGS glacier station, from 17 Jul 2026, beside the 2014-19 record
+  streamflow: {source: usgs, gauge: "15052000"}
+  stream_temperature: {site: "15052000", instantaneous: true}   # 15-minute values from Nov 2017; the published daily means start in 2020
+  grace: true
+  wgms_amce: {release: data/external/wgms-amce-2026-02-10, region: ALA, outlines: [RGI60-01.01104]}
+  mass_balance: {release: storage/mass_balance/Output_LemonCreek_Glacier_Wide_solutions_calibrated.csv, balance: seasonal}
+  velocity: true
+  lake_area:
+    - {name: lake_thomas, box: [-134.392, 58.398, -134.366, 58.414], usgs_site: "15052000"}   # the NHD lakes before the north terminus, with room for the retreat
+
+cold_start: 2004-10
+soil_offset: 1.5
+ice_temp: -1.0
+
+stations: observations/stations
+stakes: observations/storage/mass_balance/Input_LemonCreek_Glaciological_Data.csv
+precip_grad: true
+correct: [pptrate]                              # temperature stays the pressure-level forcing's; check it against the 1280 m station
+gauge_shield: SA                                # Juneau Airport's ASOS all-weather gauge, single Alter assumed
+gauge_rain: true                                # precipitation the stakes leave scaled to the airport's undercatch-corrected catch, by month
+wind_10m: [6]                                   # the airport anemometer is at 10 m

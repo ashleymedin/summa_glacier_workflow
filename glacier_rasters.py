@@ -33,7 +33,8 @@ the scenes' clear pixels are ice starts clean, and a clean ablation cell inside 
 starts as debris; added debris takes the nearest kept thickness. Debris thickness is Rounce et al. (2021), nearest neighbour, with
 thicknesses at or below --min-debris (0.04 m) raised to it (Herreid 2021; Rounce et al. 2018). Glacier
 thickness is Millan et al. (2022), bilinear over his cells, zero off the outlines and filled from the nearest
-Millan cell where an outline reaches past it. It also prints each glacier's lateral moraine width, the mean thinnest width of its
+Millan cell where an outline reaches past it; ice_thickness_source: farinotti takes Farinotti et al. (2019) instead,
+one file per glacier, where Millan's tiles do not reach. It also prints each glacier's lateral moraine width, the mean thinnest width of its
 debris polygons, for latMoraineWidth.
 
     ./glacier_rasters.py domains/wolverine.yaml
@@ -660,8 +661,12 @@ def main():
     with rasterio.open(os.path.join(glacier_dir, f"domain_{name}_debris_thickness.tif"), "w", **meta) as dst:
         dst.write(debris, 1)
 
-    tdir = os.path.join(c["data"]["ice_thickness"], f"RGI-{rn}")
-    ice_files = [os.path.join(tdir, f) for f in sorted(os.listdir(tdir)) if f.startswith(f"THICKNESS_RGI-{rn}.") and f.endswith("tif")]
+    if c.get("ice_thickness_source", "millan") == "farinotti":  # Farinotti et al. (2019), one file per glacier
+        fdir = os.path.join(c["data"]["ice_thickness"], "Farinotti2019", f"RGI60-{rnum}")
+        ice_files = [p for p in (os.path.join(fdir, f"{gid}_thickness.tif") for gid in rgi["RGIId"]) if os.path.exists(p)]
+    else:
+        tdir = os.path.join(c["data"]["ice_thickness"], f"RGI-{rn}")
+        ice_files = [os.path.join(tdir, f) for f in sorted(os.listdir(tdir)) if f.startswith(f"THICKNESS_RGI-{rn}.") and f.endswith("tif")]
     rgi_utm = rgi.to_crs(c["utm_crs"])
     surveys_utm = surveys.to_crs(c["utm_crs"]) if usgs else None
 
