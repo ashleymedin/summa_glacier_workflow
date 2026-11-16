@@ -31,12 +31,15 @@ sys.path.insert(0, RUNS)
 from calibrate import CASES, GLACIER, SUMMA_DIR, calibration_file, case_spec, config_text, fit12, periods  # noqa: E402
 
 # truth values and search bounds; snow tests the snowfall multiplier, the precipitation gradient and the glacier
-# snowfall multiplier against each other, melt the glacier wind and cooling against the snow albedo
+# snowfall multiplier against each other, melt the glacier wind and cooling against the snow albedo, phase the upland
+# and glacier snowfall multipliers against the rain--snow threshold and range (needs SUMMA's name@glacier)
 EXPERIMENTS = {
     "snow": {"frozenPrecipMultip": (1.2, 0.3, 2.0), "precipElevGrad": (0.0010, 0.0, 0.0025),
              "glacierSnowFactor": (1.4, 1.0, 2.0)},
     "melt": {"glacierWindFactor": (0.8, 0.3, 1.5), "glacierTempReduction": (0.65, 0.5, 0.9),
              "albedoDecayRate": (1.5e6, 3.0e5, 5.0e6), "albedoMax": (0.84, 0.8, 0.9)},
+    "phase": {"frozenPrecipMultip@upland": (0.9, 0.3, 2.0), "frozenPrecipMultip@glacier": (1.4, 0.3, 3.0),
+              "tempCritRain": (273.66, 272.16, 274.16), "tempRangeTimestep": (3.0, 0.5, 5.0)},
 }
 
 
@@ -46,11 +49,12 @@ def paths(case, exp):
 
 
 def truth_settings(case, exp):
-    """A copy of the case's settings with the truth values as the defaults; the bounds are kept."""
+    """A copy of the case's settings with the truth values as the defaults; the bounds are kept. A name@domainType
+    value has no default to set; the truth run pins it."""
     _, settings, _ = paths(case, exp)
     shutil.rmtree(settings, ignore_errors=True)
     shutil.copytree(os.path.join(RUNS, case, "summa_inputs"), settings)
-    truth = {k: v[0] for k, v in EXPERIMENTS[exp].items()}
+    truth = {k: v[0] for k, v in EXPERIMENTS[exp].items() if "@" not in k}
     path = os.path.join(settings, "localParamInfo.txt")
     out, seen = [], set()
     for line in open(path):
