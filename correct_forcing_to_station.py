@@ -98,7 +98,7 @@ def read_station(folder):
             rows = csv.reader(fh)
             head = next(rows)
             utc = head.index("UTC_time") if "UTC_time" in head else None
-            loc = head.index("local_time")
+            loc = None if utc is not None else head.index("local_time")
             cols = {COLUMNS[c]: head.index(c) for c in COLUMNS if c in head}
             last = None
             for r in rows:
