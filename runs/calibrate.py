@@ -39,12 +39,13 @@ GLACIER = os.path.dirname(HERE)
 SUMMA_DIR = os.path.abspath(os.environ.get("SUMMA_DIR", os.path.join(GLACIER, "..", "summa")))
 
 # paper1: one value of each soil parameter for every domain; the glacier wind and cooling stay at Site B's (glacierWindFactor
-# 0.59, glacierTempReduction 0.73), which trade off with the snow albedo (scratch/2026-11-16/twin.py); the upland canopy is fixed at Noah-MP's
-# mixed tundra (2.0 and 0.2 m, LAI 1.8)
+# 0.59, glacierTempReduction 0.73), which trade off with the snow albedo, and the rain--snow split at SUMMA's default (273.16 K, 2 K),
+# which trades off with the snowfall multipliers (scratch/2026-11-16/twin.py); the upland canopy is fixed at Noah-MP's mixed tundra
+# (2.0 and 0.2 m, LAI 1.8)
 PAPER1 = ["k_soil", "theta_sat", "aquiferBaseflowExp", "aquiferBaseflowRate", "qSurfScale", "frozenPrecipMultip",
-          "Fcapil", "tempCritRain", "windReductionParam", "vGn_n", "routingGammaScale", "routingGammaShape",
+          "Fcapil", "windReductionParam", "vGn_n", "routingGammaScale", "routingGammaShape",
           "glacStor_kIce", "glacStor_kSnow", "glacStor_kFirn", "k_snow",
-          "mw_exp", "albedoDecayRate", "albedoMax", "k_macropore", "tempRangeTimestep", "thCond_soil",
+          "mw_exp", "albedoDecayRate", "albedoMax", "k_macropore", "thCond_soil",
           "newSnowDenMin"]
 PAPER1_CHAIN = ["theta_res", "critSoilWilting", "critSoilTranspire", "fieldCapacity", "theta_sat"]
 
@@ -76,9 +77,9 @@ SEARCHES = {
 }
 SEARCHES["stream"] = dict(SEARCHES["domain"], params=STREAM, logs=SEARCHES["domain"]["logs"] + ["wetlandStorageK"])
 
-# fixed on the station-corrected cases, where the stakes set the snowfall with SUMMA's default phase split (273.16 K, 2 K),
-# the glacier domains' through frozenPrecipMultip in trialParams.nc (build_cases.set_glacier_snowfall); raw ERA5 searches them
-STATION_FIXED = ["frozenPrecipMultip", "tempCritRain", "tempRangeTimestep"]
+# fixed on the station-corrected cases, where the stakes set the snowfall, the glacier domains' through frozenPrecipMultip in
+# trialParams.nc (build_cases.set_glacier_snowfall); raw ERA5 searches it
+STATION_FIXED = ["frozenPrecipMultip"]
 
 
 def case_spec(case):
