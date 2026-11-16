@@ -10,8 +10,9 @@ pressure and humidity are the free air's at the HRU's elev_mean, read from each 
 two levels around the HRU, temperature, the logarithm of pressure and relative humidity alike, and linear in time
 between the levels' fields.  Only
 levels over ERA5's own surface (CLEAR m and more) count, the others being extrapolated from its near-surface air; an
-HRU under the lowest of them continues the lowest two.  Longwave is the cell's at its sky emissivity, by the fourth
-power of the free-air temperature at the HRU over that at the cell's surface elevation.  With wind_climatology in the
+HRU under the lowest of them continues the lowest two.  Longwave is the cell's at the basin's area-weighted mean
+elevation, carried to each HRU by the fourth power of the free-air temperature there over that at the mean (ERA5's
+smoothed surface lies below the basin's terrain; Gulkana's 1,725 m station supports the mean).  With wind_climatology in the
 YAML (acquire_climatology.py), the wind is scaled by month to the climatology's mean over the HRU, over the run's mean
 of the cell-weighted wind for that month.  With precip_climatology
 in the YAML (acquire_climatology.py), precipitation is scaled by the HRU's mean climatology over the same weighting
@@ -153,19 +154,19 @@ def read_levels(path, after, hours):
     return {"t": step(t), "rh": step(relhum(q, p[None, :, None, None], t)), "h": step(h), "lnp": np.log(p)}
 
 
-def to_hru(f, lev, w, zs, z):
+def to_hru(f, lev, w, zs, z, z_lw):
     """The month's forcing (time, hru) from the cells' surface fields f (time, lat, lon) and pressure levels lev,
-    for HRUs at z (m) with cell weights w over cells at zs (m)."""
+    for HRUs at z (m) with cell weights w over cells at zs (m), the cells' longwave belonging at z_lw (m)."""
     out = {name: np.einsum("tij,kij->tk", f[name], w) for name in ("SWRadAtm", "pptrate", "windspd")}
     t, p, rh, lw = (np.zeros((len(f["LWRadAtm"]), len(z))) for _ in range(4))
     for k, i, j in zip(*np.nonzero(w)):
         h = lev["h"][:, :, i, j]
-        hru, cell = column(h, z[k], zs[i, j] + CLEAR), column(h, zs[i, j], zs[i, j] + CLEAR)
+        hru, ref = column(h, z[k], zs[i, j] + CLEAR), column(h, z_lw, zs[i, j] + CLEAR)
         tk = hru(lev["t"][:, :, i, j])
         t[:, k] += w[k, i, j] * tk
         p[:, k] += w[k, i, j] * np.exp(hru(np.broadcast_to(lev["lnp"], h.shape)))
         rh[:, k] += w[k, i, j] * np.clip(hru(lev["rh"][:, :, i, j]), 0.01, 1.0)
-        lw[:, k] += w[k, i, j] * f["LWRadAtm"][:, i, j] * (tk / cell(lev["t"][:, :, i, j])) ** 4
+        lw[:, k] += w[k, i, j] * f["LWRadAtm"][:, i, j] * (tk / ref(lev["t"][:, :, i, j])) ** 4
     return {**out, "airtemp": t, "airpres": p, "spechum": spechum(rh, p, t), "LWRadAtm": lw}
 
 
@@ -196,7 +197,8 @@ def remap(path, levels, after, out, w, zs, hrus, ratio, wind, span):
         v[:] = hrus.HRU_ID.values
         month = np.array([d.month for d in num2date(src["time"][:], src["time"].units)])
         lev = read_levels(levels, after, np.asarray(src["time"][:], dtype="f8"))
-        f = to_hru({name: np.asarray(src[name][:], dtype="f8") for name in VARS}, lev, w, zs, hrus.elev_mean.values)
+        z_lw = np.average(hrus.elev_mean.values, weights=hrus.HRU_area.values)
+        f = to_hru({name: np.asarray(src[name][:], dtype="f8") for name in VARS}, lev, w, zs, hrus.elev_mean.values, z_lw)
         f["pptrate"] = f["pptrate"] * ratio[None, :]
         f["windspd"] = f["windspd"] * wind[month]
         for name in VARS:
@@ -233,7 +235,8 @@ def main():
     zs = cell_elevation(os.path.join(levels, f"domain_{dom}_ERA5_orography.nc"), lat, lon)
     z = hrus.elev_mean.values
     span = (z.min(), z.max()) if z.max() - z.min() >= SPAN else (z.mean() - SPAN / 2, z.mean() + SPAN / 2)
-    print("ERA5 surface under each HRU (m):", np.round(np.sum(w * zs, axis=(1, 2))), "HRUs at", np.round(z))
+    print("ERA5 surface under each HRU (m):", np.round(np.sum(w * zs, axis=(1, 2))), "HRUs at", np.round(z),
+          f"longwave at the basin mean {np.average(z, weights=hrus.HRU_area.values):.0f} m")
     ratio = precip_ratio(c["precip_climatology"], hrus, lat, lon, w) if "precip_climatology" in c else np.ones(len(hrus))
     print("precipitation ratio by HRU:", np.round(ratio, 3))
     wind = wind_ratio(c["wind_climatology"], hrus, raw, w) if "wind_climatology" in c else np.ones((13, len(hrus)))
