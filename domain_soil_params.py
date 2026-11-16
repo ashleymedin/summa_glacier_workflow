@@ -13,7 +13,7 @@ parameters then override these per domain type.
            thCondSoil = funcSoilWet, 2.92 W m-1 K-1 at frac_sand 0 to 8.21 at 0.9; frac_silt is the remainder
            of sand and clay, which SUMMA requires to add to one with them
 
-    ./domain_soil_params.py runs/gulkana_corrected/summa_inputs
+    ./domain_soil_params.py runs/gulkana_added/summa_inputs
 """
 
 import argparse

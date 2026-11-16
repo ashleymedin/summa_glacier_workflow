@@ -15,9 +15,9 @@ of cases.yaml); otherwise discharge is the GRU's own.
 The spin-up runs at the default parameters for every trial, in calibration and evaluation alike, as the
 calibration driver does. Needs summa's MPI calibration executable (bin/summa_sundials_mizuroute_opt.exe).
 
-    ./calibrate.py calibrate gulkana_raw --population 32 --generations 15 --ranks 9
-    ./calibrate.py evaluate gulkana_raw --ranks 2 --jobs 4
-    ./calibrate.py calibrate gulkana_raw --population 20 --generations 10 --ranks 5 --name pilot
+    ./calibrate.py calibrate gulkana_added --search domain --population 32 --generations 15 --ranks 4
+    ./calibrate.py evaluate gulkana_added --ranks 2 --jobs 4
+    ./calibrate.py calibrate gulkana_general --population 20 --generations 10 --ranks 5 --name pilot
 """
 
 import argparse
@@ -396,7 +396,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
     p.add_argument("mode", choices=("calibrate", "evaluate"))
-    p.add_argument("case", help="run folder, e.g. gulkana_raw")
+    p.add_argument("case", help="run folder, e.g. gulkana_added")
     p.add_argument("--population", type=int, default=32)
     p.add_argument("--generations", type=int, default=15)
     p.add_argument("--ranks", type=int, default=9, help="MPI ranks: one dispatcher and the workers")

@@ -5,10 +5,10 @@ Each trial is rerun as calibrate.py evaluate reruns it (parameters pinned, spin-
 before the calibration start, to the end of the evaluation years), but with write_timeseries (and mizuRoute's reach discharge and temperature) on, daily means of runoff, glacier and snow variables and yearly glacier surface and debris grids added to its outputControl, in
 <case>/<name>_rerun/sample_<n>. --inputs reruns them on other summa_inputs than the case's, such as a rebuilt domain's.
 
-    ./rerun_trials.py gulkana_corrected calibration 451 455 411 --jobs 3
-    ./rerun_trials.py gulkana_corrected calibration_paper1 384 --set wallErosionRate=0 --label wall0
-    ./rerun_trials.py gulkana_corrected calibration_paper1 384 --pin windExposure=0.77 --forcing <dir> --label f1
-    ./rerun_trials.py gulkana_corrected calibration_paper1 384 --massbal gulkana_balance_profile.txt --label usgsmb
+    ./rerun_trials.py gulkana_added calibration 451 455 411 --jobs 3
+    ./rerun_trials.py gulkana_added calibration 384 --set wallErosionRate=0 --label wall0
+    ./rerun_trials.py gulkana_added calibration 384 --pin glacierWindFactor=0.59 --forcing <dir> --label f1
+    ./rerun_trials.py gulkana_added calibration 384 --massbal gulkana_balance_profile.txt --label usgsmb
     ./rerun_trials.py gulkana_general calibration 370 --targets discharge,mass_balance,wgms_amce --aligned --label aligned
 """
 

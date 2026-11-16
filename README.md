@@ -136,26 +136,26 @@ first month, the year the calibration spins up over:
 | `{wolverine,gulkana}_general` | `runs/` | raw ERA5, general domain, Oct 2004 – Sep 2026 | calibrated WY2006–2015 and evaluated WY2016–2026 on discharge and the GRACE storage anomaly |
 | `{wolverine,gulkana}_added` | `runs/` | station-corrected ERA5, added-data domain, Oct 2004 – Sep 2026 | calibrated WY2006–2015 and evaluated WY2016–2026 on discharge and the seasonal mass balance (Wolverine's water temperature in the evaluation) |
 | `{wolverine,gulkana}_stream` | `runs/` | station-corrected ERA5, added-data domain with a stream HRU, a reach and a wetland domain in the terminus HRU (Wolverine's lake and delta, Gulkana's braided fan), hyporheic exchange and bedrock layers on, Oct 2015 – Sep 2026 | the stream-temperature runs: calibrated WY2017–2021 and evaluated WY2022–2026 on discharge, the seasonal mass balance and Wolverine's water temperature (`--search stream`) |
-| `{wolverine,gulkana}_{raw,corrected}` | `runs/` | raw or station-corrected, 2008–2022 | the earlier runs: calibrated 2009–2015, evaluated 2016–2022 |
 
 ## The full runs
 
 ```bash
 cd runs
-./calibrate.py calibrate gulkana_raw --population 32 --generations 15 --ranks 9
-./calibrate.py evaluate  gulkana_raw --ranks 2
+./spinup.py gulkana_added
+./calibrate.py calibrate gulkana_added --search domain --population 32 --generations 15 --ranks 4
+./calibrate.py evaluate  gulkana_added --ranks 2
 ```
 
-The calibration scores discharge and the glacier-wide seasonal mass balance over 2009–2015, after a
-spin-up over 2008. `--search paper1` (the default) searches the paper-1 calibrations' 29 parameters, one soil for
+The calibration scores the targets of the case in `cases.yaml` over its calibration water years, after `spinup.py` has
+spun the case up over its first year. `--search paper1` (the default) searches the paper-1 calibrations' 29 parameters, one soil for
 every domain and debrisConc pinned at 1 kg m-3. `--search domain` searches 32: the upland soil and the debris
 apart (`name@upland`, `name@glacDbr`), their sand fractions setting the conductivity of the solids, and debrisConc;
 it needs a SUMMA that reads bounds from `[calibration.parameters]` entries and the debris values that `domain_soil_params.py` writes
 into trialParams.nc. `--search stream` adds the wetland's `wetlandStorageK` and `wetlandMinDepth` to the domain search
 and scores the water temperature in the calibration, on a case with a wetland domain and a reach. Wall erosion is fixed at 1 mm yr-1. The evaluation reruns each front member
-over 2009–2022 with its parameters pinned and scores 2016–2022, adding Wolverine's water temperature,
-which the gauge records only from 2016. It writes `evaluation/evaluation.csv`. The observations for
-2008–2022 are in each domain's `observations/calibration`.
+to the end of the evaluation years with its parameters pinned and scores those years, adding Wolverine's water
+temperature, which the gauge records only from 2016. It writes `<name>_evaluation/evaluation.csv`. The observations
+are in each domain's `observations/calibration`.
 
 ## Data
 

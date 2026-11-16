@@ -22,7 +22,7 @@ as SUMMA counts them. Writes, in <run>/glacier_change:
   maps.npz     the main glacier's model debris and glacier masks, the other glaciers' put on its grid, and
                the image classes on that grid, by date; setup, the RGI id of every glacier's cold-state cells on that grid
 
-    ./compare_glacier_change.py domains/gulkana.yaml runs/gulkana_corrected/calibration_paper1_rerun/sample_384
+    ./compare_glacier_change.py domains/gulkana.yaml runs/gulkana_added/calibration_rerun/sample_384
     ./compare_glacier_change.py domains/gulkana_general.yaml runs/gulkana_general/calibration_rerun/sample_370 --observations domains/gulkana.yaml
 """
 

@@ -1,1 +1,0 @@
-/Users/amedin/Research/SummaSundials/summa_glacier_workflow/data/domain_Wolverine/forcing/SUMMA_input/station_corrected/
