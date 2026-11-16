@@ -54,3 +54,15 @@ scratch/**/.seen_*
 scratch/**/days_*.csv
 scratch/2026-10-29/per_step_cost/tol_t4j
 scratch/2026-10-29/per_step_cost/wolida4
+# forcing kept aside when a step is redone, and backups of downloaded data
+data/*/forcing/station_corrected_*/
+data/*/forcing/raw_levels_bad/
+data/*/forcing/*.log
+data/*/forcing/logs/
+data/*/observations/stations_*backup/
+# experiment and check runs; their scripts are committed
+runs/*/twin_*/
+runs/*/stake_seasons/
+scratch/**/forcing_*/
+scratch/**/inputs_*/
+scratch/**/ab_done
