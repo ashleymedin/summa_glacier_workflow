@@ -2,8 +2,10 @@
 """Spin a built case up to a thermal equilibrium: the year before its calibrate start is cycled N times (30 by default)
 from the cold state, each cycle restarting from the last restart file, and the final state replaces summa_inputs/coldState.nc.
 
-The glacier ice, debris, soil, snow and canopy all start from the cold state's values and settle over the cycles; the
-geometry is the built one throughout: each cycle starts with the glacier area last updated at its end, so the flow model
+The glacier ice, debris, soil and canopy all start from the cold state's values and settle over the cycles. Each cycle
+starts snow-free, so an accumulation zone does not pile up the snow of every cycle; the result keeps the snow of the last
+cycle only. The glacier ice layers keep their depths and the ice that melts is counted in the area-change mass, so no ice
+is lost over the cycles either. The geometry is the built one throughout: each cycle starts with the glacier area last updated at its end, so the flow model
 never runs, and the result has no update date, so the simulation updates the area at the end of its first year as from
 the cold state. The accumulated area-change mass is zeroed in the result. The cold state it started from is kept as coldState_cold.nc and
 a rerun starts from it again. Needs summa's serial TOML executable (bin/summa_sundials_mizuroute.exe).
@@ -32,6 +34,31 @@ def set_update_day(path, julday):
         if "updateJulDay" not in d.variables:
             d.createVariable("updateJulDay", "f8", ("scalarv", "gru"))
         d["updateJulDay"][:] = julday
+
+
+LAYER_VARS = ("mLayerTemp", "mLayerVolFracIce", "mLayerVolFracLiq", "mLayerVolFracWat", "mLayerEnthalpy", "mLayerDepth",
+              "mLayerHeight")
+SNOW_SCALARS = ("scalarSWE", "scalarSnowDepth", "scalarSfcMeltPond")
+
+
+def drop_snow(path):
+    """Remove the snow layers of a state file so the next cycle starts snow-free; soil, debris and glacier layers are kept."""
+    with nc4.Dataset(path, "r+") as d:
+        d.set_auto_mask(False)
+        n_snow = np.maximum(d["nSnow"][:], 0)  # an absent domain holds the fill value
+        n_rest = sum(np.maximum(d[v][:], 0) for v in ("nLake", "nSoil", "nGlce"))
+        for name in LAYER_VARS + ("iLayerHeight",):
+            v = d[name]
+            x = v[:]
+            fill = getattr(v, "_FillValue", nc4.default_fillvals["f8"])
+            for h, m in zip(*np.nonzero(n_snow)):
+                s, n = n_snow[h, m], n_rest[h, m] + (name == "iLayerHeight")  # interfaces are one more than layers
+                x[:n, h, m] = x[s:s + n, h, m].copy()
+                x[n:, h, m] = fill
+            v[:] = x
+        for name in SNOW_SCALARS:
+            d[name][:] = 0.0
+        d["nSnow"][:] = 0
 
 
 def main():
@@ -64,6 +91,8 @@ def main():
         for d in glob.glob(os.path.join(work, "state", "*")) + glob.glob(os.path.join(work, "output", "*")):
             os.remove(d)
         shutil.copy(current, os.path.join(work, "state", "coldState.nc"))
+        if k > 1:
+            drop_snow(os.path.join(work, "state", "coldState.nc"))
         set_update_day(os.path.join(work, "state", "coldState.nc"), cal0_jd)
         with open(os.path.join(work, "run.log"), "w") as log:
             status = subprocess.run([exe, "-c", os.path.join(work, "config.toml"), "-r", "e"], cwd=work,
