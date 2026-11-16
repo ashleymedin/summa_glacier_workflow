@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The free-air temperature and relative humidity of the ERA5 pressure levels (forcing/raw_levels) at each weather
-station's height against the station, hour by hour, on the forcing's dry and wet hours of each calendar month, beside
+station's height against the station, hour by hour, on the forcing's dry, wet and all hours of each calendar month, beside
 the raw forcing's near-surface temperature (model level 137) carried there at 6.5 K/km from ERA5's surface.
 
 The free air is read as remap_forcing.py reads it, from the levels CLEAR m and more over ERA5's surface, for several
@@ -61,7 +61,7 @@ def main():
             rows += [(name, np.concatenate([c[0] for c in v]), np.concatenate([c[1] for c in v])) for (zz, name), v in cols.items() if zz == z]
             print(f"  {z} m, hours with station T {np.isfinite(obs_t).sum()}, RH {np.isfinite(obs_rh).sum()}")
             for name, t, rh in rows:
-                for kind, sel in (("dry", pr <= WET), ("wet", pr > WET)):
+                for kind, sel in (("dry", pr <= WET), ("wet", pr > WET), ("all", pr >= 0)):
                     d = t - obs_t
                     bias = " ".join(f"{np.nanmean(d[sel & (month == m)]):+5.1f}" if np.isfinite(d[sel & (month == m)]).sum() > 48 else "    ." for m in range(1, 13))
                     ok = sel & np.isfinite(d)
