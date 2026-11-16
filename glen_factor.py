@@ -6,7 +6,7 @@ f_A * median(observed) / median(modelled) over its ice. The modelled speed is th
 surface (output *_annual.nc) over the run's bed (attributes.nc), on the flow grid of the basin's largest glacier, which
 is the grid acquire_velocity.py fetches ITS_LIVE onto. Cells count where the ice is over --min-thick (20 m) thick and
 the ITS_LIVE error under --max-err (10 m yr-1). A year counts only where the median observed speed over the ice is at
-least --min-ratio (2.0) times the median on the ice-free cells within 400 m of it, the speed the mosaic shows where
+least --min-ratio (2.5) times the median on the ice-free cells within 400 m of it, the speed the mosaic shows where
 nothing moves; each observed speed has that noise floor taken off in quadrature. The pooled ratio over the years that
 count gives the implied f_A, if at least --min-years (3) count. A geometry evolves with A, so rerun at the implied value until it implies itself (one
 step is usually within 10%). A basin with too few years that count prints none and takes the region's value.
@@ -65,7 +65,7 @@ def main():
     p.add_argument("--settings", help="folder with attributes.nc and basinParamInfo.txt (default <run>_settings, else <run>/summa_inputs)")
     p.add_argument("--min-thick", type=float, default=20.0)
     p.add_argument("--max-err", type=float, default=10.0)
-    p.add_argument("--min-ratio", type=float, default=2.0)
+    p.add_argument("--min-ratio", type=float, default=2.5)
     p.add_argument("--min-years", type=int, default=3)
     a = p.parse_args()
     settings = a.settings or next(s for s in (a.run.rstrip("/") + "_settings", os.path.join(a.run, "summa_inputs")) if os.path.isdir(s))

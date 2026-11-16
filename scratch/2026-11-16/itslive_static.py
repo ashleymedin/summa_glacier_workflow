@@ -8,7 +8,8 @@ ice-free ground within 400 m (any RGI glacier is not ground), that noise taken o
 --smooth (m) is the Gaussian width the surface is smoothed over before its slope is taken.
 
     itslive_static.py gulkana RGI60-01.00570 RGI60-01.00571 RGI60-01.00569 RGI60-01.00561 RGI60-01.00556
-    itslive_static.py wolverine RGI60-01.09162
+    itslive_static.py wolverine RGI60-01.09162 RGI60-01.09216 RGI60-01.09061
+    itslive_static.py lemon RGI60-01.01104 RGI60-01.01245 RGI60-01.01519
 """
 
 import argparse
@@ -27,7 +28,31 @@ EXT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "data
 RGI = os.path.join(EXT, "RGI_data", "nsidc0770_01.rgi60.Alaska", "01_rgi60_Alaska.shp")
 URL = "/vsicurl/https://its-live-data.s3.amazonaws.com/velocity_mosaic/v2/annual/cog/ITS_LIVE_velocity_120m_RGI01A_{y}_v02_{f}.tif"
 A0, N, RHO, G, YR = 2.4e-24, 3, 917.0, 9.80616, 365.25 * 86400
-DX, CRS = 50.0, "EPSG:32606"
+DX = 50.0
+CRS = None  # UTM zone of the glaciers, set in main
+DEM = "https://copernicus-dem-30m.s3.amazonaws.com/{t}/{t}.tif"
+
+
+def dem_tiles(bounds):
+    """Copernicus GLO-30 tiles over lon/lat bounds, the local copy where data/external has one."""
+    out = []
+    for lat in range(int(np.floor(bounds[1])), int(np.floor(bounds[3])) + 1):
+        for lon in range(int(np.floor(bounds[0])), int(np.floor(bounds[2])) + 1):
+            t = f"Copernicus_DSM_COG_10_{'N' if lat >= 0 else 'S'}{abs(lat):02d}_00_{'E' if lon >= 0 else 'W'}{abs(lon):03d}_00_DEM"
+            local = os.path.join(EXT, "Copernicus_GLO30", t + ".tif")
+            out.append(local if os.path.exists(local) else "/vsicurl/" + DEM.format(t=t))
+    return out
+
+
+def overlapping(paths, bounds):
+    """The rasters whose extent meets lon/lat bounds."""
+    out = []
+    for p in paths:
+        with rasterio.open(p) as r:
+            b = transform_bounds(r.crs, "EPSG:4326", *r.bounds)
+        if b[0] < bounds[2] and b[2] > bounds[0] and b[1] < bounds[3] and b[3] > bounds[1]:
+            out.append(p)
+    return out
 
 
 def grid(outlines):
@@ -55,17 +80,19 @@ def main():
     p.add_argument("--first", type=int, default=2005)
     p.add_argument("--last", type=int, default=2022)
     p.add_argument("--smooth", type=float, default=0.0)
-    p.add_argument("--min-ratio", type=float, default=2.0)
+    p.add_argument("--min-ratio", type=float, default=2.5)
     a = p.parse_args()
     os.environ.setdefault("GDAL_DISABLE_READDIR_ON_OPEN", "EMPTY_DIR")
     rgi = gpd.read_file(RGI)
     mine = rgi[rgi.RGIId.isin(a.ids)].set_index("RGIId").loc[a.ids]
+    global CRS
+    CRS = mine.estimate_utm_crs()
     transform, shape = grid(mine)
     bounds = transform_bounds(CRS, "EPSG:4326", transform.c, transform.f - shape[0] * DX, transform.c + shape[1] * DX, transform.f)
     all_ice = rasterize(rgi.cx[bounds[0]:bounds[2], bounds[1]:bounds[3]].to_crs(CRS).geometry, shape, transform=transform) == 1
-    surf = onto(glob.glob(os.path.join(EXT, "Copernicus_GLO30", "*.tif")), transform, shape, Resampling.average)
-    thick = np.nan_to_num(onto(glob.glob(os.path.join(EXT, "Thickness_data", "RGI-1", "THICKNESS_*.tif")), transform, shape,
-                               Resampling.average))
+    surf = onto(dem_tiles(bounds), transform, shape, Resampling.average)
+    millan = overlapping(glob.glob(os.path.join(EXT, "Thickness_data", "RGI-[12]", "THICKNESS_*.tif")), bounds)
+    thick = np.nan_to_num(onto(millan, transform, shape, Resampling.average))
     s = gaussian_filter(surf, a.smooth / DX) if a.smooth > 0 else surf
     gy, gx = np.gradient(s, DX)
     u = 2 * A0 / (N + 1) * (RHO * G) ** N * thick ** (N + 1) * np.hypot(gx, gy) ** N * YR
