@@ -158,7 +158,7 @@ def set_glacier_snowfall(inputs, source):
     if factor is None:
         return
     with nc4.Dataset(os.path.join(inputs, "coldState.nc")) as c:
-        types = np.asarray(c["domType"][:]).T  # (dom, hru)
+        types = np.asarray(c["domType"][:]).reshape(c["domType"].shape[-2:]).T  # (dom, hru), with or without scalarv
     with nc4.Dataset(os.path.join(inputs, "trialParams.nc"), "a") as t:
         if len(factor) != len(t.dimensions["hru"]) or types.shape != (len(t.dimensions["dom"]), len(t.dimensions["hru"])):
             raise SystemExit(f"{source}/corrections.csv: {len(factor)} glacier snowfall ratios for {len(t.dimensions['hru'])} HRUs")

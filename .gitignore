@@ -62,6 +62,7 @@ data/*/forcing/logs/
 data/*/observations/stations_*backup/
 # experiment and check runs; their scripts are committed
 runs/*/twin_*/
+runs/*/screen/
 runs/*/stake_seasons/
 scratch/**/forcing_*/
 scratch/**/inputs_*/

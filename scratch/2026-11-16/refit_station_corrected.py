@@ -11,6 +11,7 @@ for name in ("wolverine", "gulkana"):
     if c.get("stakes"): args += ["--stakes", os.path.join(project, c["stakes"])]
     if c.get("gauge_shield"): args += ["--gauge-shield", c["gauge_shield"]]
     if c.get("gauge_rain"): args += ["--gauge-rain"]
+    if c.get("glacier_snow_factor"): args += ["--glacier-snow-factor"]
     if c.get("fit_years"): args += ["--fit-years", *c["fit_years"]]
     if c.get("correct"): args += ["--correct", *c["correct"]]
     if c.get("wind_10m"): args += ["--wind-10m", *c["wind_10m"]]
