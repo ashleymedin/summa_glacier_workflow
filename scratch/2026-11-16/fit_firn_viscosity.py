@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Repeat WY2005 on wolverine_added for several firnViscosity values, from a given spun-up state.
+"""Repeat WY2005 on an added case (--case, default wolverine_added) for several firnViscosity values, from a given spun-up state.
 
 Each value gets its own run directory under --work, a copy of --settings with firnViscosity appended to
 localParamInfo.txt, and --cycles one-year runs, each starting from the previous run's restart. The flow model is not
@@ -16,7 +16,7 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CASE = os.path.join(HERE, "..", "..", "runs", "wolverine_added")
+RUNS = os.path.join(HERE, "..", "..", "runs")
 
 
 def run_value(a, value):
@@ -28,7 +28,7 @@ def run_value(a, value):
     shutil.copytree(a.settings, settings)
     with open(os.path.join(settings, "localParamInfo.txt"), "a") as f:
         f.write(f"firnViscosity             | {value:12.4e} |   1.0000e+12 |   1.0000e+14\n")
-    with open(os.path.join(CASE, "spinup", "config.toml")) as f:
+    with open(os.path.join(RUNS, a.case, "spinup", "config.toml")) as f:
         config = f.read()
     for key, path in (("work_path", "output"), ("settings_path", "settings/"), ("state_path", "state/"), ("output_path", "output/")):
         config = "\n".join(f'{key} = "{os.path.join(work, path)}"' if line.split("=")[0].strip() == key else line
@@ -58,6 +58,7 @@ def main():
     p.add_argument("--work", required=True)
     p.add_argument("--values", type=float, nargs="+", required=True)
     p.add_argument("--cycles", type=int, default=10)
+    p.add_argument("--case", default="wolverine_added")
     a = p.parse_args()
     with ThreadPoolExecutor(len(a.values)) as pool:
         for line in pool.map(lambda v: run_value(a, v), a.values):
