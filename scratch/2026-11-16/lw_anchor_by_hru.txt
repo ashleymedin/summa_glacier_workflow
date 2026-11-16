@@ -1,12 +1,14 @@
 
 Wolverine: ERA5 surface under HRUs [796. 781. 772.], elev_m [ 974. 1158. 1150.]
- HRU  elev   cell    new    dem  dem-new
-   1   737  321.6  323.3  329.6    6.3
-   2  1141  324.3  312.9  324.8   12.0
-   3  1411  324.4  305.1  316.7   11.6
+ basin mean 1128 m
+ HRU  elev   cell    new    dem  basin  basin-new
+   1   737  321.6  323.3  329.6  334.0   10.7
+   2  1141  324.3  312.9  324.8  323.9   11.0
+   3  1411  324.4  305.1  316.7  316.0   10.9
 
 Gulkana: ERA5 surface under HRUs [1345. 1345. 1372.], elev_m [1651. 1651. 1686.]
- HRU  elev   cell    new    dem  dem-new
-   1  1337  301.5  301.8  311.9   10.1
-   2  1704  301.5  290.2  299.9    9.7
-   3  2043  301.1  280.9  290.4    9.5
+ basin mean 1739 m
+ HRU  elev   cell    new    dem  basin  basin-new
+   1  1337  301.5  301.8  311.9  314.7   13.0
+   2  1704  301.5  290.2  299.9  302.6   12.4
+   3  2043  301.1  280.9  290.4  292.0   11.1

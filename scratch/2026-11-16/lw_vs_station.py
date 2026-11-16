@@ -1,5 +1,5 @@
 """Incoming longwave at Gulkana 1725 (WY2024-25) against ERA5 carried to 1,725 m four ways: the cell unscaled, the
-old scaling (6.5 K/km from the forcing shapefile's elev_m), the current free-air T^4 scaling from ERA5's orography, the same from elev_m,
+old scaling (6.5 K/km from the forcing shapefile's elev_m), the current free-air T^4 scaling from ERA5's orography, the same from elev_m and from the basin's mean elevation (remap_forcing.py),
 and TopoSCALE's (clear-sky emissivity of Konzelmann et al. 1994 from free-air vapour pressure, cloud part kept).
 
     /Users/amedin/miniconda3/envs/glacier/bin/python scratch/2026-11-16/lw_vs_station.py
@@ -33,6 +33,7 @@ raw = sorted(p for p in glob.glob(f"{D}/forcing/raw_data/domain_Gulkana_ERA5_mer
 with Dataset(raw[0]) as f:
     lat, lon = f["latitude"][:], f["longitude"][:]
 w = weights(hrus, lat, lon)[HRU - 1]
+z_basin = np.average(hrus.elev_mean, weights=hrus.HRU_area)
 zs = cell_elevation(f"{D}/forcing/raw_levels/domain_Gulkana_ERA5_orography.nc", lat, lon)
 elev_m = np.zeros_like(zs)
 for _, c in cells.iterrows():
@@ -48,7 +49,7 @@ for path in raw:
         time = num2date(hours, src["time"].units, only_use_cftime_datetimes=False)
         f = {v: np.asarray(src[v][:], dtype="f8") for v in ("LWRadAtm", "airtemp")}
     lev = read_levels(lpath, nxt if os.path.exists(nxt) else None, hours)
-    out = {k: np.zeros(len(hours)) for k in ("cell", "old", "new", "dem", "konz", "t_stn")}
+    out = {k: np.zeros(len(hours)) for k in ("cell", "old", "new", "dem", "basin", "konz", "t_stn")}
     for i, j in zip(*np.nonzero(w)):
         h = lev["h"][:, :, i, j]
         at_stn, at_cell = column(h, Z_STN, zs[i, j] + CLEAR), column(h, zs[i, j], zs[i, j] + CLEAR)
@@ -57,9 +58,10 @@ for path in raw:
         e0 = vapour(np.clip(at_cell(lev["rh"][:, :, i, j]), 0.01, 1), t0)
         lw, t2 = f["LWRadAtm"][:, i, j], f["airtemp"][:, i, j]
         t_dem = column(h, elev_m[i, j], zs[i, j] + CLEAR)(lev["t"][:, :, i, j])
+        t_bas = column(h, z_basin, zs[i, j] + CLEAR)(lev["t"][:, :, i, j])
         t_old = t2 - 0.0065 * (Z_STN - elev_m[i, j])
         eps1 = eps_clear(e1, t1) + lw / (SIGMA * t0 ** 4) - eps_clear(e0, t0)
-        for k, v in (("cell", lw), ("old", lw * (t_old / t2) ** 4), ("new", lw * (t1 / t0) ** 4), ("dem", lw * (t1 / t_dem) ** 4),
+        for k, v in (("cell", lw), ("old", lw * (t_old / t2) ** 4), ("new", lw * (t1 / t0) ** 4), ("dem", lw * (t1 / t_dem) ** 4), ("basin", lw * (t1 / t_bas) ** 4),
                      ("konz", eps1 * SIGMA * t1 ** 4), ("t_stn", t1 - TFREEZE)):
             out[k] += w[i, j] * v
     rows.append(pd.DataFrame(out, index=pd.DatetimeIndex(time)))
@@ -73,7 +75,7 @@ print(f"{len(both)} hours with station longwave, {both.index[0]:%Y-%m-%d} to {bo
 
 season = both.index.month.map(lambda m: {12: "DJF", 1: "DJF", 2: "DJF", 3: "MAM", 4: "MAM", 5: "MAM",
                                          6: "JJA", 7: "JJA", 8: "JJA"}.get(m, "SON"))
-cols = ["LongwaveIn", "cell", "old", "new", "dem", "konz"]
+cols = ["LongwaveIn", "cell", "old", "new", "dem", "basin", "konz"]
 print("\nmean incoming longwave (W m-2) and hours")
 tab = both.groupby(season)[cols].mean().round(1)
 tab["hours"] = both.groupby(season).size()

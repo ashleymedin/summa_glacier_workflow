@@ -1,5 +1,5 @@
-"""WY2005 JJA mean longwave by HRU: ERA5 cell, current free-air T^4 scaling from ERA5's orography, and the same
-scaling from the forcing shapefile's elev_m (the DEM mean of each cell).
+"""WY2005 JJA mean longwave by HRU: ERA5 cell, current free-air T^4 scaling from ERA5's orography, the same
+scaling from the forcing shapefile's elev_m (DEM mean of the cell within the old domain clip) and from the basin mean.
 
     /Users/amedin/miniconda3/envs/glacier/bin/python scratch/2026-11-16/lw_anchor_by_hru.py
 """
@@ -24,7 +24,8 @@ for dom in ("Wolverine", "Gulkana"):  # the general domains share these ERA5 cel
     for _, c in cells.iterrows():
         elev_m[np.argmin(abs(lat - c.lat)), np.argmin(abs(lon - c.lon))] = c.elev_m
     z = hrus.elev_mean.values
-    acc = {k: np.zeros(len(z)) for k in ("cell", "new", "dem")}
+    acc = {k: np.zeros(len(z)) for k in ("cell", "new", "dem", "basin")}
+    zb = np.average(z, weights=hrus.HRU_area)
     n = 0
     for path in raw:
         lpath = path.replace("raw_data", "raw_levels").replace("_merged_", "_levels_")
@@ -39,8 +40,9 @@ for dom in ("Wolverine", "Gulkana"):  # the general domains share these ERA5 cel
             acc["cell"][k] += w[k, i, j] * lw[:, i, j].sum()
             acc["new"][k] += w[k, i, j] * (lw[:, i, j] * (th / at(zs[i, j])) ** 4).sum()
             acc["dem"][k] += w[k, i, j] * (lw[:, i, j] * (th / at(elev_m[i, j])) ** 4).sum()
+            acc["basin"][k] += w[k, i, j] * (lw[:, i, j] * (th / at(zb)) ** 4).sum()
     print(f"\n{dom}: ERA5 surface under HRUs {np.round(np.sum(w * zs, axis=(1, 2)))}, elev_m {np.round(np.nansum(w * np.nan_to_num(elev_m), axis=(1, 2)))}")
-    print(" HRU  elev   cell    new    dem  dem-new")
+    print(f" basin mean {zb:.0f} m\n HRU  elev   cell    new    dem  basin  basin-new")
     for k in range(len(z)):
-        c, nw, dm = (acc[x][k] / n for x in ("cell", "new", "dem"))
-        print(f" {k + 1:3d} {z[k]:5.0f} {c:6.1f} {nw:6.1f} {dm:6.1f} {dm - nw:6.1f}")
+        c, nw, dm, bs = (acc[x][k] / n for x in ("cell", "new", "dem", "basin"))
+        print(f" {k + 1:3d} {z[k]:5.0f} {c:6.1f} {nw:6.1f} {dm:6.1f} {bs:6.1f} {bs - nw:6.1f}")
