@@ -101,18 +101,43 @@ def set_param_line(params, name, value, lower, upper):
     open(params, "w").writelines(lines)
 
 
-# precipitation gradient within an HRU without stakes: the mean of Wolverine's (0.0016) and Gulkana's (0.0019) stake fits
-PRECIP_GRAD_GENERAL = 0.00175
+def chelsa_precip_grad(c):
+    """precipElevGrad (m-1) of the domain's CHELSA climatology: each 30-arcsec cell's precipitation over its HRU's mean, less
+    one, against its mean Copernicus elevation less the HRU's, pooled over the HRUs. CHELSA is smooth, so this is low."""
+    import geopandas as gpd
+    import rasterio
+    from rasterio.features import geometry_mask
+    from rasterio.merge import merge
+    from rasterio.warp import Resampling, reproject
+    if "precip_climatology" not in c:
+        raise SystemExit(f"{c['domain']}: no precip_climatology for the general precipitation gradient; run acquire_climatology.py")
+    with rasterio.open(c["precip_climatology"]) as r:
+        p = r.read(1).astype(float)
+        p = np.where(p == r.nodata, np.nan, p * r.scales[0] + r.offsets[0])
+        transform, crs = r.transform, r.crs
+    dems = [rasterio.open(f) for f in sorted(glob.glob(os.path.join(HERE, c["glacier_dem"]["dems"])))]
+    dem, dem_t = merge(dems)
+    z = np.full(p.shape, np.nan)
+    reproject(dem[0].astype(float), z, src_transform=dem_t, src_crs=dems[0].crs, dst_transform=transform, dst_crs=crs,
+              resampling=Resampling.average, src_nodata=dems[0].nodata, dst_nodata=np.nan)
+    hrus = gpd.read_file(os.path.join(c["project_dir"], "shapefiles", "catchment", f"{c['domain']}_HRUs_elevation.shp")).to_crs(crs)
+    dz, dp = [], []
+    for g in hrus.geometry:
+        m = ~geometry_mask([g], p.shape, transform) & np.isfinite(p) & np.isfinite(z)
+        if m.sum() > 1:
+            dz.append(z[m] - z[m].mean())
+            dp.append(p[m] / p[m].mean() - 1)
+    return float(np.polyfit(np.concatenate(dz), np.concatenate(dp), 1)[0])
 
 
-def set_precip_grad(inputs, source):
+def set_precip_grad(inputs, source, c):
     """precipElevGrad and tempLapseRate in the case's localParamInfo.txt: the gradient from the station correction's
-    corrections.csv (PRECIP_GRAD_GENERAL without one), the lapse rate the year's mean of the monthly ones the forcing was
+    corrections.csv (added), else from CHELSA (general), the lapse rate the year's mean of the monthly ones the forcing was
     carried to the HRUs with (corrections.csv, else remap_forcing's remap.csv)."""
     path = os.path.join(source, "corrections.csv")
     params = os.path.join(inputs, "localParamInfo.txt")
     grad = csv_row(path, "precipElevGrad_per_m")
-    set_param_line(params, "precipElevGrad", grad[0] if grad else PRECIP_GRAD_GENERAL, 0.0, 0.005)
+    set_param_line(params, "precipElevGrad", grad[0] if grad else chelsa_precip_grad(c), 0.0, 0.005)
     lines = [l for l in open(params) if l.split("|")[0].strip() != "glacierSnowFactor"]
     open(params, "w").writelines(lines)
     lapse = csv_row(path, "lapse_rate_K_per_km") or csv_row(os.path.join(source, "remap.csv"), "lapse_rate_K_per_km")
@@ -476,7 +501,7 @@ def build_inputs(name, spec, cases_dir):
         source = forcing_dir_of(c, spec["forcing"])
         files = forcing_files(source, months)
         if "stream" in spec:
-            set_precip_grad(inputs, source)
+            set_precip_grad(inputs, source, c)
             built = stream_domain(c, spec, spec["stream"], spec["first_month"], spec["last_month"], tmp, files, source)
             for f in ("attributes.nc", "coldState.nc", "forcingFileList.txt"):
                 shutil.copy(os.path.join(built, "summa_inputs", f), os.path.join(inputs, f))
@@ -501,7 +526,7 @@ def build_inputs(name, spec, cases_dir):
         if "wetland" in spec:
             raise SystemExit(f"{name}: a wetland needs a stream, whose water column it copies")
 
-        set_precip_grad(inputs, source)
+        set_precip_grad(inputs, source, c)
         shutil.copy(os.path.join(tmp, "attributes_glac.nc"), os.path.join(inputs, "attributes.nc"))
         shutil.copy(os.path.join(tmp, "coldstate_glac.nc"), os.path.join(inputs, "coldState.nc"))
         fit_trial_params(inputs)  # the template may be a case with another number of HRUs, as with a stream HRU
