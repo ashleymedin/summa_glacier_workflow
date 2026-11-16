@@ -1,0 +1,5 @@
+wolverine_general: truth upland 0.9, glacier 1.4
+truth    Tcrit 273.66 range 3.0: best KGE 0.9505 (rmse 3069.3), best rmse   88.2 (KGE 0.8807); compromise KGE 0.9208 rmse 1229.6 upland 0.466 glacier 1.058; 96 trials
+default  Tcrit 273.16 range 2.0: best KGE 0.9877 (rmse  427.0), best rmse  119.4 (KGE 0.9751); compromise KGE 0.9872 rmse  367.0 upland 0.589 glacier 1.423; 96 trials
+cold1K   Tcrit 272.66 range 3.0: best KGE 0.9855 (rmse  582.1), best rmse  182.1 (KGE 0.9524); compromise KGE 0.9763 rmse  206.7 upland 0.529 glacier 1.515; 96 trials
+narrow   Tcrit 273.66 range 1.0: best KGE 0.9879 (rmse  456.1), best rmse   72.8 (KGE 0.9616); compromise KGE 0.9879 rmse  456.1 upland 0.638 glacier 1.357; 96 trials
