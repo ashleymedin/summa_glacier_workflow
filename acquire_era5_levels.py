@@ -87,6 +87,8 @@ def write(ds, path):
     y, m = int(str(ds.time.values[0])[:4]), int(str(ds.time.values[0])[5:7])
     if out.time.size != calendar.monthrange(y, m)[1] * 24 // EVERY or not np.isfinite(out.to_array().values).all():
         raise SystemExit(f"{path}: incomplete month or missing values")
+    if not (fields["airtemp"].min() > 150.0 and fields["spechum"].min() > 0.0):     # a server can hand back zeros for a day
+        raise SystemExit(f"{path}: implausible values (air temperature {fields['airtemp'].min():.1f} K)")
     out.to_netcdf(path + ".part", encoding={"time": {"dtype": "i4"}})
     os.replace(path + ".part", path)
     print(f"{datetime.now():%H:%M} wrote {path}", flush=True)
