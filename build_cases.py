@@ -101,35 +101,47 @@ def set_param_line(params, name, value, lower, upper):
     open(params, "w").writelines(lines)
 
 
+# precipitation gradient within an HRU without stakes: the mean of Wolverine's (0.0016) and Gulkana's (0.0019) stake fits
+PRECIP_GRAD_GENERAL = 0.00175
+
+
 def set_precip_grad(inputs, source):
     """precipElevGrad and tempLapseRate in the case's localParamInfo.txt: the gradient from the station correction's
-    corrections.csv (0 without one), the lapse rate the year's mean of the monthly ones the forcing was carried to the
-    HRUs with (corrections.csv, else remap_forcing's remap.csv)."""
+    corrections.csv (PRECIP_GRAD_GENERAL without one), the lapse rate the year's mean of the monthly ones the forcing was
+    carried to the HRUs with (corrections.csv, else remap_forcing's remap.csv)."""
     path = os.path.join(source, "corrections.csv")
     params = os.path.join(inputs, "localParamInfo.txt")
     grad = csv_row(path, "precipElevGrad_per_m")
-    set_param_line(params, "precipElevGrad", grad[0] if grad else 0.0, 0.0, 0.005)
-    set_param_line(params, "glacierSnowFactor", 1.0, 0.5, 5.0)  # the stake cases' values by HRU go to trialParams.nc
+    set_param_line(params, "precipElevGrad", grad[0] if grad else PRECIP_GRAD_GENERAL, 0.0, 0.005)
+    lines = [l for l in open(params) if l.split("|")[0].strip() != "glacierSnowFactor"]
+    open(params, "w").writelines(lines)
     lapse = csv_row(path, "lapse_rate_K_per_km") or csv_row(os.path.join(source, "remap.csv"), "lapse_rate_K_per_km")
     if lapse is None:
         raise SystemExit(f"no lapse_rate_K_per_km in {source}/corrections.csv or remap.csv; rerun remap_forcing.py")
     set_param_line(params, "tempLapseRate", -np.mean(lapse[:12]) / 1000.0, 0.0, 0.0098)
-    set_wind_factor(params, wind_exposure_station() if os.path.exists(path) else 1.0)
+    set_wind_factor(params, wind_exposure_station())
     set_param_line(params, "glacierTempReduction", air_cooling_station(), 0.5, 0.9)
 
 
-def set_glacier_snow_factor(inputs, source):
-    """glacierSnowFactor by HRU in trialParams.nc from the station correction's corrections.csv; none leaves SUMMA's 1."""
-    factor = csv_row(os.path.join(source, "corrections.csv"), "glacierSnowFactor")
+GLACIER_DOMAIN_TYPES = (2, 3, 4)  # glacCln1, glacCln2, glacDbr
+
+
+def set_glacier_snowfall(inputs, source):
+    """frozenPrecipMultip (dom, hru) in trialParams.nc: the stake ratio of each HRU on its glacier domains and 1 elsewhere,
+    from the station correction's corrections.csv; none leaves localParamInfo.txt's value."""
+    factor = csv_row(os.path.join(source, "corrections.csv"), "frozenPrecipMultip_glacier")
     if factor is None:
         return
+    with nc4.Dataset(os.path.join(inputs, "coldState.nc")) as c:
+        types = np.asarray(c["domType"][:]).T  # (dom, hru)
     with nc4.Dataset(os.path.join(inputs, "trialParams.nc"), "a") as t:
-        if len(factor) != len(t.dimensions["hru"]):
-            raise SystemExit(f"{source}/corrections.csv: {len(factor)} glacierSnowFactor values for {len(t.dimensions['hru'])} HRUs")
-        dims = ("dom", "hru") if "dom" in t.dimensions else ("hru",)
-        var = t["glacierSnowFactor"] if "glacierSnowFactor" in t.variables else t.createVariable("glacierSnowFactor", "f8", dims)
-        var[:] = np.broadcast_to(np.array(factor), var.shape)
-    print(f"{inputs}/trialParams.nc: glacierSnowFactor", " ".join(f"{x:.3f}" for x in factor))
+        if len(factor) != len(t.dimensions["hru"]) or types.shape != (len(t.dimensions["dom"]), len(t.dimensions["hru"])):
+            raise SystemExit(f"{source}/corrections.csv: {len(factor)} glacier snowfall ratios for {len(t.dimensions['hru'])} HRUs")
+        if "glacierSnowFactor" in t.variables:
+            raise SystemExit(f"{inputs}/trialParams.nc holds glacierSnowFactor, which SUMMA no longer has; rebuild it")
+        var = t["frozenPrecipMultip"] if "frozenPrecipMultip" in t.variables else t.createVariable("frozenPrecipMultip", "f8", ("dom", "hru"))
+        var[:] = np.where(np.isin(types, GLACIER_DOMAIN_TYPES), np.array(factor)[None, :], 1.0)
+    print(f"{inputs}/trialParams.nc: glacier frozenPrecipMultip", " ".join(f"{x:.3f}" for x in factor))
 
 
 # glacier wind and air temperature above freezing over the forcing station's, from Gulkana Site B (Wilson et al. 2026),
@@ -147,7 +159,7 @@ def wind_exposure_station():
 
 
 def air_cooling_station():
-    """The campaign's glacier-surface air temperature above freezing as a fraction of the station's (searched on ERA5)."""
+    """The campaign's glacier-surface air temperature above freezing as a fraction of the station's."""
     for row in csv.DictReader(open(AIR_COOLING_CSV)):
         if row["month"] == "all":
             return float(row["factor"])
@@ -155,8 +167,8 @@ def air_cooling_station():
 
 
 def set_wind_factor(params, value):
-    """glacierWindFactor in localParamInfo.txt, the glacier surface wind over the forcing's: the campaign's
-    on station-corrected wind, 1 on ERA5's (where it is searched); windExposure, which it replaces, is dropped."""
+    """glacierWindFactor in localParamInfo.txt, the glacier surface wind over the forcing's: the campaign's, on either
+    forcing, since it trades off with the snow albedo; windExposure, which it replaces, is dropped."""
     lines = [l for l in open(params) if l.split("|")[0].strip() != "windExposure"]
     open(params, "w").writelines(lines)
     set_param_line(params, "glacierWindFactor", value, 0.3, 1.5)
@@ -483,7 +495,7 @@ def build_inputs(name, spec, cases_dir):
             if "delta" in spec:  # after the lake, so it takes the next domain slot of the same HRU
                 wet += f", delta in HRU {delta_domain(inputs, spec['delta'], spec['wetland'])}"
             fit_trial_params(inputs)
-            set_glacier_snow_factor(inputs, source)
+            set_glacier_snowfall(inputs, source)
             print(f"{name}: stream HRU added{wet}, {len(files)} forcing files in {dest}/forcing")
             return
         if "wetland" in spec:
@@ -493,7 +505,7 @@ def build_inputs(name, spec, cases_dir):
         shutil.copy(os.path.join(tmp, "attributes_glac.nc"), os.path.join(inputs, "attributes.nc"))
         shutil.copy(os.path.join(tmp, "coldstate_glac.nc"), os.path.join(inputs, "coldState.nc"))
         fit_trial_params(inputs)  # the template may be a case with another number of HRUs, as with a stream HRU
-        set_glacier_snow_factor(inputs, source)
+        set_glacier_snowfall(inputs, source)
         write_file_list(os.path.join(inputs, "forcingFileList.txt"), [os.path.basename(f) for f in files])
         if copy_forcing:
             forcing = os.path.join(dest, "forcing")

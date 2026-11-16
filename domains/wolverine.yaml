@@ -52,7 +52,7 @@ stations: observations/stations
 stakes: observations/storage/mass_balance/Input_Wolverine_Glaciological_Data.csv
 gauge_shield: SA                                # single-Alter shield on the 990 m weighing gauge
 precip_grad: true                               # SUMMA precipElevGrad fitted with the stake ratios
-glacier_snow_factor: true                       # stake ratios as SUMMA's glacierSnowFactor, glacier domains only
+glacier_snow_factor: true                       # stake ratios as SUMMA's frozenPrecipMultip, glacier domains only
 
 # the bundled stream-temperature test: one reach from the terminus to the gauge (add_stream_hru.py)
 stream_hru:

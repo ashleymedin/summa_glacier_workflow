@@ -38,8 +38,8 @@ copies of the forcing.  Longwave is copied unchanged.
             elevation between the gauges and held at the end gauges beyond them.
             With --glacier-snow-factor the stake ratios leave the forcing: the staked HRUs keep the precipitation
             of the HRUs without stakes, and each one's ratio over that precipitation's mean multiplier on the
-            stake-interval snowfall is written to corrections.csv as glacierSnowFactor, which SUMMA applies to
-            the snowfall of the glacier domains only, since the stakes include snow blown and avalanched onto the ice.
+            stake-interval snowfall is written to corrections.csv as frozenPrecipMultip_glacier, SUMMA's snowfall
+            multiplier on the glacier domains only, since the stakes include snow blown and avalanched onto the ice.
 
 --correct names the variables to correct (default all); the rest are copied unchanged and the precipitation phase sees
 them unchanged. A station folder holds 15-minute files, or hourly ones (*_hourly_LVL2_*.csv, read only where it has no
@@ -281,7 +281,7 @@ def main():
     p.add_argument("--gauge-rain", action="store_true",
                    help="scale the precipitation the stakes leave by every gauge's monthly catch (needs --gauge-shield)")
     p.add_argument("--glacier-snow-factor", action="store_true",
-                   help="write the stake ratios as SUMMA's glacierSnowFactor instead of applying them to the forcing")
+                   help="write the stake ratios as SUMMA's glacier-domain frozenPrecipMultip instead of applying them to the forcing")
     p.add_argument("--spechum-ratios", help="CSV of hruId, month, ratio for the months the station has no humidity for")
     p.add_argument("--correct", nargs="+", choices=VARIABLES, default=list(VARIABLES),
                    help="the variables to correct, default all; the others are copied unchanged")
@@ -552,7 +552,7 @@ def main():
         if a.precip_grad:
             w.writerow(["precipElevGrad_per_m", f"{gamma:.5f}"])
         if a.glacier_snow_factor:
-            w.writerow(["glacierSnowFactor"] + [f"{glacier_factor[j]:.4f}" for j in range(nh)])
+            w.writerow(["frozenPrecipMultip_glacier"] + [f"{glacier_factor[j]:.4f}" for j in range(nh)])
         if staked.any():
             w.writerow(["pptrate_stake_snowfall_weight"] + [f"{cover[m]:.3f}" for m in range(1, 13)])
         if gauge:
@@ -570,7 +570,7 @@ def main():
     if a.precip_grad:
         print(f"precipElevGrad {gamma:.5f} m-1 ({10000 * gamma:.0f}% per 100 m), fitted with the stake ratios")
     if a.glacier_snow_factor:
-        print("glacierSnowFactor by HRU (SUMMA, glacier domains only):", " ".join(f"{x:.3f}" for x in glacier_factor))
+        print("frozenPrecipMultip of the glacier domains by HRU:", " ".join(f"{x:.3f}" for x in glacier_factor))
     if staked.any():
         print("stake multiplier weight on snowfall, by month:", " ".join(f"{cover[m]:.2f}" for m in range(1, 13)))
     if gauge:

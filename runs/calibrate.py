@@ -38,20 +38,22 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 GLACIER = os.path.dirname(HERE)
 SUMMA_DIR = os.path.abspath(os.environ.get("SUMMA_DIR", os.path.join(GLACIER, "..", "summa")))
 
-# paper1: one value of each soil parameter for every domain; glacierWindFactor is Site B's on station wind and searched on ERA5;
-# the upland canopy is fixed at Noah-MP's mixed tundra (2.0 and 0.2 m, LAI 1.8)
+# paper1: one value of each soil parameter for every domain; the glacier wind and cooling stay at Site B's (glacierWindFactor
+# 0.59, glacierTempReduction 0.73), which trade off with the snow albedo (scratch/2026-11-16/twin.py); the upland canopy is fixed at Noah-MP's
+# mixed tundra (2.0 and 0.2 m, LAI 1.8)
 PAPER1 = ["k_soil", "theta_sat", "aquiferBaseflowExp", "aquiferBaseflowRate", "qSurfScale", "frozenPrecipMultip",
           "Fcapil", "tempCritRain", "windReductionParam", "vGn_n", "routingGammaScale", "routingGammaShape",
-          "glacierWindFactor", "glacierTempReduction", "glacStor_kIce", "glacStor_kSnow", "glacStor_kFirn", "k_snow",
+          "glacStor_kIce", "glacStor_kSnow", "glacStor_kFirn", "k_snow",
           "mw_exp", "albedoDecayRate", "albedoMax", "k_macropore", "tempRangeTimestep", "thCond_soil",
           "newSnowDenMin"]
 PAPER1_CHAIN = ["theta_res", "critSoilWilting", "critSoilTranspire", "fieldCapacity", "theta_sat"]
 
 # domain: the upland soil and the debris searched apart, and the englacial debris concentration, the debris's other soil values fixed in trialParams.nc;
+# the snowfall multiplier apart on the upland and the glaciers, where it takes in blown and avalanched snow;
 # frac_sand (with frac_clay fixed) sets the conductivity of the solids, which thCondSoil = funcSoilWet uses; frac_silt is their remainder
-DOMAIN = [p for p in PAPER1 if p not in ("k_soil", "theta_sat", "vGn_n", "k_macropore", "thCond_soil")] + \
+DOMAIN = [p for p in PAPER1 if p not in ("k_soil", "theta_sat", "vGn_n", "k_macropore", "thCond_soil", "frozenPrecipMultip")] + \
          ["k_soil@upland", "k_macropore@upland", "theta_sat@upland", "vGn_n@upland", "frac_sand@upland",
-          "theta_sat@glacDbr", "frac_sand@glacDbr", "debrisConc", "precipElevGrad", "glacierSnowFactor"]
+          "theta_sat@glacDbr", "frac_sand@glacDbr", "debrisConc", "frozenPrecipMultip@upland", "frozenPrecipMultip@glacier"]
 DOMAIN_CHAIN = ["theta_res@upland", "critSoilWilting@upland", "critSoilTranspire@upland", "fieldCapacity@upland",
                 "theta_sat@upland"]
 
@@ -69,18 +71,14 @@ SEARCHES = {
                           "frac_sand@glacDbr": (0.0, 0.9),
                           "debrisConc": (0.1, 6.4),             # kg m-3, Anderson and Anderson (2018)
                           "frozenPrecipMultip": (0.3, 2.0),
-                          "glacierWindFactor": (0.3, 1.5),    # of the CHELSA-corrected wind; Site B's 0.59 of the station's
-                          "glacierTempReduction": (0.5, 0.9),  # of the air temperature above freezing; Site B's 0.73
-                          "precipElevGrad": (0.0, 0.0025),     # m-1 above the HRU elevation
-                          "glacierSnowFactor": (1.0, 2.0)}},   # blown and avalanched snow, Kneib et al. (2025) avalanche factors
+                          "frozenPrecipMultip@upland": (0.3, 2.0),
+                          "frozenPrecipMultip@glacier": (0.3, 3.0)}},  # with blown and avalanched snow, Kneib et al. (2025)
 }
 SEARCHES["stream"] = dict(SEARCHES["domain"], params=STREAM, logs=SEARCHES["domain"]["logs"] + ["wetlandStorageK"])
 
-# fixed at their defaults on the station-corrected cases: the stakes set the snowfall with SUMMA's default phase split
-# (273.16 K, 2 K), Site B sets the on-ice wind (glacierWindFactor 0.59) and cooling (glacierTempReduction 0.73), and the
-# stakes the precipitation gradient within an HRU and the glacier snowfall (build_cases.set_precip_grad); raw ERA5 searches them
-STATION_FIXED = ["frozenPrecipMultip", "tempCritRain", "tempRangeTimestep", "glacierWindFactor", "glacierTempReduction",
-                 "precipElevGrad", "glacierSnowFactor"]
+# fixed on the station-corrected cases, where the stakes set the snowfall with SUMMA's default phase split (273.16 K, 2 K),
+# the glacier domains' through frozenPrecipMultip in trialParams.nc (build_cases.set_glacier_snowfall); raw ERA5 searches them
+STATION_FIXED = ["frozenPrecipMultip", "tempCritRain", "tempRangeTimestep"]
 
 
 def case_spec(case):
