@@ -124,6 +124,10 @@ def main():
                     if cover > 0.:
                         print(f"    {t:5.1f}-{b:5.1f} m: model {r:4.0f}, core {core:4.0f} kg m-3 over {cover:.1f} m "
                               f"(winter snow {shift:.1f} m removed)")
+                core_swe = lambda z: sum(max(0., min(z+shift, b) - max(shift, t))*r for t, b, r in c["layers"])/1000.
+                depths = [z for z in (5., 10., 15., 20.) if z+shift <= c["bottom"]]
+                print("    m w.e. above depth, model/core: " +
+                      ", ".join(f"{z:.0f} m {swe_at(dz, rho, z):.1f}/{core_swe(z):.1f}" for z in depths))
 
 
 if __name__ == "__main__":
