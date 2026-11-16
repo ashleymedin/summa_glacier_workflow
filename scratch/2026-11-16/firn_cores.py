@@ -33,6 +33,19 @@ def sites(glacier):
         return {r["site_name"]: r for r in csv.DictReader(f) if r["Glacier"] == glacier}
 
 
+def sample_layers(rows):
+    """(top, bottom, density) of each sample, m and kg m-3, from consecutive sample bottom depths.
+
+    The release's layer_top/layer_bottom columns are garbled in some cores (tops below bottoms), so only SBD is used.
+    """
+    out, top = [], 0.
+    for r in rows:
+        bot = float(r["SBD"])/100.
+        out.append((top, bot, 1000.*float(r["layer_density"])))
+        top = bot
+    return out
+
+
 def cores(glacier):
     site = sites(glacier)
     att = os.path.join(DATA, f"domain_{glacier}", "attributes")
@@ -42,13 +55,14 @@ def cores(glacier):
         x, y, epsg = s["Easting"], s["Northing"], s["UTM_EPSG"]
         with open(path, encoding="utf-8-sig") as f:
             rows = list(csv.DictReader(f))
-        bottom = float(rows[-1]["layer_bottom"])/100.
+        layers = sample_layers(rows)
+        bottom = layers[-1][1]
         yield dict(
             file=os.path.basename(path), site=name,
             elev=raster_value(os.path.join(att, "elevation", "dem", f"domain_{glacier}_glacier_elv_utm.tif"), x, y, epsg),
             hru=int(raster_value(os.path.join(att, "glaciers", f"domain_{glacier}_hru_id.tif"), x, y, epsg)),
-            bottom=bottom, swe=float(rows[-1]["cumulative_SWE"]),
-            deep=np.mean([float(r["layer_density"]) for r in rows if float(r["layer_top"])/100. > bottom-2.]),
+            layers=layers, bottom=bottom, swe=sum((b - t)*rho for t, b, rho in layers)/1000.,
+            deep=np.mean([rho for t, b, rho in layers if t > bottom-2.])/1000.,
             lens=sum(float(r["ice_lens_thick_sum"] or 0) for r in rows),
             annual=[(float(r["annual_layer_depth"])/100., r["annual_layer_year"]) for r in rows if r["annual_layer_year"]])
 
@@ -64,6 +78,12 @@ def snow_column(state, hru_index):
             rho = 917.*np.asarray(d["mLayerVolFracIce"][:ns, hru_index, k]) + 1000.*np.asarray(d["mLayerVolFracLiq"][:ns, hru_index, k])
             return dz, rho
     return None
+
+
+def density_over(layers, top, bottom):
+    """Mean core density (kg m-3) between two depths (m), and the length of core that covers them (m)."""
+    w = np.array([max(0., min(bottom, b) - max(top, t)) for t, b, r in layers])
+    return (float(np.sum(w*np.array([r for t, b, r in layers]))/np.sum(w)), float(np.sum(w))) if np.sum(w) > 0. else (0., 0.)
 
 
 def swe_at(dz, rho, depth):
@@ -91,8 +111,19 @@ def main():
                     print("    no glacier domain in that HRU")
                     continue
                 dz, rho = col
+                if dz.size == 0:
+                    print("    model: no snow")
+                    continue
                 print(f"    model: {np.sum(dz):.1f} m of snow, {np.sum(dz*rho)/1000:.2f} m w.e., "
                       f"{swe_at(dz, rho, c['bottom']):.2f} m w.e. above {c['bottom']:.1f} m, densest {rho.max():.0f} kg m-3")
+                # a spring core sits on the model's 1 October datum once the snow above last summer's surface is removed
+                shift = c["annual"][0][0] if c["annual"] and int(c["file"].split("_")[-1][5:7]) < 7 else 0.
+                ztop = np.concatenate([[0.], np.cumsum(dz)[:-1]])
+                for t, b, r in zip(ztop, ztop+dz, rho):
+                    core, cover = density_over(c["layers"], t+shift, b+shift)
+                    if cover > 0.:
+                        print(f"    {t:5.1f}-{b:5.1f} m: model {r:4.0f}, core {core:4.0f} kg m-3 over {cover:.1f} m "
+                              f"(winter snow {shift:.1f} m removed)")
 
 
 if __name__ == "__main__":
