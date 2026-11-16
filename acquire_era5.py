@@ -183,15 +183,25 @@ def main():
         json.dump({k: {"sfc": j["sfc"].request_id, "ml": j["ml"].request_id, "expver": j["expver"]} for k, j in active.items()},
                   open(state_path, "w"))
 
+    def drop(j):
+        for n in ("sfc", "ml"):
+            try:
+                j[n].delete()
+            except OSError:                           # already gone
+                pass
+
     def submit_ml(y, ms, expver):
         return client.submit("reanalysis-era5-complete", ml_request(y, ms, area, expver))
 
     for y, ms in list(pending):                       # resume jobs of an earlier run
         k = keyof(y, ms)
         if k in saved:
+            try:
+                jobs = {n: client.get_remote(saved[k][n]) for n in ("sfc", "ml")}
+            except OSError:                           # gone from the CDS: submit it again
+                continue
             pending.remove((y, ms))
-            active[k] = {"y": y, "ms": ms, "months": [(y, m) for m in ms], "expver": saved[k]["expver"],
-                         "sfc": client.get_remote(saved[k]["sfc"]), "ml": client.get_remote(saved[k]["ml"])}
+            active[k] = {"y": y, "ms": ms, "months": [(y, m) for m in ms], "expver": saved[k]["expver"], **jobs}
     while pending or active:
         while pending and len(active) < a.jobs and keyof(*pending[0]) not in active:
             y, ms = pending.pop(0)
@@ -206,18 +216,13 @@ def main():
             except OSError as e:                      # the CDS is slow to answer; look again next time
                 print(f"{k}: status unavailable ({type(e).__name__})", flush=True)
                 if getattr(getattr(e, "response", None), "status_code", None) == 404:      # a job deleted at the CDS is not coming back
-                    for n in ("sfc", "ml"):
-                        try:
-                            j[n].delete()
-                        except OSError:
-                            pass
+                    drop(j)
                     pending.append((j["y"], j["ms"]))
                     del active[k]
                     save()
                 continue
             if "rejected" in st.values():             # over the CDS's limit on a user's queued requests: try again later
-                for n in ("sfc", "ml"):
-                    j[n].delete()
+                drop(j)
                 pending.append((j["y"], j["ms"]))
                 del active[k]
                 save()
