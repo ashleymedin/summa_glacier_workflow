@@ -89,6 +89,8 @@ def main():
             args += ["--gauge-shield", c["gauge_shield"]]
         if c.get("gauge_rain"):
             args += ["--gauge-rain"]
+        if c.get("glacier_snow_factor"):
+            args += ["--glacier-snow-factor"]
         if c.get("fit_years"):
             args += ["--fit-years", *c["fit_years"]]
         if c.get("correct"):

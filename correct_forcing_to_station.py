@@ -36,6 +36,10 @@ copies of the forcing.  Longwave is copied unchanged.
             stake intervals) and all of an HRU without stakes are instead multiplied per calendar month by
             each gauge's corrected catch over the forcing's precipitation at its elevation, interpolated in
             elevation between the gauges and held at the end gauges beyond them.
+            With --glacier-snow-factor the stake ratios leave the forcing: the staked HRUs keep the precipitation
+            of the HRUs without stakes, and each one's ratio over that precipitation's mean multiplier on the
+            stake-interval snowfall is written to corrections.csv as glacierSnowFactor, which SUMMA applies to
+            the snowfall of the glacier domains only, since the stakes include snow blown and avalanched onto the ice.
 
 --correct names the variables to correct (default all); the rest are copied unchanged and the precipitation phase sees
 them unchanged. A station folder holds 15-minute files, or hourly ones (*_hourly_LVL2_*.csv, read only where it has no
@@ -276,6 +280,8 @@ def main():
                         "precipitation of HRUs without stakes to the undercatch-corrected gauge")
     p.add_argument("--gauge-rain", action="store_true",
                    help="scale the precipitation the stakes leave by every gauge's monthly catch (needs --gauge-shield)")
+    p.add_argument("--glacier-snow-factor", action="store_true",
+                   help="write the stake ratios as SUMMA's glacierSnowFactor instead of applying them to the forcing")
     p.add_argument("--spechum-ratios", help="CSV of hruId, month, ratio for the months the station has no humidity for")
     p.add_argument("--correct", nargs="+", choices=VARIABLES, default=list(VARIABLES),
                    help="the variables to correct, default all; the others are copied unchanged")
@@ -479,6 +485,14 @@ def main():
         for m in range(1, 13):
             gauge_month[m] = np.interp(z, zs, [r[m] for r in rs])
 
+    # the stake ratio over the multiplier the staked HRUs keep, weighted by the stake-interval snowfall
+    glacier_factor = np.ones(nh)
+    if a.glacier_snow_factor and staked.any():
+        weight = snow * cover[month][:, None]
+        kept = gauge_month[month[:, None], np.arange(nh)[None, :]] if a.gauge_rain else np.ones_like(snow)
+        for j in np.nonzero(staked)[0]:
+            glacier_factor[j] = ratio["pptrate"][j] * weight[:, j].sum() / (kept[:, j] * weight[:, j]).sum()
+
     # write the corrected files
     os.makedirs(a.output, exist_ok=True)
     for f in files:
@@ -495,7 +509,9 @@ def main():
             g_mult = gauge_month[m_file, cols]
             if a.gauge_rain:
                 p_mult = np.where(staked[None, :], p_mult, g_mult)
-            if staked.any():
+            if a.glacier_snow_factor:
+                p_mult = g_mult if a.gauge_rain else np.where(staked[None, :], 1.0, p_mult)
+            elif staked.any():
                 frac = snow_fraction(np.array(s["airtemp"][:], float) + offset[wet_file, m_file, cols],
                                      np.array(s["spechum"][:], float) * q_ratio[wet_file, m_file, cols],
                                      np.array(s["airpres"][:], float) * ratio["airpres"][None, :],
@@ -535,6 +551,8 @@ def main():
         w.writerow(["corrected", *a.correct])
         if a.precip_grad:
             w.writerow(["precipElevGrad_per_m", f"{gamma:.5f}"])
+        if a.glacier_snow_factor:
+            w.writerow(["glacierSnowFactor"] + [f"{glacier_factor[j]:.4f}" for j in range(nh)])
         if staked.any():
             w.writerow(["pptrate_stake_snowfall_weight"] + [f"{cover[m]:.3f}" for m in range(1, 13)])
         if gauge:
@@ -551,6 +569,8 @@ def main():
     print(f"wind x{a.wind_exposure} of the {wz} m station, by month:", " ".join(f"{wind[m]:.2f}" for m in range(1, 13)))
     if a.precip_grad:
         print(f"precipElevGrad {gamma:.5f} m-1 ({10000 * gamma:.0f}% per 100 m), fitted with the stake ratios")
+    if a.glacier_snow_factor:
+        print("glacierSnowFactor by HRU (SUMMA, glacier domains only):", " ".join(f"{x:.3f}" for x in glacier_factor))
     if staked.any():
         print("stake multiplier weight on snowfall, by month:", " ".join(f"{cover[m]:.2f}" for m in range(1, 13)))
     if gauge:

@@ -55,6 +55,7 @@ stakes: observations/storage/mass_balance/Input_Gulkana_Glaciological_Data.csv
 gauge_shield: SA                                # weighing gauges at 1480 and 1725 m, shield assumed as Wolverine's
 gauge_rain: true                                # precipitation the stakes leave scaled by the gauges, by month
 precip_grad: true                               # SUMMA precipElevGrad fitted with the stake ratios
+glacier_snow_factor: true                       # stake ratios as SUMMA's glacierSnowFactor, glacier domains only
 spechum_campaign:                               # Wilson et al. 2024 Site B, for the April-August humidity
   station: observations/campaigns/wilson_2024/1_meteo/gulkanaB_AWS_2024.csv
   latitude: 63.285514

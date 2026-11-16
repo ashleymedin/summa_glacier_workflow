@@ -51,7 +51,7 @@ PAPER1_CHAIN = ["theta_res", "critSoilWilting", "critSoilTranspire", "fieldCapac
 # frac_sand (with frac_clay fixed) sets the conductivity of the solids, which thCondSoil = funcSoilWet uses; frac_silt is their remainder
 DOMAIN = [p for p in PAPER1 if p not in ("k_soil", "theta_sat", "vGn_n", "k_macropore", "thCond_soil")] + \
          ["k_soil@upland", "k_macropore@upland", "theta_sat@upland", "vGn_n@upland", "frac_sand@upland",
-          "theta_sat@glacDbr", "frac_sand@glacDbr", "debrisConc", "precipElevGrad"]
+          "theta_sat@glacDbr", "frac_sand@glacDbr", "debrisConc", "precipElevGrad", "glacierSnowFactor"]
 DOMAIN_CHAIN = ["theta_res@upland", "critSoilWilting@upland", "critSoilTranspire@upland", "fieldCapacity@upland",
                 "theta_sat@upland"]
 
@@ -71,15 +71,16 @@ SEARCHES = {
                           "frozenPrecipMultip": (0.3, 2.0),
                           "glacierWindFactor": (0.3, 1.5),    # of the CHELSA-corrected wind; Site B's 0.59 of the station's
                           "glacierTempReduction": (0.5, 0.9),  # of the air temperature above freezing; Site B's 0.73
-                          "precipElevGrad": (0.0, 0.0025)}},   # m-1 above the HRU elevation
+                          "precipElevGrad": (0.0, 0.0025),     # m-1 above the HRU elevation
+                          "glacierSnowFactor": (1.0, 2.0)}},   # blown and avalanched snow, Kneib et al. (2025) avalanche factors
 }
 SEARCHES["stream"] = dict(SEARCHES["domain"], params=STREAM, logs=SEARCHES["domain"]["logs"] + ["wetlandStorageK"])
 
 # fixed at their defaults on the station-corrected cases: the stakes set the snowfall with SUMMA's default phase split
 # (273.16 K, 2 K), Site B sets the on-ice wind (glacierWindFactor 0.59) and cooling (glacierTempReduction 0.73), and the
-# stakes the precipitation gradient within an HRU (build_cases.set_precip_grad); raw ERA5 searches them
+# stakes the precipitation gradient within an HRU and the glacier snowfall (build_cases.set_precip_grad); raw ERA5 searches them
 STATION_FIXED = ["frozenPrecipMultip", "tempCritRain", "tempRangeTimestep", "glacierWindFactor", "glacierTempReduction",
-                 "precipElevGrad"]
+                 "precipElevGrad", "glacierSnowFactor"]
 
 
 def case_spec(case):
