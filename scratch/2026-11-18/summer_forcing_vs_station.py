@@ -64,7 +64,7 @@ def forcing(case, elev):
     return h.resample("1D").agg({"T": "mean", "P": "sum", "SW": "mean"}), z[i]
 
 
-for spec in sys.argv[1:]:
+for spec in sys.argv[1:] if __name__ == "__main__" else []:
     case, sample, elev = spec.split(":")
     basin, elev = case.split("_")[0], int(elev)
     mb = aligned(f"{WF}/runs/{case}/calibration_rerun/sample_{sample}_aligned/output")["mass_balance"]
