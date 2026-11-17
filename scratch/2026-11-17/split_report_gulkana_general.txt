@@ -1,0 +1,19 @@
+gulkana_general: calibrated compromise KGE 0.7310, RMSE 942
+calibrated  272.99 K 0.69 K (64 nodes): best KGE 0.8114 at 2.00/0.70 (RMSE 1307); best RMSE 771 at 1.30/1.40 (KGE 0.5811)
+      front  upland 2.00 glacier 0.70  KGE 0.8114  RMSE 1307
+      front  upland 2.00 glacier 0.80  KGE 0.7943  RMSE 1204
+      front  upland 2.00 glacier 0.90  KGE 0.7797  RMSE 1112
+      front  upland 2.00 glacier 1.00  KGE 0.7623  RMSE 1017
+      front  upland 2.00 glacier 1.10  KGE 0.7422  RMSE 937
+      front  upland 2.00 glacier 1.20  KGE 0.7290  RMSE 873
+      front  upland 2.00 glacier 1.30  KGE 0.7162  RMSE 811
+      front  upland 2.00 glacier 1.40  KGE 0.6993  RMSE 771
+default     273.16 K 2.00 K (64 nodes): best KGE 0.7782 at 2.00/0.70 (RMSE 1201); best RMSE 725 at 1.30/1.40 (KGE 0.5224)
+      front  upland 2.00 glacier 0.70  KGE 0.7782  RMSE 1201
+      front  upland 2.00 glacier 0.80  KGE 0.7580  RMSE 1099
+      front  upland 2.00 glacier 0.90  KGE 0.7344  RMSE 997
+      front  upland 2.00 glacier 1.00  KGE 0.7136  RMSE 914
+      front  upland 2.00 glacier 1.10  KGE 0.6973  RMSE 841
+      front  upland 2.00 glacier 1.20  KGE 0.6795  RMSE 799
+      front  upland 2.00 glacier 1.30  KGE 0.6612  RMSE 762
+      front  upland 2.00 glacier 1.40  KGE 0.6458  RMSE 725

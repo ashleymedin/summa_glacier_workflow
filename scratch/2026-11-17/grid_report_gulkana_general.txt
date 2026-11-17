@@ -1,0 +1,5 @@
+gulkana_general: truth upland 0.9, glacier 1.4, threshold 273.66 K, range 3 K
+default  273.16 K 2.0 K (64 nodes): best KGE 0.9736 at 0.75/1.85 (rmse 218); best rmse 90 at 0.30/1.70 (KGE 0.9207); joint 0.9600/90 at 0.60/1.70
+cold1K   272.66 K 3.0 K (64 nodes): best KGE 0.9540 at 0.60/1.85 (rmse 151); best rmse 83 at 0.30/1.70 (KGE 0.9156); joint 0.9314/83 at 0.60/1.70
+narrow   273.66 K 1.0 K (64 nodes): best KGE 0.9853 at 0.75/1.70 (rmse 167); best rmse 50 at 0.30/1.55 (KGE 0.9110); joint 0.9707/50 at 0.75/1.55
+truth    273.66 K 3.0 K (64 nodes): best KGE 1.0000 at 0.90/1.40 (rmse 0); best rmse 0 at 0.30/1.40 (KGE 0.8636); joint 1.0000/0 at 0.90/1.40

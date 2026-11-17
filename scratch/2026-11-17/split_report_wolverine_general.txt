@@ -1,0 +1,10 @@
+wolverine_general: calibrated compromise KGE 0.8386, RMSE 390
+calibrated  272.56 K 4.82 K (64 nodes): best KGE 0.8537 at 0.50/1.00 (RMSE 874); best RMSE 393 at 0.30/0.80 (KGE 0.8487)
+      front  upland 0.50 glacier 1.00  KGE 0.8537  RMSE 874
+      front  upland 0.40 glacier 0.90  KGE 0.8512  RMSE 573
+      front  upland 0.30 glacier 0.80  KGE 0.8487  RMSE 393
+default     273.16 K 2.00 K (64 nodes): best KGE 0.8409 at 0.50/1.10 (RMSE 1004); best RMSE 398 at 0.30/0.80 (KGE 0.8335)
+      front  upland 0.50 glacier 1.10  KGE 0.8409  RMSE 1004
+      front  upland 0.40 glacier 1.00  KGE 0.8404  RMSE 685
+      front  upland 0.30 glacier 0.90  KGE 0.8378  RMSE 416
+      front  upland 0.30 glacier 0.80  KGE 0.8335  RMSE 398

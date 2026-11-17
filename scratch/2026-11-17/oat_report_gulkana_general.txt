@@ -1,0 +1,33 @@
+gulkana_general: compromise discharge 0.7310, wgms_amce 941.9 (calibration file [7.30955455e-01 9.41933580e+02])
+parameter                         value  dKGE lo  dKGE hi  dRMSE lo  dRMSE hi
+frozenPrecipMultip@glacier        1.099   +0.136   -0.175    +962.5    +434.6
+albedoDecayRate               3.189e+05   +0.005   -0.272      +7.9    -195.1
+frozenPrecipMultip@upland         1.921   -0.234   +0.012      +0.0      +0.0
+tempRangeTimestep                0.6911   +0.004   -0.144      +8.3    -182.7
+tempCritRain                        273   +0.060   -0.107    +178.4    -186.1
+aquiferBaseflowRate             0.01062   -0.070   +0.000      +0.0      +0.0
+Fcapil                           0.1898   +0.028   -0.002     +96.3     -10.0
+albedoMax                        0.8526   +0.027   -0.022     +56.4     -51.9
+vGn_n@upland                      2.923   -0.026   -0.001      +0.0      +0.0
+glacStor_kSnow                1.184e+05   +0.000   -0.019      +0.0      +0.0
+glacStor_kFirn                1.663e+06   +0.009   -0.015      +0.0      +0.0
+frac_sand@glacDbr                0.5455   -0.008     +nan     -14.8      +nan
+debrisConc                        1.791   +0.003   -0.008      +2.7      -7.5
+theta_sat@glacDbr                0.2843   +0.004   -0.007      +7.6     -11.4
+k_soil@upland                 0.0004497   -0.007   +0.004      +0.0      +0.0
+mw_exp                            3.932   +0.002   -0.004      +6.3     -15.3
+k_snow                          0.03011   -0.004   -0.001     -12.3      -5.9
+newSnowDenMin                      68.3   +0.001   -0.004      +1.5      -7.9
+aquiferBaseflowExp                2.825   +0.000   -0.004      +0.0      +0.0
+theta_sat@upland                 0.4943   +0.002   -0.004      +0.0      +0.0
+windReductionParam               0.9712   -0.003   +0.000      +0.0      +0.0
+routingGammaScale             1.158e+05   +0.003   -0.001      +0.0      +0.0
+frac_sand@upland                 0.4526   -0.002     +nan      +0.0      +nan
+theta_res@upland                0.06666   -0.002   +0.000      +0.0      +0.0
+qSurfScale                        22.29   -0.001   +0.000      -0.3      +0.0
+routingGammaShape                 2.205   +0.000   -0.001      +0.0      +0.0
+critSoilWilting@upland            0.146   -0.000   +0.000      +0.0      +0.0
+glacStor_kIce                 3.884e+04   +0.000   -0.000      +0.0      +0.0
+critSoilTranspire@upland         0.3382   -0.000   -0.000      +0.0      +0.0
+k_macropore@upland            1.957e-08   +0.000   -0.000      +0.0      +0.0
+fieldCapacity@upland             0.3687   +0.000   +0.000      +0.0      +0.0

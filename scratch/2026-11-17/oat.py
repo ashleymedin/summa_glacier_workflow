@@ -68,7 +68,7 @@ def variants(case):
     for p in base:
         b, _, at = p.partition("@")
         lo, hi = s["bounds"].get(p) or file_bounds(settings, p)
-        if b in CHAIN:
+        if b in CHAIN and (f"{CHAIN[0]}@{at}" if at else CHAIN[0]) in base:  # the debris has no chain
             k = CHAIN.index(b)
             near = lambda j: base.get(f"{CHAIN[j]}@{at}" if at else CHAIN[j])  # noqa: E731
             if k > 0:

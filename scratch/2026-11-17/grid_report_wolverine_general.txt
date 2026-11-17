@@ -1,0 +1,5 @@
+wolverine_general: truth upland 0.9, glacier 1.4, threshold 273.66 K, range 3 K
+default  273.16 K 2.0 K (64 nodes): best KGE 0.9881 at 0.60/1.40 (rmse 440); best rmse 143 at 0.30/1.55 (KGE 0.9017); joint 0.9744/143 at 0.60/1.55
+cold1K   272.66 K 3.0 K (64 nodes): best KGE 0.9810 at 0.60/1.55 (rmse 157); best rmse 157 at 0.30/1.55 (KGE 0.9183); joint 0.9810/157 at 0.60/1.55
+narrow   273.66 K 1.0 K (64 nodes): best KGE 0.9838 at 0.75/1.55 (rmse 234); best rmse 234 at 0.30/1.55 (KGE 0.8753); joint 0.9838/234 at 0.75/1.55
+truth    273.66 K 3.0 K (64 nodes): best KGE 1.0000 at 0.90/1.40 (rmse 0); best rmse 0 at 0.30/1.40 (KGE 0.8266); joint 1.0000/0 at 0.90/1.40

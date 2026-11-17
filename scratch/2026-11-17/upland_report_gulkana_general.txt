@@ -1,0 +1,17 @@
+gulkana_general: default split, the compromise's other parameters
+  upland 2.00 glacier 0.80: KGE 0.7580  RMSE 1099
+  upland 2.00 glacier 1.00: KGE 0.7136  RMSE 914
+  upland 2.00 glacier 1.20: KGE 0.6795  RMSE 799
+  upland 2.00 glacier 1.40: KGE 0.6458  RMSE 725
+  upland 2.50 glacier 0.80: KGE 0.8237  RMSE 1099
+  upland 2.50 glacier 1.00: KGE 0.7898  RMSE 914
+  upland 2.50 glacier 1.20: KGE 0.7608  RMSE 799
+  upland 2.50 glacier 1.40: KGE 0.7315  RMSE 725
+  upland 3.00 glacier 0.80: KGE 0.8494  RMSE 1099
+  upland 3.00 glacier 1.00: KGE 0.8349  RMSE 914
+  upland 3.00 glacier 1.20: KGE 0.8173  RMSE 799
+  upland 3.00 glacier 1.40: KGE 0.7971  RMSE 725
+  upland 3.50 glacier 0.80: KGE 0.8437  RMSE 1099
+  upland 3.50 glacier 1.00: KGE 0.8479  RMSE 914
+  upland 3.50 glacier 1.20: KGE 0.8438  RMSE 799
+  upland 3.50 glacier 1.40: KGE 0.8350  RMSE 725
