@@ -31,6 +31,6 @@ The 17 Nov results are not comparable with these.
 4. **Never rebuild `summa/build/cmake_build_mizu` or relink `summa/bin` while a run uses them.** macOS kills
    running jobs (signal 9), which is how the 17 Nov gulkana_general calibration stopped at 392 trials.
 
-## Not in this round
+## Stream cases
 
-The stream cases (`*_stream*`, paper 2) still have the old cooling factor (0.733) and have not been rebuilt.
+The stream cases (`*_stream*`, paper 2) are rebuilt with the added-data factors (0.595, 0.790) and respun too.
