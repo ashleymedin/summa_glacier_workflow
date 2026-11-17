@@ -34,6 +34,24 @@ TEMP_COLORS = ["#7f7f7f", "#c0392b", "#9b59b6", "#16a085"]
 TEMP_HELD = "2019-10-01"  # the stream cases calibrate WY2006-2019 and hold out WY2020-2026
 COLORS = ["#1b6ca8", "#e07b39", "#3a923a", "#9b59b6"]
 START, HELD, END = "2005-10-01", "2015-10-01", "2026-09-30"  # run, held-out and end dates
+WY_FIRST, WY_LAST = int(START[:4]) + 1, int(END[:4])  # the run's water years
+
+
+def wyx(idx):
+    """Dates as fractional water years centred on the year, so WY n spans n - 0.5 to n + 0.5 like its bar slot."""
+    idx = pd.DatetimeIndex(idx)
+    n = idx.year + (idx.month >= 10)
+    beg = pd.to_datetime([f"{y - 1}-10-01" for y in n])
+    end = pd.to_datetime([f"{y}-10-01" for y in n])
+    return n - 0.5 + ((idx - beg) / (end - beg)).values
+
+
+def wy_axis(ax):
+    """The water-year axis the discharge and balance rows share."""
+    ax.set_xlim(WY_FIRST - 0.5, WY_LAST + 0.5)
+    ax.set_xticks(np.arange(WY_FIRST + WY_FIRST % 2, WY_LAST + 1, 2))
+    ax.set_xticks(np.arange(WY_FIRST, WY_LAST + 1), minor=True)
+    ax.set_xlabel("Water year", fontsize=8)
 
 
 def dates(d):
@@ -48,12 +66,13 @@ def series(path, var):
 
 
 def aligned(out):
-    """The driver's aligned obs and sim of each target in a rerun's timestep file, the pairs it scored."""
+    """The driver's aligned obs and sim of each target in a rerun's timestep file; a NaN sim (the driver could not
+    score that observation) is kept, so the observation is still drawn."""
     h = nc.Dataset([f for f in glob.glob(os.path.join(out, "*_timestep.nc")) if "spinup" not in f][0])
     ev = {}
     for t, g in h["evaluation"].groups.items():
         ev[t] = pd.DataFrame({"obs": np.ma.filled(g["obs"][:].astype(float), np.nan),
-                              "sim": np.ma.filled(g["sim"][:].astype(float), np.nan)}, index=dates(g)).dropna()
+                              "sim": np.ma.filled(g["sim"][:].astype(float), np.nan)}, index=dates(g)).dropna(subset=["obs"])
     return ev
 
 
@@ -97,11 +116,13 @@ def reach_temperature(case, rerun, suffix):
 
 
 def kge(df):
+    df = df.dropna()
     r = np.corrcoef(df.sim, df.obs)[0, 1]
     return 1 - np.sqrt((r - 1) ** 2 + (df.sim.std() / df.obs.std() - 1) ** 2 + (df.sim.mean() / df.obs.mean() - 1) ** 2)
 
 
 def rmse(df):
+    df = df.dropna()
     return np.sqrt(np.mean((df.sim - df.obs) ** 2))
 
 
@@ -110,28 +131,38 @@ def split(df, score):
     return score(df[df.index < HELD]), score(df[df.index >= HELD])
 
 
-def bars(ax, sims, target, obs_label, title):
-    """Grouped bars by water year, observed black and each trial beside it, of the pairs the driver scored."""
+def bars(ax, sims, target, obs_label, title, seasonal=False):
+    """Grouped bars by water year, observed black and each trial beside it. Every observation is drawn, a trial's bar
+    only where the driver scored it. Seasonal: winter solid, summer hatched over it (a summer gain stays visible), and
+    the observed net of a year with both seasons marked, to compare with the annual row."""
     held = int(HELD[:4]) + 1
-    wy = lambda idx: (idx - pd.Timedelta(days=1)).year + ((idx - pd.Timedelta(days=1)).month >= 10)  # a 1 Oct stamp ends its year
-    first = min(wy(ev[target].index).min() for _, _, ev in sims)
-    last = max(wy(ev[target].index).max() for _, _, ev in sims)
+    wy = lambda idx: (idx - pd.Timedelta(days=45)).year + ((idx - pd.Timedelta(days=45)).month >= 10)  # a 1 Oct stamp or an early-Oct summer survey ends its year
+    first, last = WY_FIRST, WY_LAST  # the run's water years, data or not, so the rows line up with (a)
     ax.axvspan(held - 0.5, last + 0.5, color="0.93", zorder=0)
     w = 0.8 / (len(sims) + 1)
     off = lambda k: (k - len(sims) / 2) * w
-    o = pd.concat([ev[target].obs for _, _, ev in sims]).groupby(level=0).first()  # every observation a trial scored
-    ax.bar(wy(o.index) + off(0), o.values, w, color="k", label=obs_label)
+    summer = lambda idx: (idx.month >= 8) | (idx.month <= 1)  # surveys from August on close the summer
+    def draw(x, v, k, c, label):
+        v = v.dropna()
+        s = summer(v.index) if seasonal else np.zeros(len(v), bool)
+        ax.bar(wy(v.index[~s]) + off(k), v.values[~s], w, color=c, label=label)
+        ax.bar(wy(v.index[s]) + off(k), v.values[s], w, color=c, hatch="////", edgecolor="white", lw=0)
+    o = pd.concat([ev[target].obs for _, _, ev in sims]).groupby(level=0).first()  # every observation in the run
+    draw(None, o, 0, "k", obs_label)
     for k, ((label, _, ev), c) in enumerate(zip(sims, COLORS), start=1):
         e = ev[target]
         cal, hold = split(e, rmse)
-        ax.bar(wy(e.index) + off(k), e.sim, w, color=c, label=f"{label}: RMSE {cal:.0f} / {hold:.0f} mm")
+        draw(None, e.sim, k, c, f"{label}: RMSE {cal:.0f} / {hold:.0f} mm")
+    if seasonal:
+        n = o.groupby(wy(o.index)).agg(["sum", "count"])
+        n = n[n["count"] == 2]["sum"]
+        ax.plot(n.index + off(0), n.values, "_", color="#d62728", ms=9, mew=2, label="observed net")
     ax.axhline(0, color="k", lw=0.6)
-    ax.set_xlim(first - 0.6, last + 0.6)
-    ax.set_xticks(np.arange(first + first % 2, last + 1, 2))
+    wy_axis(ax)
     lo, hi = ax.get_ylim()
     ax.set_ylim(lo, hi + 0.4 * (hi - lo))  # room for the legend
     ax.text(held - 0.35, 0.74, "held out", transform=ax.get_xaxis_transform(), color="grey", fontsize=8, va="top")
-    ax.legend(fontsize=8, loc="upper center", ncol=len(sims) + 1, framealpha=0.9)
+    ax.legend(fontsize=8, loc="upper center", ncol=len(sims) + 2, framealpha=0.9)
     ax.set_ylabel("Glacier-wide balance (mm w.e.)")
     ax.set_title(title, loc="left", fontsize=10)
 
@@ -146,12 +177,14 @@ def main():
 
     rows = 5 if temps else 4
     fig, ax = plt.subplots(rows, 1, figsize=(10, 3.5 * rows), gridspec_kw={"height_ratios": [1.1] + [1] * (rows - 1)})
-    ax[0].plot(q.index, q.values, color="k", lw=0.8, label="USGS gauge")
+    held = int(HELD[:4]) + 1
+    ax[0].axvspan(held - 0.5, WY_LAST + 0.5, color="0.93", zorder=0)
+    ax[0].plot(wyx(q.index), q.values, color="k", lw=0.8, label="USGS gauge")
     for (label, s, ev), c in zip(sims, COLORS):
         cal, hold = split(ev["discharge"], kge)
-        ax[0].plot(s.index, s["Q"], color=c, lw=0.6, alpha=0.85, label=f"{label}: KGE {cal:.2f} / {hold:.2f}")
-    ax[0].axvline(pd.Timestamp(HELD), color="grey", ls=":", lw=1)
-    ax[0].text(pd.Timestamp(HELD) + pd.Timedelta(days=30), ax[0].get_ylim()[1] * 0.80, "held out", color="grey", fontsize=8)
+        ax[0].plot(wyx(s.index), s["Q"], color=c, lw=0.6, alpha=0.85, label=f"{label}: KGE {cal:.2f} / {hold:.2f}")
+    wy_axis(ax[0])
+    ax[0].text(held - 0.35, 0.80, "held out", transform=ax[0].get_xaxis_transform(), color="grey", fontsize=8, va="top")
     ax[0].set_ylabel("Discharge (m$^3$ s$^{-1}$)")
     ax[0].legend(fontsize=8, ncol=len(sims) + 1, loc="upper left")
     ax[0].set_title("(a) Daily discharge, WY2006–2026 (KGE calibration / held out)", loc="left", fontsize=10)
@@ -172,7 +205,8 @@ def main():
     ax[1].set_title("(b) Mean annual cycle on gauged days, WY2006–2026", loc="left", fontsize=10)
 
     bars(ax[2], sims, "mass_balance", "USGS stakes",
-         "(c) Seasonal balances by water year, winter up and summer down (RMSE calibration / held out)")
+         "(c) Seasonal balances by water year, winter solid and summer hatched (RMSE calibration / held out)",
+         seasonal=True)
     bars(ax[3], sims, "wgms_amce", "WGMS estimate",
          "(d) Annual balances by water year (RMSE calibration / held out)")
     if temps:
