@@ -81,6 +81,10 @@ SEARCHES["stream"] = dict(SEARCHES["domain"], params=STREAM, logs=SEARCHES["doma
 # trialParams.nc (build_cases.set_glacier_snowfall); raw ERA5 searches it
 STATION_FIXED = ["frozenPrecipMultip"]
 
+# searched on raw ERA5 as multipliers of trialParams.nc's values, the glacier snowfall's elevation shape
+# (build_cases.glacier_snow_shape), so one number scales the snowfall of every glacier domain
+RAW_MULTIPLIERS = ["frozenPrecipMultip@glacier"]
+
 
 def case_spec(case):
     """A run's entry in cases.yaml."""
@@ -101,6 +105,8 @@ def search_for(case, name):
     search = dict(SEARCHES[name])
     if case_spec(case).get("forcing") == "station_corrected":
         search["params"] = [q for q in search["params"] if q.split("@")[0] not in STATION_FIXED]
+    else:
+        search["multipliers"] = [q for q in RAW_MULTIPLIERS if q in search["params"]]
     with nc4.Dataset(os.path.join(HERE, case, "summa_inputs", "coldState.nc")) as d:
         types = np.asarray(d["domType"][:])
     if not np.any(types == 4):
@@ -131,9 +137,11 @@ def search_of(calibration):
     if "param_list" in cal:  # a calibration run before the [calibration.parameters] format
         return {"params": cal["param_list"], "logs": list(cal.get("parameter_transformations", {})), "chains": chains,
                 "bounds": {k: tuple(v) for k, v in cal.get("parameter_bounds", {}).items()}}
-    entries = cal["parameters"]
+    multipliers = cal.get("spatial_multipliers", {})
+    entries = dict(cal["parameters"], **multipliers)
     return {"params": list(entries), "logs": [k for k, v in entries.items() if v.get("transformation") == "log"],
-            "chains": chains, "bounds": {k: (v["lower"], v["upper"]) for k, v in entries.items() if "lower" in v}}
+            "chains": chains, "bounds": {k: (v["lower"], v["upper"]) for k, v in entries.items() if "lower" in v},
+            "multipliers": list(multipliers)}
 
 
 def config_text(case, run_dir, settings, work, start, end, score_start, score_end, algorithm, n_samples,
@@ -224,7 +232,9 @@ varname_length = "length"
         e = [f"lower = {float(bounds[p][0])!r}", f"upper = {float(bounds[p][1])!r}"] if p in bounds else []
         e += ['transformation = "log"'] if p in search["logs"] else []
         return f'"{p}" = {{ {", ".join(e)} }}' if e else f'"{p}" = {{}}'
-    params = "\n".join(entry(p) for p in searched_names(search))
+    multipliers = search.get("multipliers", [])
+    params = "\n".join(entry(p) for p in searched_names(search) if p not in multipliers)
+    scaled = "\n\n[calibration.spatial_multipliers]\n\n" + "\n".join(entry(p) for p in multipliers) + "\n" if multipliers else ""
     lines.append(f'''
 [calibration]
 
@@ -241,7 +251,7 @@ write_aligned = false
 [calibration.parameters]
 
 {params}
-''')
+{scaled}''')
     for members, gap in search["chains"]:
         names = ", ".join(f'"{m}"' for m in members)
         lines.append(f"\n\n[[parameter_dependencies.ordered]]\n\nparameters   = [{names}]\ngap_fraction = {gap}\n")

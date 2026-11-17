@@ -101,43 +101,20 @@ def set_param_line(params, name, value, lower, upper):
     open(params, "w").writelines(lines)
 
 
-def chelsa_precip_grad(c):
-    """precipElevGrad (m-1) of the domain's CHELSA climatology: each 30-arcsec cell's precipitation over its HRU's mean, less
-    one, against its mean Copernicus elevation less the HRU's, pooled over the HRUs. CHELSA is smooth, so this is low."""
-    import geopandas as gpd
-    import rasterio
-    from rasterio.features import geometry_mask
-    from rasterio.merge import merge
-    from rasterio.warp import Resampling, reproject
-    if "precip_climatology" not in c:
-        raise SystemExit(f"{c['domain']}: no precip_climatology for the general precipitation gradient; run acquire_climatology.py")
-    with rasterio.open(c["precip_climatology"]) as r:
-        p = r.read(1).astype(float)
-        p = np.where(p == r.nodata, np.nan, p * r.scales[0] + r.offsets[0])
-        transform, crs = r.transform, r.crs
-    dems = [rasterio.open(f) for f in sorted(glob.glob(os.path.join(HERE, c["glacier_dem"]["dems"])))]
-    dem, dem_t = merge(dems)
-    z = np.full(p.shape, np.nan)
-    reproject(dem[0].astype(float), z, src_transform=dem_t, src_crs=dems[0].crs, dst_transform=transform, dst_crs=crs,
-              resampling=Resampling.average, src_nodata=dems[0].nodata, dst_nodata=np.nan)
-    hrus = gpd.read_file(os.path.join(c["project_dir"], "shapefiles", "catchment", f"{c['domain']}_HRUs_elevation.shp")).to_crs(crs)
-    dz, dp = [], []
-    for g in hrus.geometry:
-        m = ~geometry_mask([g], p.shape, transform) & np.isfinite(p) & np.isfinite(z)
-        if m.sum() > 1:
-            dz.append(z[m] - z[m].mean())
-            dp.append(p[m] / p[m].mean() - 1)
-    return float(np.polyfit(np.concatenate(dz), np.concatenate(dp), 1)[0])
+# winter-balance elevation gradient of the snowfall (m-1), the exponential fit of the stake balance over ERA5's snowfall at
+# Wolverine (0.0018) and Gulkana (0.0016); the stakes alone give 0.0018-0.0020 there and at Lemon Creek
+# (scratch/2026-11-17/twin2/snow_ratio_form.py, bw_gradient.py)
+GLACIER_SNOW_GRAD = 0.0017
 
 
 def set_precip_grad(inputs, source, c):
     """precipElevGrad and tempLapseRate in the case's localParamInfo.txt: the gradient from the station correction's
-    corrections.csv (added), else from CHELSA (general), the lapse rate the year's mean of the monthly ones the forcing was
+    corrections.csv (added), else GLACIER_SNOW_GRAD (general), the lapse rate the year's mean of the monthly ones the forcing was
     carried to the HRUs with (corrections.csv, else remap_forcing's remap.csv)."""
     path = os.path.join(source, "corrections.csv")
     params = os.path.join(inputs, "localParamInfo.txt")
     grad = csv_row(path, "precipElevGrad_per_m")
-    set_param_line(params, "precipElevGrad", grad[0] if grad else chelsa_precip_grad(c), 0.0, 0.005)
+    set_param_line(params, "precipElevGrad", grad[0] if grad else GLACIER_SNOW_GRAD, 0.0, 0.005)
     lines = [l for l in open(params) if l.split("|")[0].strip() != "glacierSnowFactor"]
     open(params, "w").writelines(lines)
     lapse = csv_row(path, "lapse_rate_K_per_km") or csv_row(os.path.join(source, "remap.csv"), "lapse_rate_K_per_km")
@@ -153,9 +130,10 @@ GLACIER_DOMAIN_TYPES = (2, 3, 4)  # glacCln1, glacCln2, glacDbr
 
 def set_glacier_snowfall(inputs, source):
     """frozenPrecipMultip (dom, hru) in trialParams.nc: the stake ratio of each HRU on its glacier domains and 1 elsewhere,
-    from the station correction's corrections.csv; none leaves localParamInfo.txt's value."""
+    from the station correction's corrections.csv; without one (raw ERA5), the snowfall shape of glacier_snow_shape."""
     factor = csv_row(os.path.join(source, "corrections.csv"), "frozenPrecipMultip_glacier")
     if factor is None:
+        glacier_snow_shape(inputs, [csv_row(os.path.join(source, "remap.csv"), "precip_ratio")])
         return
     with nc4.Dataset(os.path.join(inputs, "coldState.nc")) as c:
         types = np.asarray(c["domType"][:]).reshape(c["domType"].shape[-2:]).T  # (dom, hru), with or without scalarv
@@ -170,6 +148,44 @@ def set_glacier_snowfall(inputs, source):
         var = t["frozenPrecipMultip"] if "frozenPrecipMultip" in t.variables else t.createVariable("frozenPrecipMultip", "f8", ("dom", "hru"))
         var[:] = np.where(np.isin(types, GLACIER_DOMAIN_TYPES), np.array(factor)[None, :], 1.0)
     print(f"{inputs}/trialParams.nc: glacier frozenPrecipMultip", " ".join(f"{x:.3f}" for x in factor))
+
+
+def glacier_snow_shape(inputs, ratios):
+    """frozenPrecipMultip (dom, hru) in trialParams.nc for raw ERA5: exp(GLACIER_SNOW_GRAD (z_hru - z_gru)) over the HRU's
+    CHELSA precip_ratio on the glacier domains and 1 elsewhere, z_gru the glacier-area-weighted mean HRU elevation of the
+    HRU's GRU, so the glacier snowfall follows the stake gradient over ERA5's and the calibration's spatial multiplier
+    frozenPrecipMultip@glacier is its ratio to ERA5's snowfall at z_gru. ratios: remap.csv's precip_ratio of each merged
+    part in HRU order, the HRUs appended after them (a stream HRU) taking 1."""
+    with nc4.Dataset(os.path.join(inputs, "coldState.nc")) as c:
+        shape = c["domType"].shape[-2:]
+        types = np.asarray(c["domType"][:]).reshape(shape).T  # (dom, hru)
+        area = np.ma.filled(np.asarray(c["DOMarea"][:]).reshape(shape).T, 0.0)
+    with nc4.Dataset(os.path.join(inputs, "attributes.nc")) as a:
+        z = np.asarray(a["elevation"][:], float)
+        gru = np.asarray(a["hru2gruId"][:])
+    ratio = np.concatenate([np.ones(0)] + [np.asarray(r, float) for r in ratios])
+    ratio = np.concatenate([ratio, np.ones(len(z) - len(ratio))])
+    glacier = np.isin(types, GLACIER_DOMAIN_TYPES)
+    ice = np.where(glacier, np.maximum(area, 0.0), 0.0).sum(axis=0)  # glacier area of each HRU
+    factor = np.ones(len(z))
+    for g in np.unique(gru):
+        m = gru == g
+        if ice[m].sum() > 0:
+            factor[m] = np.exp(GLACIER_SNOW_GRAD * (z[m] - np.sum(z[m] * ice[m]) / ice[m].sum())) / ratio[m]
+    with nc4.Dataset(os.path.join(inputs, "trialParams.nc"), "a") as t:
+        if "dom" not in t.dimensions:
+            t.createDimension("dom", types.shape[0])
+        var = t["frozenPrecipMultip"] if "frozenPrecipMultip" in t.variables else t.createVariable("frozenPrecipMultip", "f8", ("dom", "hru"))
+        var[:] = np.where(glacier, factor[None, :], 1.0)
+    print(f"{inputs}/trialParams.nc: glacier snowfall shape", " ".join(f"{x:.3f}" for x in factor))
+
+
+def glacier_part_ratios(c, folder):
+    """remap.csv's precip_ratio of a merged part's land HRUs, 1 for the stream HRU appended after them."""
+    ratio = csv_row(os.path.join(forcing_dir_of(c, "raw"), "remap.csv"), "precip_ratio")
+    with nc4.Dataset(os.path.join(folder, "attributes.nc")) as a:
+        n = len(a.dimensions["hru"])
+    return list(ratio) + [1.0] * (n - len(ratio))
 
 
 # glacier wind and air temperature above freezing over the forcing station's, from Gulkana Site B (Wilson et al. 2026),
@@ -485,6 +501,9 @@ def build_inputs(name, spec, cases_dir):
             for f in ("attributes.nc", "coldState.nc"):
                 merge_netcdf([os.path.join(folder, f) for _, folder, _, _ in parts], os.path.join(inputs, f), ("hru", "gru"), shift)
             write_trial_params(os.path.join(inputs, "trialParams.nc"), os.path.join(inputs, "attributes.nc"))
+            if spec["forcing"] == "raw":
+                set_param_line(os.path.join(inputs, "localParamInfo.txt"), "precipElevGrad", GLACIER_SNOW_GRAD, 0.0, 0.005)
+                glacier_snow_shape(inputs, [glacier_part_ratios(c, folder) for c, folder, _, _ in parts])
             if all(top for _, _, _, top in parts):
                 merge_netcdf([top for _, _, _, top in parts], os.path.join(dest, "topology.nc"), ("hru", "seg"), topology_shift)
             forcing = os.path.join(dest, "forcing")

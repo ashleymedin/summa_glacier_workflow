@@ -140,6 +140,14 @@ first month, the year the calibration spins up over:
 | `{wolverine,gulkana}_added` | `runs/` | station-corrected ERA5, added-data domain, Oct 2004 – Sep 2026 | calibrated WY2006–2015 and evaluated WY2016–2026 on discharge and the seasonal mass balance (Wolverine's water temperature in the evaluation) |
 | `{wolverine,gulkana}_stream` | `runs/` | station-corrected ERA5, added-data domain with a stream HRU, a reach and a wetland domain in the terminus HRU (Wolverine's lake and delta, Gulkana's braided fan), hyporheic exchange and bedrock layers on, Oct 2015 – Sep 2026 | the stream-temperature runs: calibrated WY2017–2021 and evaluated WY2022–2026 on discharge, the seasonal mass balance and Wolverine's water temperature (`--search stream`) |
 
+On raw ERA5 (the tests and the general runs) the glacier snowfall takes the stakes' elevation gradient, which no global
+dataset gives: `build_cases.py` sets `precipElevGrad` to 0.0017 m⁻¹ (`GLACIER_SNOW_GRAD`) and writes the glacier domains'
+`frozenPrecipMultip` in `trialParams.nc` as exp(0.0017 (z_HRU − z̄)) over the HRU's CHELSA precipitation ratio, z̄ the
+glacier-area-weighted mean HRU elevation of the GRU. `calibrate.py` searches `frozenPrecipMultip@glacier` as a spatial
+multiplier of that shape, so it is the glacier snowfall over ERA5's at z̄. The gradient is the stakes' winter balance
+over ERA5's snowfall at Wolverine (0.0018) and Gulkana (0.0016), and the stakes alone give 0.0018–0.0020 there and at
+Lemon Creek (`scratch/2026-11-17/twin2/snow_ratio_form.py`, `bw_gradient.py`).
+
 ## The full runs
 
 ```bash
