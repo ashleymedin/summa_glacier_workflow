@@ -72,7 +72,7 @@ SEARCHES = {
                           "debrisConc": (0.1, 6.4),             # kg m-3, Anderson and Anderson (2018)
                           "frozenPrecipMultip": (0.2, 4.0),
                           "frozenPrecipMultip@upland": (0.2, 4.0),       # ERA5 with CHELSA is 0.6 of the gauges at Gulkana, up to twice them at Wolverine
-                          "frozenPrecipMultip@glacier": (0.3, 3.0)}},  # with blown and avalanched snow, Kneib et al. (2025)
+                          "frozenPrecipMultip@glacier": (0.2, 4.0)}},  # with blown and avalanched snow, Kneib et al. (2025)
 }
 SEARCHES["stream"] = dict(SEARCHES["domain"], params=STREAM, logs=SEARCHES["domain"]["logs"] + ["wetlandStorageK"])
 
