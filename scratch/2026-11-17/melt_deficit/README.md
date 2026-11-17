@@ -67,6 +67,42 @@ glacierWindFactor 1 is about as strong as the fix but was not tried as one, per 
 - Gulkana HRU 3's 2016–24 winter value (+1.5) is an artefact. The 2024 firn-to-ice conversion of 20 m w.e. breaks
   the counter differencing, so ignore that cell.
 
+## Follow-up on what is left (batch7.sh)
+
+Summer balance bias with the fix (`gmahrt`), m w.e., HRU 1 / 2 / 3:
+
+| run | Gulkana WY06–15 | Gulkana WY16–24 | Wolverine WY06–15 | Wolverine WY16–24 |
+|---|---|---|---|---|
+| fix | +0.73 / +0.26 / +0.85 | −0.18 / +0.21 / −0.18 | +0.20 / −0.04 / +0.36 | +0.57 / −0.86 / −0.44 |
+| + glacier multiplier off May–Aug | +0.83 / +0.18 / +0.62 | −0.12 / +0.16 / −0.21 | +0.20 / −0.13 / +0.09 | +0.56 / −0.97 / −0.70 |
+| + albedoDecayRate 5e5 | +0.56 / −0.13 / +0.68 | −0.35 / −0.03 / −0.22 | +0.05 / −0.26 / +0.14 | +0.41 / −1.04 / −0.65 |
+| + albedoDecayRate 2e5 | +0.35 / −0.58 / +0.43 | −0.57 / −0.31 / −0.28 | −0.14 / −0.51 / −0.13 | +0.25 / −1.25 / −0.87 |
+
+- **Summer glacier snowfall multiplier.** The stake ratio is fitted on fall-to-spring snowfall only (stake weight 0 in
+  May–Aug in corrections.csv), but as frozenPrecipMultip it multiplies glacier snow in every month. The multiplier
+  adds 319 mm/yr of May–Sep snowfall at Gulkana HRU 3 and 366 at Wolverine HRU 3. A throwaway build that applied it
+  only in Sep–Apr (`merge(1, frozenPrecipMultip, is_glac .and. jm>=5 .and. jm<=8)` in derivforce; worktree
+  removed) moves Gulkana HRU 3 only 0.23 m, and makes Wolverine worse in the held-out years. So it is not the main
+  cause of the HRU 3 residual. The rain–snow phase is not the cause either: it is already taken from the uncooled
+  forcing air, and the JJA lapse rate (−7.3 to −7.9 K/km between stations) matches ERA5's free air.
+- **Albedo decay.** At 2e5 s the model reproduces the July–August 2024 Site B albedo (0.57 against 0.58/0.59;
+  `siteb_run.py`). At 1e6 s it stays at 0.69–0.74. But at 2e5 the HRU 2 stakes over-melt by 0.3–0.6 m (Gulkana) and
+  0.5–1.25 m (Wolverine), so another error is being offset at that HRU. The Site B data support a search lower bound
+  of 2e5 (now 3e5). I would widen it rather than fix a value.
+- **Discharge at calibrated trial 450 (gulkana_added), fixed binary, parameters unchanged**
+  (`runs/gulkana_added/calibration_rerun/sample_450_fix`): r 0.90→0.91, α 0.76→0.82, β 0.78→0.84, KGE about
+  0.66→0.74. About a quarter of the volume deficit closes before any recalibration.
+- **General cases: the cause is the precipitation gradient, not melt.** Oct–Apr glacier snowfall from HRU 1 to HRU 3
+  rises ×1.2 (Gulkana general, 359→433 mm) and ×1.3 (Wolverine general, 2088→2703). The stakes rise ×2.6 and ×3.3,
+  and the added cases ×2.4 and ×3.0. CHELSA's precipElevGrad (0.000202, 0.000076 m-1) is about a tenth of the stake
+  fit (0.0019, 0.00175). One frozenPrecipMultip@glacier cannot fix the shape: Wolverine general's HRU 1 winter is
+  +1.1 m and Gulkana general's HRU 2–3 are −0.6 to −0.9 m. The HRU 2–3 summer over-melt follows from the thin
+  winter snow. The general setup needs a better global gradient than CHELSA's at this scale. Searching
+  precipElevGrad is the decision already taken against.
+- **2024 at Site B is still short** even with decay 2e5 (B −2.0 against −3.8 m w.e.). The HRU 2 domain sits at 1770 m,
+  between B (1682) and D (1843), and starts 2024 with firn under the snow. One summer is not enough to diagnose
+  this further.
+
 ## Files
 
 - `exp.py`: one-change experiment driver (params, attributes, decisions, forcing; `SUMMA_DIR` picks the binary).
