@@ -66,7 +66,7 @@ wolverine_added:
   copy_forcing: false
   calibrate: [2005-10-01, 2015-09-30]
   evaluate: [2015-10-01, 2026-09-30]
-  targets: [discharge, mass_balance, stream_temperature]
+  targets: [discharge, mass_balance]
 
 gulkana_general:
   domain: gulkana_general
