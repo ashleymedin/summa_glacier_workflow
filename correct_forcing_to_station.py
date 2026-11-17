@@ -25,7 +25,9 @@ copies of the forcing.  Longwave is copied unchanged.
             15th.  With --precip-grad, the ratios are fitted jointly with SUMMA's precipElevGrad (precipitation
             x (1 + grad (z - z_hru)) within an HRU), each stake on the HRU of its nearest glacier domain
             (--glacier-state) and its snowfall the HRU's own, lapsed as SUMMA does.  Snowfall is split on wet-bulb temperature as SUMMA does, with --temp-crit-rain and
-            --temp-range.  Only stakes above --stake-min-elev count, where winter ablation is small.
+            --temp-range.  Only stakes above --stake-min-elev count: the terminus
+            stakes below it stay warm into autumn (0.2-1.0 m w.e. of winter ablation), so winter rain and melt there
+            take snowfall the winter balance never sees.
             With --gauge-shield, every HRU the stakes leave out instead takes the ratio
             of the station's weighing-gauge catch, corrected for wind undercatch, to the forcing's
             precipitation at the gauge's elevation, summed over the full hours the gauge, wind and
@@ -264,7 +266,8 @@ def main():
     p.add_argument("attributes", help="SUMMA attributes file, for the HRU elevations")
     p.add_argument("output", help="directory to write the corrected forcing to")
     p.add_argument("--stakes", help="Input_<glacier>_Glaciological_Data.csv; scale precipitation to the winter balances")
-    p.add_argument("--stake-min-elev", type=float, default=1000.0, help="lowest stake used, m")
+    p.add_argument("--stake-min-elev", type=float, default=800.0,
+                   help="lowest stake used, m: below the gap between Wolverine's terminus stakes (440-650 m) and the next up (990 m)")
     p.add_argument("--stake-window", type=float, default=200.0, help="stakes within this of an HRU's elevation, m")
     p.add_argument("--glacier-state", help="cold state with DOMelev; stakes then belong to the nearest glacier domain's HRU")
     p.add_argument("--precip-grad", action="store_true",
