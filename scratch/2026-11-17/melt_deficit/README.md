@@ -30,7 +30,7 @@ Site B). Once the melt is fixed, the HRU 2 firn melts out in most summers.
 ## Fix (SUMMA branches, not merged; worktrees beside summa)
 
 - `glacier-meas-height` (0b318918, worktree `summa_measheight`): glacier domains use a 2 m measurement height.
-- `glacier-mahrt` (worktree `summa_mahrt`, on top of the first): the ground stability function is Mahrt (1987) for
+- `glacier-mahrt` (bffb03b4, worktree `summa_mahrt`, on top of the first): the ground stability function is Mahrt (1987) for
   glacier and lake snow and ice (the surfaces that already take the Andreas scalar roughness). The case decision
   `astability` is unchanged, so upland snow is unaffected. Switching the decision to `mahrtexp` gives the same glacier
   result but moves upland melt-out by up to ~10 days.
