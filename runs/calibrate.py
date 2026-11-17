@@ -38,9 +38,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 GLACIER = os.path.dirname(HERE)
 SUMMA_DIR = os.path.abspath(os.environ.get("SUMMA_DIR", os.path.join(GLACIER, "..", "summa")))
 
-# paper1: one value of each soil parameter for every domain; the glacier wind and cooling stay at Site B's (glacierWindFactor
-# 0.59, glacierTempReduction 0.73), which trade off with the snow albedo, and the rain--snow split at SUMMA's default (273.16 K, 2 K),
-# which trades off with the snowfall multipliers (scratch/2026-11-16/twin.py); the upland canopy is fixed at Noah-MP's mixed tundra
+# paper1: one value of each soil parameter for every domain; the glacier wind and cooling stay at Site B's against the case's
+# forcing (build_cases.set_glacier_factors), which trade off with the snow albedo (scratch/2026-11-17/twin2), and the rain--snow
+# split at SUMMA's default (273.16 K, 2 K), which trades off with the snowfall multipliers (scratch/2026-11-16/twin.py); the upland canopy is fixed at Noah-MP's mixed tundra
 # (2.0 and 0.2 m, LAI 1.8)
 PAPER1 = ["k_soil", "theta_sat", "aquiferBaseflowExp", "aquiferBaseflowRate", "qSurfScale", "frozenPrecipMultip",
           "Fcapil", "windReductionParam", "vGn_n", "routingGammaScale", "routingGammaShape",
