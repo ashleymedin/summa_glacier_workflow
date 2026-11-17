@@ -121,8 +121,7 @@ def set_precip_grad(inputs, source, c):
     if lapse is None:
         raise SystemExit(f"no lapse_rate_K_per_km in {source}/corrections.csv or remap.csv; rerun remap_forcing.py")
     set_param_line(params, "tempLapseRate", -np.mean(lapse[:12]) / 1000.0, 0.0, 0.0098)
-    set_wind_factor(params, wind_exposure_station())
-    set_param_line(params, "glacierTempReduction", air_cooling_station(), 0.5, 0.9)
+    set_glacier_factors(params, not os.path.exists(path))
 
 
 GLACIER_DOMAIN_TYPES = (2, 3, 4)  # glacCln1, glacCln2, glacDbr
@@ -188,31 +187,40 @@ def glacier_part_ratios(c, folder):
     return list(ratio) + [1.0] * (n - len(ratio))
 
 
-# glacier wind and air temperature above freezing over the forcing station's, from Gulkana Site B (Wilson et al. 2026),
-# wind_exposure_from_campaign.py and air_cooling_from_campaign.py
-WIND_EXPOSURE_CSV = os.path.join(HERE, "data", "domain_Gulkana", "forcing", "wind_exposure_wilson2024.csv")
-AIR_COOLING_CSV = os.path.join(HERE, "data", "domain_Gulkana", "forcing", "air_cooling_wilson2024.csv")
+# glacier wind and air temperature above freezing over the forcing's, from Gulkana Site B (Wilson et al. 2026),
+# wind_exposure_from_campaign.py and air_cooling_from_campaign.py: against the stations for the station-corrected
+# forcing, against the general setup's HRU 2 for raw ERA5
+SITE_B_DIR = {False: os.path.join(HERE, "data", "domain_Gulkana", "forcing"),
+              True: os.path.join(HERE, "data", "domain_Gulkana_general", "forcing")}
 
 
-def wind_exposure_station():
-    """The campaign's heat-weighted ratio of glacier-surface wind to the reference station's."""
-    for row in csv.DictReader(open(WIND_EXPOSURE_CSV)):
+def wind_exposure_station(raw=False):
+    """The campaign's heat-weighted ratio of glacier-surface wind to the forcing's (raw ERA5 or the stations)."""
+    path = os.path.join(SITE_B_DIR[raw], "wind_exposure_wilson2024.csv")
+    for row in csv.DictReader(open(path)):
         if row["month"] == "all":
             return float(row["heat_weighted_ratio"])
-    raise SystemExit(f"no campaign ratio in {WIND_EXPOSURE_CSV}")
+    raise SystemExit(f"no campaign ratio in {path}")
 
 
-def air_cooling_station():
-    """The campaign's glacier-surface air temperature above freezing as a fraction of the station's."""
-    for row in csv.DictReader(open(AIR_COOLING_CSV)):
+def air_cooling_station(raw=False):
+    """The campaign's glacier-surface air temperature above freezing as a fraction of the forcing's (raw ERA5 or the stations)."""
+    path = os.path.join(SITE_B_DIR[raw], "air_cooling_wilson2024.csv")
+    for row in csv.DictReader(open(path)):
         if row["month"] == "all":
             return float(row["factor"])
-    raise SystemExit(f"no campaign factor in {AIR_COOLING_CSV}")
+    raise SystemExit(f"no campaign factor in {path}")
+
+
+def set_glacier_factors(params, raw):
+    """glacierWindFactor and glacierTempReduction in localParamInfo.txt, Site B's against the case's forcing."""
+    set_wind_factor(params, wind_exposure_station(raw))
+    set_param_line(params, "glacierTempReduction", air_cooling_station(raw), 0.5, 0.9)
 
 
 def set_wind_factor(params, value):
-    """glacierWindFactor in localParamInfo.txt, the glacier surface wind over the forcing's: the campaign's, on either
-    forcing, since it trades off with the snow albedo; windExposure, which it replaces, is dropped."""
+    """glacierWindFactor in localParamInfo.txt, the glacier surface wind over the forcing's: the campaign's, since it
+    trades off with the snow albedo; windExposure, which it replaces, is dropped."""
     lines = [l for l in open(params) if l.split("|")[0].strip() != "windExposure"]
     open(params, "w").writelines(lines)
     set_param_line(params, "glacierWindFactor", value, 0.3, 1.5)
@@ -503,6 +511,7 @@ def build_inputs(name, spec, cases_dir):
             write_trial_params(os.path.join(inputs, "trialParams.nc"), os.path.join(inputs, "attributes.nc"))
             if spec["forcing"] == "raw":
                 set_param_line(os.path.join(inputs, "localParamInfo.txt"), "precipElevGrad", GLACIER_SNOW_GRAD, 0.0, 0.005)
+                set_glacier_factors(os.path.join(inputs, "localParamInfo.txt"), True)
                 glacier_snow_shape(inputs, [glacier_part_ratios(c, folder) for c, folder, _, _ in parts])
             if all(top for _, _, _, top in parts):
                 merge_netcdf([top for _, _, _, top in parts], os.path.join(dest, "topology.nc"), ("hru", "seg"), topology_shift)

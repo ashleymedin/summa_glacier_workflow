@@ -28,7 +28,7 @@ for f in sorted(glob.glob(os.path.join(FRC, "*_20240[4-9].nc"))):
 frc = pd.concat(rows)
 a = pd.read_csv(AWS, skiprows=[1, 2], parse_dates=["TIMESTAMP"], date_format="%m/%d/%Y %H:%M").set_index("TIMESTAMP")
 a = a[["AirTC_Avg", "WS_ms_Avg", "SWUpper_Avg", "SWLower_Avg"]].apply(pd.to_numeric, errors="coerce")
-a.index = a.index + pd.Timedelta(hours=9)  # AKST logger clock to UTC, as wind_exposure_from_campaign.py found
+# the logger clock is UTC: its shortwave matches the 1725 m station's at no shift
 a = a.resample("h").mean()
 j = pd.concat([frc, a], axis=1).dropna()
 j["Tg"] = np.where(j["T"] > 0, COOL * j["T"], j["T"])

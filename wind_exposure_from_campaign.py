@@ -13,15 +13,19 @@ station's wind.
 
 The on-ice file is a Campbell logger table (TIMESTAMP, WS_ms_Avg, AirTC_Avg), as in Wilson et al.'s 2026
 Gulkana Site B release.  Its clock is shifted by whichever of --lags correlates best with the bridge station.
-Station files are the USGS benchmark-glacier LVL2 tables (UTC_time, WindSpeed).
+Station files are the USGS benchmark-glacier LVL2 tables (UTC_time, WindSpeed). With --forcing, the reference is
+instead one HRU of a SUMMA forcing (the general setup's ERA5), with no bridge.
 
     ./wind_exposure_from_campaign.py $O/campaigns/wilson_2024/1_meteo/gulkanaB_AWS_2024.csv \\
         "$O/stations/1725/LVL2/gulkana1725_hourly_LVL2_*.csv" "$O/stations/1480/LVL2/gulkana1480_hourly_LVL2_*.csv" \\
         $S/domain_Gulkana/forcing/wind_exposure_wilson2024.csv
+    ./wind_exposure_from_campaign.py $O/campaigns/wilson_2024/1_meteo/gulkanaB_AWS_2024.csv \\
+        --forcing $S/domain_Gulkana_general/forcing/SUMMA_input --hru 2 $S/domain_Gulkana_general/forcing/wind_exposure_wilson2024.csv
 """
 
 import argparse
 import glob
+import os
 
 import numpy as np
 import pandas as pd
@@ -35,6 +39,22 @@ def read_station(pattern, years):
     return s[~s.index.duplicated()].resample("h").mean()
 
 
+def read_forcing(path, hru, years):
+    """Hourly wind (m s-1) and air temperature (degC) of one HRU of the SUMMA forcing files in path, for the given years."""
+    import netCDF4 as nc4
+    rows = []
+    for f in sorted(glob.glob(os.path.join(path, "*.nc"))):
+        if not any(f"_{y}" in os.path.basename(f) for y in years):
+            continue
+        with nc4.Dataset(f) as d:
+            t = pd.to_datetime(nc4.num2date(d["time"][:], d["time"].units, only_use_cftime_datetimes=False,
+                                            only_use_python_datetimes=True))
+            j = list(np.asarray(d["hruId"][:])).index(hru)
+            rows.append(pd.DataFrame({"u": np.asarray(d["windspd"][:, j], float),
+                                      "t": np.asarray(d["airtemp"][:, j], float) - 273.15}, index=t))
+    return pd.concat(rows).sort_index()
+
+
 def read_campaign(path):
     """Hourly wind (m s-1) and air temperature (degC) on the logger clock."""
     d = pd.read_csv(path, skiprows=[1, 2], parse_dates=["TIMESTAMP"], date_format="%m/%d/%Y %H:%M")
@@ -45,9 +65,10 @@ def read_campaign(path):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("campaign", help="on-ice logger table")
-    p.add_argument("bridge", help="glob of the bridge station's LVL2 files")
-    p.add_argument("reference", help="glob of the forcing reference station's LVL2 files")
+    p.add_argument("stations", nargs="*", help="globs of the bridge and the forcing reference station's LVL2 files")
     p.add_argument("output", help="CSV of month, ratio, heat-weighted ratio")
+    p.add_argument("--forcing", help="SUMMA forcing folder to take the reference wind from instead of the stations")
+    p.add_argument("--hru", type=int, default=2, help="--forcing: hruId of the reference")
     p.add_argument("--bridge-years", default="2012-2022", help="years, first-last, for bridge over reference")
     p.add_argument("--lags", default="0,8,9", help="hours added to the campaign clock to try for UTC")
     p.add_argument("--min-days", type=float, default=10.0, help="fewest campaign days for a month's ratio")
@@ -55,7 +76,7 @@ def main():
 
     camp = read_campaign(a.campaign)
     years = set(camp.index.year)
-    near = read_station(a.bridge, years)
+    near = read_forcing(a.forcing, a.hru, years).u if a.forcing else read_station(a.stations[0], years)
     best = None
     for lag in (int(x) for x in a.lags.split(",")):
         c = camp.copy()
@@ -68,11 +89,14 @@ def main():
     _, lag, j = best
     print(f"using +{lag} h, {len(j)} overlapping hours")
 
-    y0, y1 = (int(y) for y in a.bridge_years.split("-"))
-    yrs = set(range(y0, y1 + 1))
-    k = pd.concat([read_station(a.bridge, yrs).rename("b"), read_station(a.reference, yrs).rename("r")],
-                  axis=1, sort=True).dropna()
-    link = k.b.groupby(k.index.month).mean() / k.r.groupby(k.index.month).mean()
+    if a.forcing:
+        link = pd.Series(1.0, index=range(1, 13))  # the forcing is the reference itself
+    else:
+        y0, y1 = (int(y) for y in a.bridge_years.split("-"))
+        yrs = set(range(y0, y1 + 1))
+        k = pd.concat([read_station(a.stations[0], yrs).rename("b"), read_station(a.stations[1], yrs).rename("r")],
+                      axis=1, sort=True).dropna()
+        link = k.b.groupby(k.index.month).mean() / k.r.groupby(k.index.month).mean()
 
     j["heat"] = j.u * j.t.clip(lower=0.0)
     j["heat_b"] = j.ub * j.t.clip(lower=0.0)

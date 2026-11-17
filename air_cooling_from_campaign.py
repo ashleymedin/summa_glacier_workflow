@@ -8,10 +8,14 @@ campaign's elevation.  The mean gap by 2 K bin of T_off and the ratio of positiv
 sum(max(T_ice, 0)) / sum(max(T_off, 0)), are printed as checks on the form.
 
 The on-ice file is a Campbell logger table (TIMESTAMP, WS_ms_Avg, AirTC_Avg), as in Wilson et al.'s 2026 Gulkana Site B
-release; the station files are the USGS benchmark-glacier LVL2 tables (UTC_time, site_temp_USGS).
+release; the station files are the USGS benchmark-glacier LVL2 tables (UTC_time, site_temp_USGS). With --forcing, the
+off-ice air is instead one HRU of a SUMMA forcing (the general setup's ERA5), station and station_elev then that HRU's
+forcing folder and elevation.
 
     ./air_cooling_from_campaign.py $O/campaigns/wilson_2024/1_meteo/gulkanaB_AWS_2024.csv 1682 \\
         "$O/stations/1725/LVL2/gulkana1725_hourly_LVL2_*.csv" 1725 $S/domain_Gulkana/forcing/air_cooling_wilson2024.csv
+    ./air_cooling_from_campaign.py $O/campaigns/wilson_2024/1_meteo/gulkanaB_AWS_2024.csv 1682 \\
+        $S/domain_Gulkana_general/forcing/SUMMA_input 1703 $S/domain_Gulkana_general/forcing/air_cooling_wilson2024.csv --forcing --hru 2
 """
 
 import argparse
@@ -20,7 +24,7 @@ import glob
 import numpy as np
 import pandas as pd
 
-from wind_exposure_from_campaign import read_campaign
+from wind_exposure_from_campaign import read_campaign, read_forcing
 
 
 def main():
@@ -32,15 +36,21 @@ def main():
     p.add_argument("output", help="CSV of month, factor")
     p.add_argument("--lapse", type=float, default=7.3, help="air temperature decrease with height (K km-1)")
     p.add_argument("--min-days", type=float, default=10.0, help="fewest thawed days for a month's factor")
-    p.add_argument("--lag", type=int, default=8, help="hours added to the campaign clock for UTC")
+    p.add_argument("--lag", type=int, default=0, help="hours added to the campaign clock for UTC (its shortwave matches the 1725 m station's at 0)")
+    p.add_argument("--forcing", action="store_true", help="station is a SUMMA forcing folder, the off-ice air its --hru")
+    p.add_argument("--hru", type=int, default=2, help="--forcing: hruId of the off-ice air")
     a = p.parse_args()
 
     camp = read_campaign(a.campaign)
     camp.index = camp.index + pd.Timedelta(hours=a.lag)
-    d = pd.concat(pd.read_csv(f, usecols=["UTC_time", "site_temp_USGS"]) for f in sorted(glob.glob(a.station))
-                  if int(f.rsplit("_", 1)[1][:4]) in set(camp.index.year))
-    s = pd.Series(d.site_temp_USGS.astype(float).values, index=pd.to_datetime(d.UTC_time))
-    s = s[~s.index.duplicated()].resample("h").mean() + a.lapse * 1e-3 * (a.station_elev - a.campaign_elev)
+    if a.forcing:
+        s = read_forcing(a.station, a.hru, set(camp.index.year)).t
+    else:
+        d = pd.concat(pd.read_csv(f, usecols=["UTC_time", "site_temp_USGS"]) for f in sorted(glob.glob(a.station))
+                      if int(f.rsplit("_", 1)[1][:4]) in set(camp.index.year))
+        s = pd.Series(d.site_temp_USGS.astype(float).values, index=pd.to_datetime(d.UTC_time))
+        s = s[~s.index.duplicated()].resample("h").mean()
+    s = s + a.lapse * 1e-3 * (a.station_elev - a.campaign_elev)
     j = pd.concat([camp.t.rename("ice"), s.rename("off")], axis=1, sort=True).dropna()
 
     print("off-ice T (C)  hours  off minus ice (K)")

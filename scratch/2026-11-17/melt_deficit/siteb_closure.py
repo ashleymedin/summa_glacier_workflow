@@ -29,7 +29,7 @@ frc = pd.concat(rows)
 a = pd.read_csv(os.path.join(C, "1_meteo/gulkanaB_AWS_2024.csv"), skiprows=[1, 2], parse_dates=["TIMESTAMP"],
                 date_format="%m/%d/%Y %H:%M").set_index("TIMESTAMP")
 a = a[["AirTC_Avg", "RH", "WS_ms_Avg", "SWUpper_Avg", "SWLower_Avg"]].apply(pd.to_numeric, errors="coerce")
-a.index = a.index + pd.Timedelta(hours=9)
+# the logger clock is UTC: its shortwave matches the 1725 m station's at no shift
 a = a.resample("h").mean()
 j = pd.concat([frc, a], axis=1).dropna()
 T, U, P = j.AirTC_Avg.values, np.maximum(j.WS_ms_Avg.values, 0.1), j.P.values
