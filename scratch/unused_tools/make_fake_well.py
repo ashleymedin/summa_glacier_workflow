@@ -16,7 +16,7 @@ import os
 import netCDF4 as nc4
 import numpy as np
 
-from observation_netcdf import write_observations
+import sys, os; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")); from observation_netcdf import write_observations
 
 
 def main():

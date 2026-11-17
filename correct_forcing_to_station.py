@@ -36,8 +36,8 @@ copies of the forcing.  Longwave is copied unchanged.
             stake intervals) and all of an HRU without stakes are instead multiplied per calendar month by
             each gauge's corrected catch over the forcing's precipitation at its elevation, interpolated in
             elevation between the gauges and held at the end gauges beyond them.
-            With --glacier-snow-factor the stake ratios leave the forcing: the staked HRUs keep the precipitation
-            of the HRUs without stakes, and each one's ratio over that precipitation's mean multiplier on the
+            With --glacier-snow-factor the stake ratios leave the forcing: the staked HRUs keep the forcing's
+            precipitation, or with --gauge-rain the gauges' monthly scaling, and each one's ratio over that mean multiplier on the
             stake-interval snowfall is written to corrections.csv as frozenPrecipMultip_glacier, SUMMA's snowfall
             multiplier on the glacier domains only, since the stakes include snow blown and avalanched onto the ice.
 

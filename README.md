@@ -41,8 +41,8 @@ Landsat or Sentinel-2 scene with the least cloud and snow, writing areas, classe
 station-folder layout `correct_forcing_to_station.py` reads; its `--correct` picks the variables to correct, so Lemon Creek
 corrects only precipitation, to Juneau Airport and the stakes.
 
-The observation scripts `acquire_streamflow.py`, `acquire_stream_temperature.py`, `acquire_grace_tws.py` and
-`acquire_groundwater_level.py` fetch records from the web and write them with `observation_netcdf.py`, in the
+The observation scripts `acquire_streamflow.py`, `acquire_stream_temperature.py` and `acquire_grace_tws.py`
+(and `scratch/unused_tools/acquire_groundwater_level.py`, for a well target) fetch records from the web and write them with `observation_netcdf.py`, in the
 form a SUMMA calibration target reads. `add_stream_hru.py` gives a one-GRU domain a stream HRU and a one-reach
 mizuRoute topology; `add_stream_network.py` splits tributary GRUs off it, each with its own reach, from a JSON
 spec such as `wolverine_network.json`, Wolverine Creek's tributary network. `add_wetland.py` gives an HRU a
@@ -110,15 +110,18 @@ empty domain slot; a case's `stream:` and `wetland:` keys in `cases.yaml` run bo
    - humidity by a ratio on the same split;
    - shortwave and pressure by one ratio per HRU;
    - wind by the monthly station ratio;
-   - snowfall in the stake intervals scaled to the stakes' winter balances;
-   - on Gulkana (`gauge_rain`), the rest of the precipitation by the undercatch-corrected 1480 and 1725 m
-     gauges' monthly ratio to the forcing, interpolated in elevation: about 1.15 in June and 1.5–3 in
-     July–September, where ERA5 has half the gauged rain.
+   - precipitation (`gauge_rain`) by the undercatch-corrected gauges' monthly ratio to the forcing: at
+     Gulkana the 1480 and 1725 m gauges interpolated in elevation, about 1.15 in June and 1.5–3 in
+     July–September, where ERA5 has half the gauged rain; at Wolverine the single 990 m gauge on every HRU,
+     0.36–0.69, where ERA5 has about twice the gauged precipitation;
+   - snowfall on the glacier domains (`glacier_snow_factor`) by the stakes' winter balances over that
+     gauge-scaled snowfall, written to `corrections.csv` as `frozenPrecipMultip_glacier` (1 on an HRU
+     without stakes), which `build_cases.py` puts in the case's `trialParams.nc`, with the stakes'
+     `precipElevGrad` in `localParamInfo.txt`.
 
-   Wolverine's HRUs without stakes take the SA-shielded gauge. Gulkana's April–August humidity comes from
-   Wilson et al.'s 2024 Site B station. The output is `forcing/SUMMA_input/station_corrected`.
+   Gulkana's April–August humidity comes from Wilson et al.'s 2024 Site B station. The output is `forcing/SUMMA_input/station_corrected`.
 7. **coldstate.** `attributes_glac.nc` and `coldstate_glac.nc`:
-   - **Ice:** five layers, 0.15 to 23 m, starting at −5 °C, with ice fraction 0.90 to 0.98 down the column.
+   - **Ice:** five layers, 0.15 to 23 m, starting at the YAML's `ice_temp` (−1 °C for both glaciers), with ice fraction 0.90 to 0.98 down the column.
    - **Debris:** 2 to 5 soil layers over the ice, enough for the thickest debris cell in the HRU. The top
      layer is at most 5 cm and each layer below is a fixed ratio times the one above, as SUMMA re-splits
      the debris at each glacier update.
@@ -133,7 +136,7 @@ first month, the year the calibration spins up over:
 | `wolverine_test` | `tests/wolverine` | raw, 2016–2019, stream HRU | 2017–2019, discharge + temperature + mass balance |
 | `gulkana_test` | `tests/gulkana` | raw, 2008–2012 | 2009–2012, discharge + mass balance |
 | `gulkana_wolverine` | summa `utils/test/test_calibration/gulkana_wolverine` | raw, Oct 2008 – Dec 2011, 2 GRUs | Oct 2009 – Dec 2011, each glacier's mass balance |
-| `{wolverine,gulkana}_general` | `runs/` | raw ERA5, general domain, Oct 2004 – Sep 2026 | calibrated WY2006–2015 and evaluated WY2016–2026 on discharge and the GRACE storage anomaly |
+| `{wolverine,gulkana}_general` | `runs/` | raw ERA5, general domain, Oct 2004 – Sep 2026 | calibrated WY2006–2015 and evaluated WY2016–2026 on discharge and the WGMS annual mass change (`wgms_amce`) |
 | `{wolverine,gulkana}_added` | `runs/` | station-corrected ERA5, added-data domain, Oct 2004 – Sep 2026 | calibrated WY2006–2015 and evaluated WY2016–2026 on discharge and the seasonal mass balance (Wolverine's water temperature in the evaluation) |
 | `{wolverine,gulkana}_stream` | `runs/` | station-corrected ERA5, added-data domain with a stream HRU, a reach and a wetland domain in the terminus HRU (Wolverine's lake and delta, Gulkana's braided fan), hyporheic exchange and bedrock layers on, Oct 2015 – Sep 2026 | the stream-temperature runs: calibrated WY2017–2021 and evaluated WY2022–2026 on discharge, the seasonal mass balance and Wolverine's water temperature (`--search stream`) |
 

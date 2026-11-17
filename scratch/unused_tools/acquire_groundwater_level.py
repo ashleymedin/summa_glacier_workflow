@@ -36,7 +36,7 @@ import sys
 
 import numpy as np
 
-from acquire_streamflow import fetch_features, usgs_utc_offset
+import sys, os; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")); from acquire_streamflow import fetch_features, usgs_utc_offset
 from observation_netcdf import write_observations
 
 FT_TO_M = 0.3048

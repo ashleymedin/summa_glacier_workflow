@@ -6,8 +6,7 @@ One panel per basin (rows) and setup (columns), on the setup's UTM surface grid,
   model glacier and debris   the trial's last annual state: ice thicker than thick4area (0.1 m), debris of 2 cm or more
                              (compare_glacier_change.py's rule), on each glacier's own grid
   start outline              the trial's cold-state glaciers, thin
-  last survey outline        the main glacier's last USGS survey outline (the YAML's later_outline), thin
-  observed outline           that outline brought to the last two late-summer scenes (check_glacier_imagery.py classes of
+  observed outline           the last USGS survey outline (the YAML's later_outline) brought to the last two late-summer scenes (check_glacier_imagery.py classes of
                              the added-data domain): less the cells mostly not ice in the scenes that join the ground outside
                              through such cells, but for those the added-data setup started as debris, whose ice the scenes cannot see
   observed debris            the start-debris rule of glacier_rasters.py on the same scenes: inside the observed outline, cells
@@ -112,7 +111,6 @@ def panel(ax, config, obs_config, run, label, a, letter):
         if deb.any():
             ax.contourf(gx, gy, soft(deb), levels=[0.5, 1.5], colors=[BROWN], alpha=0.85, zorder=4)
         ax.contour(gx, gy, soft(ice0), levels=[0.5], colors=[PURPLE], linewidths=0.8, linestyles=":", zorder=5)
-    gpd.GeoSeries(outline.map(chaikin)).boundary.plot(ax=ax, color="#555555", linewidth=0.7, linestyle="--", zorder=6)
     ax.contour(xs, ys, soft(obs_glacier), levels=[0.5], colors=[OBS], linewidths=1.4, linestyles="--", zorder=6)
     if obs_debris.any():
         ax.contour(xs, ys, soft(obs_debris), levels=[0.5], colors=["#4a2508"], linewidths=1.3, zorder=7)
@@ -169,10 +167,9 @@ def main():
         config = os.path.join(HERE, "domains", f"{basin}{'_general' if setup == 'general' else ''}.yaml")
         year, *_ = panel(axes[i, j], config, os.path.join(HERE, "domains", f"{basin}.yaml"), os.path.join(HERE, run), label, a,
                          "abcdefgh"[i * len(setups) + j])
-        axes[i, j].set_title(f"{basin.capitalize()}, {'general' if setup == 'general' else 'added-data'} setup ({label})", fontsize=10)
+        axes[i, j].set_title(f"{basin.capitalize()}, {'general' if setup == 'general' else 'added-data'} setup", fontsize=10)
     handles = [Patch(fc=ICE, ec=ICE_EDGE, label=f"model glacier, end of {year}"), Patch(fc=BROWN, alpha=0.85, label="model debris, 2 cm or more"),
                Line2D([], [], color=PURPLE, lw=0.9, ls=":", label="glacier outline at the start"),
-               Line2D([], [], color="#555555", lw=0.7, ls="--", label="last USGS survey outline"),
                Line2D([], [], color=OBS, lw=1.4, ls="--", label="observed outline, late-summer imagery"),
                Line2D([], [], color="#4a2508", lw=1.3, label="observed debris, late-summer imagery")]
     fig.legend(handles=handles, loc="lower center", ncol=3, fontsize=7.5, frameon=False)
