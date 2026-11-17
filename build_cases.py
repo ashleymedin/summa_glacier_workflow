@@ -159,6 +159,9 @@ def set_glacier_snowfall(inputs, source):
         return
     with nc4.Dataset(os.path.join(inputs, "coldState.nc")) as c:
         types = np.asarray(c["domType"][:]).reshape(c["domType"].shape[-2:]).T  # (dom, hru), with or without scalarv
+    n_hru = types.shape[1]
+    if len(factor) < n_hru and not np.isin(types[:, len(factor):], GLACIER_DOMAIN_TYPES).any():
+        factor = list(factor) + [1.0] * (n_hru - len(factor))  # HRUs appended after the land ones (a stream HRU) have no glacier
     with nc4.Dataset(os.path.join(inputs, "trialParams.nc"), "a") as t:
         if len(factor) != len(t.dimensions["hru"]) or types.shape != (len(t.dimensions["dom"]), len(t.dimensions["hru"])):
             raise SystemExit(f"{source}/corrections.csv: {len(factor)} glacier snowfall ratios for {len(t.dimensions['hru'])} HRUs")
