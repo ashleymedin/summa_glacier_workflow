@@ -30,6 +30,7 @@ import numpy as np
 import pandas as pd
 import rasterio
 from scipy.ndimage import gaussian_filter
+from matplotlib import patheffects
 from matplotlib.colors import LightSource
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch, Rectangle
@@ -41,6 +42,71 @@ from domain_config import load_config
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PURPLE, PINK, RED, BLUE, GREEN, ORANGE, BROWN = "#7b2d8e", "#e8629c", "#c0392b", "#1f78b4", "#1a9850", "#e08214", "#a8773f"
+SKY = "#56b4e9"  # the on-ice station
+CONTOUR, CONTOUR_INDEX = "#8a8a8a", "#5a5a5a"  # contour lines and the labelled ones, the same in both figures
+OUTLINE_LW, DEBRIS_EDGE = 0.5, "#6b3a12"  # glacier, debris and advance-room outlines, one width in both figures
+HRU_LW = 1.8  # the HRU lines, and the observed outlines of plot_glacier_end.py
+DIM_ALPHA = 0.15  # opacity of the grey over the hillshade, the same in both figures
+HILL_VMIN = -0.3  # the hillshade's black point; below 0 its darkest slopes stay mid-grey
+VERT_EXAG = 1.0  # hillshade relief exaggeration, the same in both figures
+ICE_ALPHA = 0.55  # its opacity over the hillshade, the same in both figures
+ICE_FILL = "#d9c3e3"  # glacier ice, a light shade of PURPLE (here the start, in plot_glacier_end.py the model's end)
+HALO = [patheffects.withStroke(linewidth=2.0, foreground="white")]  # station labels stay legible on dark hillshade
+ON_ICE_SITES = ("B",)  # Site B, the on-ice weather station of the 2024 campaign
+
+
+def legend_below(fig, axes, handles, ncol):
+    """The legend just under the lowest panel, whose equal aspect leaves its box short of the space tight_layout gave it."""
+    fig.canvas.draw()
+    bottom = min(ax.get_position().y0 for ax in axes.flat)
+    fig.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, bottom - 0.01), ncol=ncol, fontsize=7.5, frameon=False)
+
+
+def on_ice_sites(source):
+    """The on-ice weather stations of the campaign in a domain's observations, as dicts of lat, lon and elev; none if it has no campaign."""
+    path = os.path.join(source, "observations", "campaigns", "wilson_2024", "site_locations.csv")
+    if not os.path.exists(path):
+        return []
+    t = pd.read_csv(path, skipinitialspace=True)
+    t.columns = ["site", "lat", "lon", "elev"]
+    return [{"lat": float(r.lat), "lon": float(r.lon), "elev": str(r.elev).strip()} for r in t.itertuples() if str(r.site).strip() in ON_ICE_SITES]
+
+
+STAKE_SITES = os.path.join(HERE, "data", "external", "Glacier_Mass_Balance_Sites", "Glacier_Mass_Balance_Data_Sites.csv")  # USGS release 10.5066/F7HD7SRF
+STAKE_MIN_ELEV = 800.0  # correct_forcing_to_station.py --stake-min-elev
+
+
+def used_stakes(source, c, name):
+    """The mass-balance stakes with a winter balance from the first water year of the run on, as (lon, lat, fitted): fitted when the
+    stake lies above STAKE_MIN_ELEV, where the added-data forcing correction fits its winter balance (below it, winter melt and rain
+    leave the winter balance short of the snowfall, and the stake enters only the USGS glacier-wide balances).  Positions are the
+    USGS site locations; none without the site file or stake record."""
+    if not c.get("stakes") or not os.path.exists(STAKE_SITES):
+        return []
+    rec = pd.read_csv(os.path.join(source, c["stakes"]))
+    first = int(str(c.get("cold_start", "1900-10"))[:4]) + 1  # water year of the first forcing October
+    rec = rec[(rec["Year"] >= first) & rec["bw"].notna()].assign(site_name=lambda t: t["site_name"].astype(str).str.strip())
+    used = set(rec["site_name"])
+    fitted = set(rec.loc[rec["elevation"] > STAKE_MIN_ELEV, "site_name"])
+    sites = pd.read_csv(STAKE_SITES)
+    sites = sites[(sites["Glacier"] == name) & (sites["Type"] == "Glaciological")]
+    sites = sites.assign(site_name=sites["site_name"].astype(str).str.strip()).drop_duplicates("site_name")
+    missing = used - set(sites["site_name"])
+    if missing:
+        print(f"{name}: no USGS position for stakes {sorted(missing)}")
+    return [(float(r.longitude), float(r.latitude), r.site_name in fitted) for r in sites.itertuples() if r.site_name in used]
+
+
+def core_sites(source, name):
+    """The firn-core sites of a glacier with a core in the domain's observations/firn (files NAME_site_firn_date.csv), as (lon, lat)."""
+    folder = os.path.join(source, "observations", "firn")
+    path = os.path.join(folder, "Glacier_Firn_Sites.csv")
+    if not os.path.exists(path):
+        return []
+    t = pd.read_csv(path)
+    t = t[t["Glacier"] == name]
+    return [(float(r.longitude), float(r.latitude)) for r in t.itertuples()
+            if glob.glob(os.path.join(folder, f"{name.upper()}_{str(r.site_name).strip()}_firn_*.csv"))]
 
 
 def on_grid(path, like):
@@ -97,12 +163,12 @@ def panel(ax, config, a, setup, keep_out, letter):
     xs = tr.c + tr.a * (np.arange(shape[1]) + 0.5)
     ys = tr.f + tr.e * (np.arange(shape[0]) + 0.5)
     filled = np.where(np.isfinite(dem), dem, np.nanmin(dem))
-    shade = LightSource(315, 40).hillshade(filled, vert_exag=2, dx=abs(tr.a), dy=abs(tr.e))
-    ax.imshow(shade, cmap="gray", vmin=0.2, vmax=1.0, extent=extent, zorder=0)
+    shade = LightSource(315, 40).hillshade(filled, vert_exag=VERT_EXAG, dx=abs(tr.a), dy=abs(tr.e))
+    ax.imshow(shade, cmap="gray", vmin=HILL_VMIN, vmax=1.0, extent=extent, zorder=0)
     levels = np.arange(np.floor(np.nanmin(dem) / a.contour) * a.contour, np.nanmax(dem) + a.contour, a.contour)
     index = levels % (5 * a.contour) == 0
-    ax.contour(xs, ys, dem, levels=levels[~index], colors="#3a3a3a", linewidths=0.4, zorder=1)
-    labelled = ax.contour(xs, ys, dem, levels=levels[index], colors="#1a1a1a", linewidths=0.9, zorder=1)
+    ax.contour(xs, ys, dem, levels=levels[~index], colors=CONTOUR, linewidths=0.4, zorder=1)
+    labelled = ax.contour(xs, ys, dem, levels=levels[index], colors=CONTOUR_INDEX, linewidths=0.8, zorder=1)
     place = []  # one label per index contour, at its rightmost vertex outside both setups' basins, so a and b (c and d) match
     free = ~geometry_mask(list(keep_out), transform=tr, invert=True, out_shape=shape)
     for segs in labelled.allsegs:
@@ -118,15 +184,16 @@ def panel(ax, config, a, setup, keep_out, letter):
         if best is not None:
             for text in ax.clabel(labelled, levels=[labelled.levels[k]], fontsize=6.5, fmt="%d", manual=[best], inline=True, inline_spacing=3):
                 text.set_zorder(12)
-    ax.imshow(np.where(outside, 1.0, np.nan), cmap="gray_r", vmin=0, vmax=1.3, alpha=0.55, extent=extent, zorder=2)
+    ax.imshow(np.ones(shape), cmap="gray_r", vmin=0, vmax=1.3, alpha=DIM_ALPHA, extent=extent, zorder=0.2)  # the hillshade dimmed alike inside and outside the basin
+    ax.contourf(xs, ys, soft(glc & ~outside), levels=[0.5, 1.5], colors=[ICE_FILL], alpha=ICE_ALPHA, zorder=0.4)
     if debris.any():
         ax.contourf(xs, ys, soft(debris & ~outside), levels=[0.5, 1.5], colors=[BROWN], alpha=0.5, zorder=0.5)
-        ax.contour(xs, ys, soft(debris & ~outside), levels=[0.5], colors=["#6b3a12"], linewidths=0.9, zorder=3)
+        ax.contour(xs, ys, soft(debris & ~outside), levels=[0.5], colors=[DEBRIS_EDGE], linewidths=OUTLINE_LW, zorder=3)
     ax.contourf(xs, ys, soft(ext & ~glc), levels=[0.5, 1.5], colors=[PINK], alpha=0.45, zorder=3)
-    ax.contour(xs, ys, soft(ext & ~glc), levels=[0.5], colors=[PINK], linewidths=1.0, zorder=4)
+    ax.contour(xs, ys, soft(ext & ~glc), levels=[0.5], colors=[PINK], linewidths=OUTLINE_LW, zorder=4)
     start = ax.contour(xs, ys, soft(glc), levels=[0.5], linewidths=0)  # outline traced on cell edges, clipped to the basin polygon
-    gpd.GeoSeries([LineString(seg).intersection(smooth_basin.geometry.union_all()) for seg in start.allsegs[0] if len(seg) > 1]).plot(ax=ax, color=PURPLE, linewidth=1.3, zorder=5)
-    smooth_hrus.boundary.plot(ax=ax, color=GREEN, linewidth=1.8, zorder=6)
+    gpd.GeoSeries([LineString(seg).intersection(smooth_basin.geometry.union_all()) for seg in start.allsegs[0] if len(seg) > 1]).plot(ax=ax, color=PURPLE, linewidth=OUTLINE_LW, zorder=5)
+    smooth_hrus.boundary.plot(ax=ax, color=GREEN, linewidth=HRU_LW, zorder=6)
     smooth_basin.boundary.plot(ax=ax, color="black", linewidth=1.8, zorder=7)
     lat, lon = (float(v) for v in c["pour_point"].split("/"))
     gx, gy = gpd.GeoSeries([Point(lon, lat)], crs=4326).to_crs(crs).iloc[0].coords[0]
@@ -139,14 +206,29 @@ def panel(ax, config, a, setup, keep_out, letter):
         for k, g in enumerate(ids):
             t = tf[int(g)]
             ax.add_patch(Rectangle((t.c, t.f + t.e * ny[k]), abs(t.a) * nx[k], abs(t.e) * ny[k], fill=False, ec=ORANGE, lw=1.2, ls="-", zorder=8))
-    if a.stations and setup == "added":  # the stations belong to the added-data setup
-        source = os.path.join(HERE, c["seed_from"]) if c.get("seed_from") else project  # the stations belong to the added-data domain
-        st = pd.read_csv(os.path.join(source, "observations", "stations", "weatherStationLocations.csv"))
-        st = st[st["Location"] == name]
+    source = os.path.join(HERE, c["seed_from"]) if c.get("seed_from") else project  # the observations belong to the added-data domain
+    if a.stations and setup == "added":  # the weather stations the added-data forcing is corrected to
+        stations = os.path.join(source, "observations", "stations")
+        st = pd.read_csv(os.path.join(stations, "weatherStationLocations.csv"))
+        # the location list is USGS's for all its sites, the stream gauges and stations without a record among them;
+        # only a station with its record in the folder (named by its elevation) forces the model
+        st = st[(st["Location"] == name) & st["Elevation"].map(lambda e: os.path.isdir(os.path.join(stations, f"{int(e)}")))]
         for _, s in st.iterrows():
             px, py = gpd.GeoSeries([Point(s["Longitude"], s["Latitude"])], crs=4326).to_crs(crs).iloc[0].coords[0]
             ax.plot(px, py, marker="s", ms=7, mfc="#f1c40f", mec="black", mew=1.0, ls="none", zorder=14)
-            ax.annotate(f"{int(s['Elevation'])} m", (px, py), xytext=(8, 6), textcoords="offset points", fontsize=6, zorder=14)
+            ax.annotate(f"{int(s['Elevation'])} m", (px, py), xytext=(8, 6), textcoords="offset points", fontsize=6, zorder=14, path_effects=HALO)
+        for lon, lat, fitted in used_stakes(source, c, name):  # white: winter balance fitted by the forcing correction; grey: glacier-wide balance only
+            px, py = gpd.GeoSeries([Point(lon, lat)], crs=4326).to_crs(crs).iloc[0].coords[0]
+            ax.plot(px, py, marker="o", ms=4.5, mfc="white" if fitted else "#555555", mec="black", mew=1.0, ls="none", zorder=15)
+    if a.stations:  # the firn cores, which set the firn viscosity of both setups, under the stake they were drilled at
+        for lon, lat in core_sites(source, name):
+            px, py = gpd.GeoSeries([Point(lon, lat)], crs=4326).to_crs(crs).iloc[0].coords[0]
+            ax.plot(px, py, marker="h", ms=10, mfc=ORANGE, mec="black", mew=1.0, ls="none", zorder=13)
+    if a.stations:  # the on-ice station of Wilson et al. (2026), which sets the glacier wind and cooling of both setups
+        for site in on_ice_sites(source):
+            px, py = gpd.GeoSeries([Point(site["lon"], site["lat"])], crs=4326).to_crs(crs).iloc[0].coords[0]
+            ax.plot(px, py, marker="D", ms=7, mfc=SKY, mec="black", mew=1.0, ls="none", zorder=14)
+            ax.annotate(f"{site['elev']} m", (px, py), xytext=(8, 6), textcoords="offset points", fontsize=6, zorder=14, path_effects=HALO)
     if a.reaches:
         from nhd_reach import cut_from_gauge, model_reach_length
         nhd = os.path.join(project, "shapefiles", "nhd.gpkg")
@@ -231,15 +313,20 @@ def main():
             panel(axes[i, j], config, a, setup, [g for g in gpd.GeoSeries(keep_out, crs=32606).to_crs(keep_crs)], "abcdefgh"[i * len(a.setups) + j])
             label = "general setup" if setup == "general" else "added-data setup"
             axes[i, j].set_title(f"{basin.capitalize()}, {label}", fontsize=10)
-    handles = [Line2D([], [], color="#3a3a3a", lw=0.5, label=f"{a.contour:g} m contours (labelled every {5 * a.contour:g} m)"),
-               Line2D([], [], color=PURPLE, lw=1.3, label="glacier outline at the start"),
-               Patch(fc=BROWN, ec="#6b3a12", alpha=0.6, label="debris-covered ice"), Patch(fc=PINK, ec=PINK, alpha=0.5, label="room to advance"),
-               Line2D([], [], color="black", lw=1.8, label="basin"), Line2D([], [], color=GREEN, lw=1.8, label="HRUs"),
+    handles = [Line2D([], [], color=CONTOUR, lw=0.5, label=f"{a.contour:g} m contours (labelled every {5 * a.contour:g} m)"),
+               Patch(fc=ICE_FILL, ec=PURPLE, lw=OUTLINE_LW, label="glacier at the start"),
+               Patch(fc=BROWN, ec=DEBRIS_EDGE, alpha=0.6, label="debris-covered ice"), Patch(fc=PINK, ec=PINK, lw=OUTLINE_LW, alpha=0.5, label="room to advance"),
+               Line2D([], [], color="black", lw=1.8, label="basin"), Line2D([], [], color=GREEN, lw=HRU_LW, label="HRUs"),
                Line2D([], [], marker="^", ls="none", mfc=RED, mec="white", ms=8, label="gauge")]
     if a.grids:
         handles.append(Line2D([], [], color=ORANGE, lw=1.2, label="flow-model grid"))
     if a.stations and setup == "added":  # the stations belong to the added-data setup
         handles.append(Line2D([], [], marker="s", ls="none", mfc="#f1c40f", mec="black", ms=6, label="weather station"))
+        handles.append(Line2D([], [], marker="o", ls="none", mfc="white", mec="black", ms=4.5, label="mass-balance stake"))
+        handles.append(Line2D([], [], marker="o", ls="none", mfc="#555555", mec="black", ms=4.5, label=f"stake below {STAKE_MIN_ELEV:,.0f} m"))
+    if a.stations:
+        handles.append(Line2D([], [], marker="D", ls="none", mfc=SKY, mec="black", ms=6, label="on-ice weather station"))
+        handles.append(Line2D([], [], marker="h", ls="none", mfc=ORANGE, mec="black", ms=8, label="firn core"))
     if a.reaches:
         handles += [Line2D([], [], color="#08306b", lw=2.8, label="NHD stream, ice front to gauge (dotted: unmapped)"),
                     Line2D([], [], color=RED, lw=7, alpha=0.45, label="model reach, its stream length from the gauge"),
@@ -250,8 +337,8 @@ def main():
     if a.streams:
         handles += [Line2D([], [], color=BLUE, lw=1.4, label="stream (NHD; dotted: through lakes and ice)"), Patch(fc="#a6cee3", ec=BLUE, label="lake (NHD)"),
                     Line2D([], [], color=ORANGE, lw=1.3, ls="--", label="terminus-to-gauge window")]
-    fig.legend(handles=handles, loc="lower center", ncol=min(len(handles), 3 if len(a.setups) == 1 else 4), fontsize=7.5, frameon=False)
     fig.tight_layout(rect=(0, 0.07, 1, 1), h_pad=3.0)
+    legend_below(fig, axes, handles, min(len(handles), 3 if len(a.setups) == 1 else 4))
     os.makedirs(os.path.dirname(os.path.abspath(a.output)), exist_ok=True)
     fig.savefig(a.output, dpi=250, bbox_inches="tight", pad_inches=0.05)
     print("wrote", a.output)

@@ -174,6 +174,7 @@ Downloaded by hand to the paths in the domain YAMLs:
 | Elevation change rates 2000-2019 (Hugonnet et al., 2021), dhdt tiles of regions 01-02 | https://doi.org/10.6096/13 |
 | Glacier thickness (Millan et al., 2022) | https://www.sedoo.fr/theia-publication-products/?uuid=55acbdd5-3982-4eac-89b2-46703557938c |
 | USGS benchmark-glacier stations, stakes and glacier-wide balances | https://www.sciencebase.gov/catalog/item/6441de03d34ee8d4ade7d2a5 |
+| USGS mass-balance stake positions (`Glacier_Mass_Balance_Sites.zip` of the same release), unzipped to `data/external/Glacier_Mass_Balance_Sites/`, for the stakes of `plot_basin_setup.py --stations` | https://www.sciencebase.gov/catalog/item/6441de03d34ee8d4ade7d2a5 |
 | Gulkana 2024 Site B station (Wilson et al.) | `data/domain_Gulkana/observations/campaigns/wilson_2024` |
 
 The forcing, station records and built forcing are git-ignored (about 1 GB). Discharge and water
