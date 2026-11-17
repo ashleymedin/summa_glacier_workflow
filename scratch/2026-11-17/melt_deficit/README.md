@@ -103,6 +103,25 @@ Summer balance bias with the fix (`gmahrt`), m w.e., HRU 1 / 2 / 3:
   between B (1682) and D (1843), and starts 2024 with firn under the snow. One summer is not enough to diagnose
   this further.
 
+## General calibrations of 17 Nov, before the fix
+
+Both ran on the library from before the fix (started 16:51, finished about 20:40), so they show the deficit, not
+the fix.
+
+| case | trials | front | balanced trial | KGE | WGMS annual RMSE (mm w.e.) | 11 Nov balanced | upland / glacier snowfall multiplier |
+|---|---|---|---|---|---|---|---|
+| wolverine_general | 480 | 15 | 478 | 0.86 | 369 | 426: 0.91, 459 | 0.21 / 0.89 |
+| gulkana_general | 392 (stopped) | 20 | 375 | 0.90 | 1134 | 450: 0.85, 809 | 3.61 / 0.65 |
+
+- Gulkana: the search raises upland snow to get the discharge (3.2–3.6 across the front) and cuts glacier snow so the
+  glacier loses mass. With ERA5 at about 0.6 of the gauges, an upland multiplier near 1.7 would be expected. The
+  glacier's mass change is still far off (RMSE 709–1320 mm/yr across the front).
+- Wolverine: the upland multiplier sits at its 0.2 floor across the front, and the glacier multiplier stays below 1.
+  Two causes push it there: the melt deficit, and CHELSA's flat precipitation gradient, which gives the low HRU too
+  much snow (winter +1.1 m at HRU 1 at the defaults).
+- Also at limits: windReductionParam 0.28–0.30 (floor 0.25) on both; Gulkana albedoMax 0.80–0.84; Wolverine's
+  upland conductivities at their low end.
+
 ## Files
 
 - `exp.py`: one-change experiment driver (params, attributes, decisions, forcing; `SUMMA_DIR` picks the binary).
