@@ -142,7 +142,6 @@ qSurfScale           = {}
 summerLAI            = {}
 frozenPrecipMultip   = {}
 Fcapil               = {}
-tempCritRain         = {}
 heightCanopyTop      = {}
 heightCanopyBottom   = {}
 windReductionParam   = {}

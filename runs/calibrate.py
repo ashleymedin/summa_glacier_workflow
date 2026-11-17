@@ -45,8 +45,7 @@ SUMMA_DIR = os.path.abspath(os.environ.get("SUMMA_DIR", os.path.join(GLACIER, ".
 PAPER1 = ["k_soil", "theta_sat", "aquiferBaseflowExp", "aquiferBaseflowRate", "qSurfScale", "frozenPrecipMultip",
           "Fcapil", "windReductionParam", "vGn_n", "routingGammaScale", "routingGammaShape",
           "glacStor_kIce", "glacStor_kSnow", "glacStor_kFirn", "k_snow",
-          "mw_exp", "albedoDecayRate", "albedoMax", "k_macropore", "thCond_soil",
-          "newSnowDenMin"]
+          "mw_exp", "albedoDecayRate", "albedoMax", "k_macropore", "thCond_soil"]
 PAPER1_CHAIN = ["theta_res", "critSoilWilting", "critSoilTranspire", "fieldCapacity", "theta_sat"]
 
 # domain: the upland soil and the debris searched apart, and the englacial debris concentration, the debris's other soil values fixed in trialParams.nc;
@@ -71,8 +70,8 @@ SEARCHES = {
                           "frac_sand@upland": (0.0, 0.9),       # up to what the fixed clay (0.1) leaves
                           "frac_sand@glacDbr": (0.0, 0.9),
                           "debrisConc": (0.1, 6.4),             # kg m-3, Anderson and Anderson (2018)
-                          "frozenPrecipMultip": (0.3, 2.0),
-                          "frozenPrecipMultip@upland": (0.3, 2.0),
+                          "frozenPrecipMultip": (0.2, 4.0),
+                          "frozenPrecipMultip@upland": (0.2, 4.0),       # ERA5 with CHELSA is 0.6 of the gauges at Gulkana, up to twice them at Wolverine
                           "frozenPrecipMultip@glacier": (0.3, 3.0)}},  # with blown and avalanched snow, Kneib et al. (2025)
 }
 SEARCHES["stream"] = dict(SEARCHES["domain"], params=STREAM, logs=SEARCHES["domain"]["logs"] + ["wetlandStorageK"])
