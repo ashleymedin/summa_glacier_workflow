@@ -1,10 +1,11 @@
 # SUMMA cases built from the glacier domains by build_cases.py. Paths are relative to this file.
 # first_month is the cold start: the calibration spins up over the year before its start_time, from it.
 
+# the tests are on the general setup (the global data only, raw ERA5 free air)
 # a short Wolverine calibration with its routed reach, discharge, stream temperature and mass balance:
 # spin-up 2016, scored 2017-2019
 wolverine_test:
-  domain: wolverine
+  domain: wolverine_general
   dest: tests/wolverine
   first_month: 2016-01
   last_month: 2019-12
@@ -14,7 +15,7 @@ wolverine_test:
 
 # a short Gulkana calibration, discharge and mass balance: spin-up 2008, scored 2009-2012
 gulkana_test:
-  domain: gulkana
+  domain: gulkana_general
   dest: tests/gulkana
   first_month: 2008-01
   last_month: 2012-12
@@ -30,15 +31,29 @@ gulkana_test:
 # an estimate.
 gulkana_wolverine:
   merge:
-    - domain: gulkana
+    - domain: gulkana_general
       stream: {length: 2600, slope: 0.03, width: 30, elevation: 1200, latitude: 63.247, longitude: -145.455}
-    - domain: wolverine
+    - domain: wolverine_general
       stream: {length: 2100, slope: 0.03, width: 5, elevation: 390, latitude: 60.374, longitude: -148.912}
   dest: ../summa/utils/test/test_calibration/gulkana_wolverine
   first_month: 2015-10
   last_month: 2018-07
   forcing: raw
   forcing_name: "GulkanaWolverine_{Y}-{M}-01-00-00-00.nc"
+
+# summa_test_cases' gulkana_wolverine (test_cases/settings/multiGruTestCases/gulkana_wolverine): the same two general domains
+# without the stream HRUs, Oct 2008 - Dec 2009. Built here, then its attributes.nc, coldState.nc and trialParams.nc copied to
+# that folder and its forcing to test_cases/input_data/gulkana_wolverine, where tools/convert_to_float.py writes the single precision
+gulkana_wolverine_testcases:
+  merge:
+    - domain: gulkana_general
+    - domain: wolverine_general
+  dest: tests/gulkana_wolverine_testcases
+  template: ../summa/utils/test/test_calibration/gulkana_wolverine/summa_inputs
+  first_month: 2008-10
+  last_month: 2009-12
+  forcing: raw
+  forcing_name: "GulkanaWolverine_{Y}-{M}-01-00-00-00_double_precision.nc"
 
 # the two runs of each basin in glacier.tex, Oct 2004 - Sep 2026: spin-up WY2005, calibrated WY2006-2015, evaluated WY2016-2026
 # general: the global data only (domains/<basin>_general.yaml), raw ERA5, scored on discharge and the annual mass change of the WGMS annual mass-change estimates (Dussaillant et al., 2025)
