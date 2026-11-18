@@ -7,7 +7,7 @@ L=logs/2026-11-18
 export OMPI_MCA_mpi_yield_when_idle=1
 until grep -q "all done" $L/run.log 2>/dev/null; do sleep 120; done
 X="--targets discharge,mass_balance,wgms_amce --aligned --ranks 2"
-for v in scalarGlceMelt scalarSenHeatGround scalarLatHeatGround scalarGroundAbsorbedSolar scalarLWNetGround scalarSnowAlbedo scalarSWE scalarSurfaceTemp scalarGroundNetNrgFlux; do X="$X --extra $v"; done
+for v in scalarGlceMelt scalarSenHeatGround scalarLatHeatGround scalarGroundAbsorbedSolar scalarLWNetGround scalarSnowAlbedo scalarSurfaceTemp scalarGroundNetNrgFlux; do X="$X --extra $v"; done
 $PY rerun_trials.py wolverine_added calibration 472 $X --label nrg > $L/nrg_wolverine.log 2>&1 &
 $PY rerun_trials.py gulkana_added calibration 468 $X --label nrg > $L/nrg_gulkana.log 2>&1 &
 $PY rerun_trials.py wolverine_added calibration 472 $X --set glacierTempReduction=0.6 --label cool06 > $L/nrg_wolverine_cool06.log 2>&1 &
