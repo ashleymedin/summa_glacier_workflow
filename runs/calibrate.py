@@ -48,12 +48,13 @@ PAPER1 = ["k_soil", "theta_sat", "aquiferBaseflowExp", "aquiferBaseflowRate", "q
           "mw_exp", "albedoDecayRate", "albedoMax", "k_macropore", "thCond_soil"]
 PAPER1_CHAIN = ["theta_res", "critSoilWilting", "critSoilTranspire", "fieldCapacity", "theta_sat"]
 
-# domain: the upland soil and the debris searched apart, and the englacial debris concentration, the debris's other soil values fixed in trialParams.nc;
+# domain: the upland soil and the debris searched apart, the debris's other soil values fixed in trialParams.nc and its englacial
+# concentration in basinParamInfo.txt (0.44 kg m-3, Anderson et al. (2021) at Kennicott), which the glacier-wide balances cannot constrain;
 # the snowfall multiplier apart on the upland and the glaciers, where it takes in blown and avalanched snow;
 # frac_sand (with frac_clay fixed) sets the conductivity of the solids, which thCondSoil = funcSoilWet uses; frac_silt is their remainder
 DOMAIN = [p for p in PAPER1 if p not in ("k_soil", "theta_sat", "vGn_n", "k_macropore", "thCond_soil", "frozenPrecipMultip")] + \
          ["k_soil@upland", "k_macropore@upland", "theta_sat@upland", "vGn_n@upland", "frac_sand@upland",
-          "theta_sat@glacDbr", "frac_sand@glacDbr", "debrisConc", "frozenPrecipMultip@upland", "frozenPrecipMultip@glacier"]
+          "theta_sat@glacDbr", "frac_sand@glacDbr", "frozenPrecipMultip@upland", "frozenPrecipMultip@glacier"]
 DOMAIN_CHAIN = ["theta_res@upland", "critSoilWilting@upland", "critSoilTranspire@upland", "fieldCapacity@upland",
                 "theta_sat@upland"]
 
@@ -69,11 +70,10 @@ SEARCHES = {
                           "theta_sat@glacDbr": (0.2, 0.45),     # supraglacial debris, Fontrodona-Bach et al. (2025)
                           "frac_sand@upland": (0.0, 0.9),       # up to what the fixed clay (0.1) leaves
                           "frac_sand@glacDbr": (0.0, 0.9),
-                          "debrisConc": (0.1, 6.4),             # kg m-3, Anderson and Anderson (2018)
                           "albedoDecayRate": (0.2e6, 5.0e6),    # s; summer snow at Gulkana Site B decays in 2-6 days (Wilson et al. 2026)
-                          "frozenPrecipMultip": (0.2, 4.0),
-                          "frozenPrecipMultip@upland": (0.2, 4.0),       # ERA5 with CHELSA is 0.6 of the gauges at Gulkana, up to twice them at Wolverine
-                          "frozenPrecipMultip@glacier": (0.2, 4.0)}},  # with blown and avalanched snow, Kneib et al. (2025)
+                          "frozenPrecipMultip": (0.2, 5.0),
+                          "frozenPrecipMultip@upland": (0.2, 5.0),       # ERA5 with CHELSA is 0.6 of the gauges at Gulkana, up to twice them at Wolverine
+                          "frozenPrecipMultip@glacier": (0.2, 5.0)}},  # with blown and avalanched snow, Kneib et al. (2025)
 }
 SEARCHES["stream"] = dict(SEARCHES["domain"], params=STREAM, logs=SEARCHES["domain"]["logs"] + ["wetlandStorageK"])
 
@@ -100,7 +100,7 @@ def periods(case):
 
 def search_for(case, name):
     """The named search, without the STATION_FIXED parameters on a station-corrected case, and without the debris
-    ones on a case with no debris-covered domain (domType 4), where they select nothing and debris cannot emerge,
+    ones on a case with no debris-covered domain (domType 4), where they select nothing,
     or the wetland ones on a case with no wetland domain (domType 5)."""
     search = dict(SEARCHES[name])
     if case_spec(case).get("forcing") == "station_corrected":
@@ -110,7 +110,7 @@ def search_for(case, name):
     with nc4.Dataset(os.path.join(HERE, case, "summa_inputs", "coldState.nc")) as d:
         types = np.asarray(d["domType"][:])
     if not np.any(types == 4):
-        search["params"] = [q for q in search["params"] if not q.endswith("@glacDbr") and q != "debrisConc"]
+        search["params"] = [q for q in search["params"] if not q.endswith("@glacDbr")]
     if not np.any(types == 5):
         search["params"] = [q for q in search["params"] if not q.startswith("wetland")]
         search["logs"] = [q for q in search["logs"] if not q.startswith("wetland")]
