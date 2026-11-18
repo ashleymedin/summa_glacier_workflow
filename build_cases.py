@@ -25,6 +25,8 @@ that differ between the upland soil and the debris are then written into its tri
            take their own parameter values by domain in trialParams.nc
   merge    two domains become one, one GRU each, with their HRUs, glacier grids and forcing side by side
   decisions  choices of modelDecisions.txt that differ from the template's
+  parent   the non-stream case a stream case is built on: every parameter line of its localParamInfo.txt and
+           basinParamInfo.txt replaces the stream case's, which keeps only its own stream, wetland and reach lines
 
     ./build_cases.py cases.yaml gulkana_test wolverine_test
 """
@@ -91,6 +93,22 @@ def csv_row(path, key):
             if row and row[0] == key:
                 return [float(x) for x in row[1:]]
     return None
+
+
+def inherit_params(inputs, parent):
+    """Every parameter line of the parent case's localParamInfo.txt and basinParamInfo.txt in place of the case's own;
+    the case's lines the parent lacks (stream, wetland, reach) stay."""
+    key = lambda l: l.split("|")[0].strip() if "|" in l and not l.lstrip().startswith("!") else None  # noqa: E731
+    for name in ("localParamInfo.txt", "basinParamInfo.txt"):
+        theirs = {key(l): l for l in open(os.path.join(parent, name)) if key(l)}
+        path = os.path.join(inputs, name)
+        mine = open(path).readlines()
+        have = {key(l) for l in mine if key(l)}
+        out = [theirs.get(key(l), l) if key(l) else l for l in mine]
+        out += [l for k, l in theirs.items() if k not in have]
+        if out and not out[-1].endswith("\n"):
+            out[-1] += "\n"
+        open(path, "w").writelines(out)
 
 
 def set_param_line(params, name, value, lower, upper):
@@ -541,6 +559,8 @@ def build_inputs(name, spec, cases_dir):
             if not os.path.exists(routing):
                 shutil.copy(os.path.join(cases_dir, spec.get("routing", "tests/wolverine/mizuroute.param")), routing)
             set_reach_width(routing, os.path.join(dest, "topology.nc"), spec["stream"]["width"])
+            if "parent" in spec:
+                inherit_params(inputs, os.path.join(cases_dir, spec["parent_dest"], "summa_inputs"))
             if "outlet_elevation" in spec["stream"]:  # the reach falls from the glacier front to its outlet
                 set_param_line(os.path.join(inputs, "localParamInfo.txt"), "reachOutletElev",
                                spec["stream"]["outlet_elevation"], 0.0, 9000.0)
@@ -587,6 +607,8 @@ def main():
         cases = yaml.safe_load(f)
     cases_dir = os.path.dirname(os.path.abspath(a.cases))
     for name in a.names or cases:
+        if "parent" in cases[name]:
+            cases[name]["parent_dest"] = cases[cases[name]["parent"]]["dest"]
         build(name, cases[name], cases_dir)
 
 
