@@ -77,9 +77,10 @@ SEARCHES = {
 }
 SEARCHES["stream"] = dict(SEARCHES["domain"], params=STREAM, logs=SEARCHES["domain"]["logs"] + ["wetlandStorageK"])
 
-# fixed on the station-corrected cases, where the stakes set the snowfall, the glacier domains' through frozenPrecipMultip in
-# trialParams.nc (build_cases.set_glacier_snowfall); raw ERA5 searches it
-STATION_FIXED = ["frozenPrecipMultip"]
+# fixed on the station-corrected cases, where the stakes set the glacier domains' snowfall through frozenPrecipMultip in
+# trialParams.nc (build_cases.set_glacier_snowfall); raw ERA5 searches it. The upland snowfall is searched on both, as the
+# gauges miss the snow the wind takes off their orifice and drifts onto the upland
+STATION_FIXED = ["frozenPrecipMultip", "frozenPrecipMultip@glacier"]
 
 # searched on raw ERA5 as multipliers of trialParams.nc's values, the glacier snowfall's elevation shape
 # (build_cases.glacier_snow_shape), so one number scales the snowfall of every glacier domain
@@ -104,7 +105,7 @@ def search_for(case, name):
     or the wetland ones on a case with no wetland domain (domType 5)."""
     search = dict(SEARCHES[name])
     if case_spec(case).get("forcing") == "station_corrected":
-        search["params"] = [q for q in search["params"] if q.split("@")[0] not in STATION_FIXED]
+        search["params"] = [q for q in search["params"] if q not in STATION_FIXED]
     else:
         search["multipliers"] = [q for q in RAW_MULTIPLIERS if q in search["params"]]
     with nc4.Dataset(os.path.join(HERE, case, "summa_inputs", "coldState.nc")) as d:
@@ -142,6 +143,15 @@ def search_of(calibration):
     return {"params": list(entries), "logs": [k for k, v in entries.items() if v.get("transformation") == "log"],
             "chains": chains, "bounds": {k: (v["lower"], v["upper"]) for k, v in entries.items() if "lower" in v},
             "multipliers": list(multipliers)}
+
+
+def has_obs(path, var, start, end):
+    """Whether an observation file holds any value from start to end (YYYY-MM-DD)."""
+    with nc4.Dataset(path) as d:
+        t = nc4.num2date(d["time"][:], d["time"].units, only_use_cftime_datetimes=False, only_use_python_datetimes=True)
+        v = np.ma.filled(d[var][:].astype(float), np.nan).squeeze()
+    day = np.array([x.strftime("%Y-%m-%d") for x in t])
+    return bool(np.any((day >= start) & (day <= end) & np.isfinite(v)))
 
 
 def config_text(case, run_dir, settings, work, start, end, score_start, score_end, algorithm, n_samples,
@@ -275,7 +285,8 @@ obs_file  = "{c["flow"]}"
 vname_obs = "q_obs"
 metric    = "kge"
 ''')
-    if temperature and routed and "temp" in c and "stream_temperature" in targets:
+    if (temperature and routed and "temp" in c and "stream_temperature" in targets
+            and has_obs(os.path.join(obs, c["temp"]), "t_obs", score_start, score_end)):  # a window with no record cannot be scored
         lines.append(f'''
 
 [[calibration.target]]
