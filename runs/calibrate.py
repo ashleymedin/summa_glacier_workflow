@@ -180,6 +180,7 @@ end_time   = "{end} 23:00"
 time_zone  = "utcTime"
 
 use_mizuroute    = {"true" if routed else "false"}
+stream_temp      = {"true" if temperature and routed and "temp" in c and "stream_temperature" in targets else "false"}
 write_timeseries = false
 
 work_path = "{work}/output"
