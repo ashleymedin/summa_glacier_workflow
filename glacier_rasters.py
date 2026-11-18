@@ -30,7 +30,9 @@ at least its highest cells as accumulation. On the usgs_outline glacier, start-o
 take the nearest type. Debris is mapped from one image of about 2010, after the start, so with start_debris_scenes
 (late-summer imagery classes from check_glacier_imagery.py, near the start) a mapped debris cell where most of
 the scenes' clear pixels are ice starts clean, and a clean ablation cell inside its glacier where most are not
-starts as debris; added debris takes the nearest kept thickness. Debris thickness is Rounce et al. (2021), nearest neighbour, with
+starts as debris; added debris takes the nearest kept thickness. With stagnant_debris, a debris cell whose ArcticDEM strips (its dems) have lowered by under rate (0.5 m yr-1) since since
+(2010) is moraine, not glacier, and leaves the outline: debris-covered ice keeps lowering, ice-cored moraine barely does.
+Debris thickness is Rounce et al. (2021), nearest neighbour, with
 thicknesses at or below --min-debris (0.04 m) raised to it (Herreid 2021; Rounce et al. 2018). Glacier
 thickness is Millan et al. (2022), bilinear over his cells, zero off the outlines and filled from the nearest
 Millan cell where an outline reaches past it; ice_thickness_source: farinotti takes Farinotti et al. (2019) instead,
@@ -631,6 +633,16 @@ def main():
     if c.get("start_debris_scenes"):
         frac = image_ice_fraction([os.path.join(project, f) for f in c["start_debris_scenes"]], src, dem.shape)
         dtype = start_debris(dtype, rgi_id > 0, frac)
+    if c.get("stagnant_debris"):  # debris cells whose surface does not lower are moraine, not glacier
+        sd = c["stagnant_debris"]
+        years, heights = strip_heights(dem, rgi_id > 0, src, sorted(glob.glob(os.path.join(HERE, sd["dems"], "*.tif"))))
+        trend = height_trend(years, heights, sd.get("since", 2010.0))
+        drop = (dtype == DEBRIS_ABLATION) & np.isfinite(trend) & (trend > -sd.get("rate", 0.5))
+        dx, dy = cell_size(src, dem.shape)
+        print(f"stagnant debris: {drop.sum()} cells ({drop.sum() * dx * dy / 1e6:.2f} km2) lower by under {sd.get('rate', 0.5)} m yr-1 "
+              f"since {sd.get('since', 2010.0):.0f} in {len(years)} strips; left off the glacier")
+        rgi_id[drop] = 0
+        dtype[drop] = UPLAND
     debris0 &= dtype == DEBRIS_ABLATION
     meta.update(count=1, dtype="int16")
     with rasterio.open(os.path.join(glacier_dir, f"domain_{name}_domain_type.tif"), "w", **meta) as dst:
