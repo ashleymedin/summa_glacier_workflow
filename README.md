@@ -148,6 +148,20 @@ multiplier of that shape, so it is the glacier snowfall over ERA5's at z̄. The 
 over ERA5's snowfall at Wolverine (0.0018) and Gulkana (0.0016), and the stakes alone give 0.0018–0.0020 there and at
 Lemon Creek (`scratch/2026-11-17/twin2/snow_ratio_form.py`, `bw_gradient.py`).
 
+**Keep the test cases on the general setup.** Every change to the general forcing or parameters (the `*_general.yaml`
+domains, `remap_forcing.py`, the Site B factors against that forcing, the fixed values in `tests/*/summa_inputs`) must be
+carried to all the glacier test cases:
+- rebuild `wolverine_test`, `gulkana_test`, `gulkana_wolverine` and `gulkana_wolverine_testcases` (`build_cases.py`), and set any
+  fixed value in their `localParamInfo.txt`, which an existing case does not re-copy from its template;
+- `gulkana_wolverine` is summa multi-calib's `utils/test/test_calibration/gulkana_wolverine`; develop's copy has no stream HRUs
+  (`scratch/2026-11-17/develop_testcase/strip_stream.py <multi-calib folder> <develop folder>`);
+- `gulkana_wolverine_testcases` goes to summa_test_cases: `attributes.nc`, `coldState.nc`, `trialParams.nc` and
+  `localParamInfo.txt` to `test_cases/settings/multiGruTestCases/gulkana_wolverine`, the forcing to
+  `test_cases/input_data/gulkana_wolverine`, then `tools/convert_to_float.py gulkana_wolverine` there.
+
+The stream cases take every parameter of their non-stream case (`parent:` in `cases.yaml`), so they are rebuilt after any
+change to it.
+
 ## The full runs
 
 ```bash

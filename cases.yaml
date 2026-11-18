@@ -2,6 +2,11 @@
 # first_month is the cold start: the calibration spins up over the year before its start_time, from it.
 
 # the tests are on the general setup (the global data only, raw ERA5 free air)
+# Every change to the general forcing or its parameters (the general domains' YAMLs, remap_forcing.py, the Site B factors against
+# it, the templates' fixed values) must be carried to all the glacier test cases: rebuild wolverine_test, gulkana_test,
+# gulkana_wolverine (summa multi-calib; develop's copy without stream HRUs by scratch/2026-11-17/develop_testcase/strip_stream.py)
+# and gulkana_wolverine_testcases (copied to summa_test_cases, forcing to input_data, then tools/convert_to_float.py there).
+# Stream cases take every parameter of their non-stream parent case (parent:), so rebuild them after a change to it.
 # a short Wolverine calibration with its routed reach, discharge, stream temperature and mass balance:
 # spin-up 2016, scored 2017-2019
 wolverine_test:
