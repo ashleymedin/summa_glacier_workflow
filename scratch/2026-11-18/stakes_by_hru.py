@@ -59,10 +59,10 @@ def compare(case, run):
         at = lambda t: float(m.asof(t))  # noqa: E731
         bw = (at(r.spring_date) - at(r.prev_fall)) * (1 + grad * (r.elevation - z))
         bs = at(r.fall_date) - at(r.spring_date)
-        rows.append(dict(year=r.Year, hru=h + 1, z=r.elevation, d_bw=bw - r.bw, d_bs=bs - (r.ba - r.bw), d_ba=bw + bs - r.ba))
+        rows.append(dict(year=r.Year, hru=h + 1, z=r.elevation, bw_obs=r.bw, bw_sim=bw, d_bw=bw - r.bw, d_bs=bs - (r.ba - r.bw), d_ba=bw + bs - r.ba))
     t = pd.DataFrame(rows)
     t["period"] = np.where(t.year <= 2015, "cal", "held")
-    g = t.groupby(["hru", "period"])[["z", "d_bw", "d_bs", "d_ba"]].mean().round(2)
+    g = t.groupby(["hru", "period"])[["z", "bw_obs", "bw_sim", "d_bw", "d_bs", "d_ba"]].mean().round(2)
     g["n"] = t.groupby(["hru", "period"]).size()
     print(f"== {case} {run}: sim - obs by HRU (m w.e.; winter, summer, annual)")
     print(g.unstack("period").to_string())
