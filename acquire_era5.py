@@ -17,15 +17,24 @@ The grid is that of the files already in raw_data, else the cells the HRUs overl
 Downloading needs a free CDS account, the ERA5 licence accepted on the dataset pages, and its key in ~/.cdsapirc
 (url: https://cds.climate.copernicus.eu/api, key: <key>).  The model-level requests come off tape and can queue for days.
 
+With --source ncar the month comes instead from NCAR's copy (Research Data Archive d633000) by OPeNDAP, --workers
+reads at once: no account and no queue, but it trails ERA5 by a few months and has no model level on this grid, so
+the wind is the 10 m wind and airtemp and spechum are the 2 m air's (remap_forcing.py takes those from raw_levels).
+
     ./acquire_era5.py 2004-10 2026-09 domains/wolverine.yaml domains/gulkana.yaml
+    ./acquire_era5.py 2004-10 2026-09 domains/lemon_creek.yaml --source ncar
 """
 
 import argparse
+import calendar
 import glob
 import json
 import os
 import tempfile
 import time
+import urllib.error
+import urllib.request
+from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 import geopandas as gpd
@@ -45,6 +54,10 @@ ATTRS = {"airtemp": ("Temperature", "K"), "spechum": ("Specific humidity", "kg k
          "airpres": ("Surface pressure", "Pa"), "SWRadAtm": ("Mean surface downward short-wave radiation flux", "W m**-2"),
          "LWRadAtm": ("Mean surface downward long-wave radiation flux", "W m**-2"),
          "pptrate": ("Mean total precipitation rate", "kg m**-2 s**-1")}
+NCAR_SFC = {"airpres": ("128_134_sp", "SP"), "u": ("128_165_10u", "VAR_10U"), "v": ("128_166_10v", "VAR_10V"),
+            "airtemp": ("128_167_2t", "VAR_2T"), "dew": ("128_168_2d", "VAR_2D")}
+NCAR_FLUX = {"SWRadAtm": ("235_035_msdwswrf", "MSDWSWRF"), "LWRadAtm": ("235_036_msdwlwrf", "MSDWLWRF"),
+             "pptrate": ("235_055_mtpr", "MTPR")}
 
 
 def grid_area(project, dom, raw_dir):
@@ -124,14 +137,14 @@ def assemble(sfc, ml, workdir):
     return out
 
 
-def write(ds, path):
+def write(ds, path, source="ERA5 from the CDS, model level 137 and surface"):
     ds = ds.sortby("latitude", ascending=False).sortby("longitude")
     hours = ((ds.time.values - np.datetime64(EPOCH)) / np.timedelta64(1, "h")).astype("i4")
     out = xr.Dataset({k: (("time", "latitude", "longitude"), ds[k].values.astype("f4"), {"long_name": ATTRS[k][0], "units": ATTRS[k][1]})
                       for k in ATTRS}, coords={"time": ("time", hours, {"units": "hours since 1900-01-01 00:00:00.0",
                       "long_name": "time", "calendar": "gregorian"}), "latitude": ("latitude", ds.latitude.values.astype("f4"),
                       {"units": "degrees_north"}), "longitude": ("longitude", ds.longitude.values.astype("f4"), {"units": "degrees_east"})},
-                     attrs={"History": f"acquire_era5.py {datetime.now(timezone.utc):%Y-%m-%d}: ERA5 from the CDS, model level 137 and surface"})
+                     attrs={"History": f"acquire_era5.py {datetime.now(timezone.utc):%Y-%m-%d}: {source}"})
     if out.time.size % 24 or np.isnan(out.to_array().values).any():
         raise SystemExit(f"{path}: incomplete month or missing values")
     out.to_netcdf(path, encoding={"time": {"dtype": "i4"}})
@@ -148,6 +161,88 @@ def store(job, files, workdir, areas):
                 print(f"wrote {path}", flush=True)
 
 
+# ---- NCAR
+
+def ncar_urls(y, m):
+    """{name: [(url, variable, last forecast only)]} of the files holding the month: the analyses, and the mean fluxes
+    of the forecasts from 06 and 18 UTC, the previous month's last forecast reaching into this month's first hours."""
+    from acquire_era5_levels import NCAR
+    last = calendar.monthrange(y, m)[1]
+    py, pm = (y - 1, 12) if m == 1 else (y, m - 1)
+    ny, nm = (y + 1, 1) if m == 12 else (y, m + 1)
+    sfc = lambda code: f"{NCAR}e5.oper.an.sfc/{y:04d}{m:02d}/e5.oper.an.sfc.{code}.ll025sc.{y:04d}{m:02d}0100_{y:04d}{m:02d}{last:02d}23.nc"
+    flux = lambda code, y_, m_, span: f"{NCAR}e5.oper.fc.sfc.meanflux/{y_:04d}{m_:02d}/e5.oper.fc.sfc.meanflux.{code}.ll025sc.{span}.nc"
+    out = {k: [(sfc(code), name, False)] for k, (code, name) in NCAR_SFC.items()}
+    for k, (code, name) in NCAR_FLUX.items():
+        out[k] = [(flux(code, py, pm, f"{py:04d}{pm:02d}1606_{y:04d}{m:02d}0106"), name, True),
+                  (flux(code, y, m, f"{y:04d}{m:02d}0106_{y:04d}{m:02d}1606"), name, False),
+                  (flux(code, y, m, f"{y:04d}{m:02d}1606_{ny:04d}{nm:02d}0106"), name, False)]
+    return out
+
+
+def ncar_field(task):
+    """A file's field over the box: values (time, lat, lon) and their valid times (h since 1900)."""
+    from acquire_era5_levels import ncar_read
+    url, name, tail, rows, cols = task
+    if name.startswith("VAR_") or name == "SP":
+        return ncar_read(url, name, (slice(None),), rows, cols, "time")
+    v, init = ncar_read(url, name, (slice(-1, None) if tail else slice(None), slice(None)), rows, cols, "forecast_initial_time")
+    hours = (init[-1:] if tail else init)[:, None] + np.arange(1, v.shape[1] + 1)[None, :]
+    return v.reshape(-1, *v.shape[2:]), hours.ravel()
+
+
+def ncar_has(y, m):
+    """Whether NCAR holds the month's last fluxes."""
+    try:
+        urllib.request.urlopen(ncar_urls(y, m)["pptrate"][-1][0] + ".dds", timeout=120).close()
+        return True
+    except urllib.error.HTTPError:
+        return False
+
+
+def ncar_month(y, m, rows, cols, pool):
+    """The month as acquire_era5's fields (time, lat, lon) on NCAR's rows and runs of columns."""
+    urls = ncar_urls(y, m)
+    tasks = [(k, u + (rows, cols)) for k, us in urls.items() for u in us]
+    got = list(pool.map(ncar_field, [t for _, t in tasks]))
+    t = (np.datetime64(f"{y:04d}-{m:02d}-01T00") - np.datetime64(EPOCH)) // np.timedelta64(1, "h") + np.arange(24 * calendar.monthrange(y, m)[1])
+    f = {}
+    for k in urls:
+        v = np.concatenate([g[0] for (n, _), g in zip(tasks, got) if n == k])
+        h = np.concatenate([np.asarray(g[1], dtype="i8") for (n, _), g in zip(tasks, got) if n == k])
+        i = np.searchsorted(h, t)
+        if (i >= len(h)).any() or (h[np.minimum(i, len(h) - 1)] != t).any():
+            raise SystemExit(f"{y:04d}-{m:02d} {k}: NCAR lacks hours of the month")
+        f[k] = v[i]
+    e = 611.21 * np.exp(17.502 * (f["dew"] - 273.16) / (f["dew"] - 32.19))      # Pa, vapour pressure over water at the dew point
+    f["spechum"] = 0.621981 * e / (f["airpres"] - 0.378019 * e)
+    f["windspd"] = np.hypot(f.pop("u"), f.pop("v"))
+    del f["dew"]
+    return f, t
+
+
+def from_ncar(a, area, areas, files):
+    from acquire_era5_levels import GRID, box
+    rows, cols = box(area)
+    lat = 90.0 - GRID * np.arange(rows[0], rows[1] + 1)
+    lon = (np.concatenate([GRID * np.arange(c0, c1 + 1) for c0, c1 in cols]) + 180.0) % 360.0 - 180.0
+    with ProcessPoolExecutor(a.workers) as pool:
+        for y, m in months(a.first, a.last):
+            if all(os.path.exists(files(d, y, m)) for d in areas):
+                continue
+            if not ncar_has(y, m):
+                print(f"{y:04d}-{m:02d} is not at NCAR yet; --source cds has it", flush=True)
+                continue
+            f, t = ncar_month(y, m, rows, cols, pool)
+            ds = xr.Dataset({k: (("time", "latitude", "longitude"), v) for k, v in f.items()},
+                            coords={"time": np.datetime64(EPOCH) + t * np.timedelta64(1, "h"), "latitude": lat, "longitude": lon})
+            for dom in areas:
+                path = files(dom, y, m)
+                if not os.path.exists(path):
+                    write(cut(ds, areas[dom]), path, "ERA5 from NCAR d633000, 10 m wind, 2 m air and surface")
+                    print(f"wrote {path}", flush=True)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
@@ -157,9 +252,9 @@ def main():
     p.add_argument("--chunk", type=int, default=3, choices=(1, 2, 3), help="months per request")
     p.add_argument("--jobs", type=int, default=3, help="requests in the queue at once")
     p.add_argument("--out", help="directory for the monthly files (default forcing/raw_data; one domain only)")
+    p.add_argument("--source", choices=("cds", "ncar"), default="cds")
+    p.add_argument("--workers", type=int, default=4, help="reads from NCAR at once")
     a = p.parse_args()
-    import cdsapi
-    from ecmwf.datastores import Client
     cs = [load_config(f) for f in a.config]
     if a.out and len(cs) > 1:
         raise SystemExit("--out takes one domain")
@@ -170,6 +265,10 @@ def main():
     area = [max(x[0] for x in areas.values()), min(x[1] for x in areas.values()),
             min(x[2] for x in areas.values()), max(x[3] for x in areas.values())]
     files = lambda dom, y, m: os.path.join(dirs[dom], f"domain_{dom}_ERA5_merged_{y:04d}{m:02d}.nc")
+    if a.source == "ncar":
+        return from_ncar(a, area, areas, files)
+    import cdsapi
+    from ecmwf.datastores import Client
     url, key, _ = cdsapi.api.get_url_key_verify(None, None, None)
     client = Client(url=url, key=key)
     state_path = os.path.join(next(iter(dirs.values())), ".era5_jobs.json")
