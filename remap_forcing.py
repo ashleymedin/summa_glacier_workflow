@@ -14,7 +14,9 @@ HRU under the lowest of them continues the lowest two.  Longwave is the cell's a
 elevation, carried to each HRU by the fourth power of the free-air temperature there over that at the mean (ERA5's
 smoothed surface lies below the basin's terrain; Gulkana's 1,725 m station supports the mean).  With wind_climatology in the
 YAML (acquire_climatology.py), the wind is scaled by month to the climatology's mean over the HRU, over the run's mean
-of the cell-weighted wind for that month.  With precip_climatology
+of the cell-weighted wind for that month; with wind_climatology_basin true, every HRU takes one ratio, the climatology's
+area-weighted mean over the basin over that of the wind, as the station-corrected forcing has one station's wind on every
+HRU (the climatology's surface wind rises over ridges and summits that a glacier's surface air does not see).  With precip_climatology
 in the YAML (acquire_climatology.py), precipitation is scaled by the HRU's mean climatology over the same weighting
 of the cells' mean, the climatology's pattern within the ERA5 cells.  Every month of raw_data is written, one file per month, with the names
 the rest of the pipeline reads.  Units and time (hours since 1900-01-01 UTC) pass through.  remap.csv keeps the
@@ -89,9 +91,10 @@ def precip_ratio(path, hrus, lat, lon, w):
     return hru / np.sum(w * cell, axis=(1, 2))
 
 
-def wind_ratio(path, hrus, raw, w):
+def wind_ratio(path, hrus, raw, w, basin=False):
     """(13, hru) by calendar month (row 0 unused): each HRU's mean of the monthly wind climatology (one band a month)
-    over the overlap-weighted ERA5 wind's mean for that month over the raw files."""
+    over the overlap-weighted ERA5 wind's mean for that month over the raw files; with basin, both area-weighted over the
+    basin, the same for every HRU."""
     with rasterio.open(path) as r:
         transform = r.transform
         clim = np.array([[raster_mean(np.where(b.mask, np.nan, b.data * sc + of), transform, g)
@@ -107,6 +110,9 @@ def wind_ratio(path, hrus, raw, w):
             count[m] += (month == m).sum()
     ratio = np.ones((13, len(hrus)))
     ratio[1:] = clim / (total[1:] / count[1:, None])
+    if basin:
+        a = hrus.HRU_area.values
+        ratio[1:] = ((clim * a).sum(axis=1) / (total[1:] / count[1:, None] * a).sum(axis=1))[:, None]
     return ratio
 
 
@@ -239,7 +245,7 @@ def main():
           f"longwave at the basin mean {np.average(z, weights=hrus.HRU_area.values):.0f} m")
     ratio = precip_ratio(c["precip_climatology"], hrus, lat, lon, w) if "precip_climatology" in c else np.ones(len(hrus))
     print("precipitation ratio by HRU:", np.round(ratio, 3))
-    wind = wind_ratio(c["wind_climatology"], hrus, raw, w) if "wind_climatology" in c else np.ones((13, len(hrus)))
+    wind = wind_ratio(c["wind_climatology"], hrus, raw, w, c.get("wind_climatology_basin", False)) if "wind_climatology" in c else np.ones((13, len(hrus)))
     print("wind ratio by HRU, January and July:", np.round(wind[1], 2), np.round(wind[7], 2))
     out_dir = os.path.join(project, "forcing", "SUMMA_input")
     os.makedirs(out_dir, exist_ok=True)

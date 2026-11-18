@@ -67,3 +67,4 @@ runs/*/stake_seasons/
 scratch/**/forcing_*/
 scratch/**/inputs_*/
 scratch/**/ab_done
+data/*/forcing/SUMMA_input_*/

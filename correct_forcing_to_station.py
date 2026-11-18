@@ -42,6 +42,9 @@ copies of the forcing.  Longwave is copied unchanged.
             precipitation, or with --gauge-rain the gauges' monthly scaling, and each one's ratio over that mean multiplier on the
             stake-interval snowfall is written to corrections.csv as frozenPrecipMultip_glacier, SUMMA's snowfall
             multiplier on the glacier domains only, since the stakes include snow blown and avalanched onto the ice.
+            With --rain-grad as well (needs --precip-grad and --gauge-rain), the rain of an HRU above the highest gauge is
+            multiplied by 1 + gamma (z_hru - z_gauge), the stakes' precipitation gradient carried up from that gauge, the
+            rain split from the snow on wet-bulb temperature as above.
 
 --correct names the variables to correct (default all); the rest are copied unchanged and the precipitation phase sees
 them unchanged. A station folder holds 15-minute files, or hourly ones (*_hourly_LVL2_*.csv, read only where it has no
@@ -285,6 +288,8 @@ def main():
                    help="scale the precipitation the stakes leave by every gauge's monthly catch (needs --gauge-shield)")
     p.add_argument("--glacier-snow-factor", action="store_true",
                    help="write the stake ratios as SUMMA's glacier-domain frozenPrecipMultip instead of applying them to the forcing")
+    p.add_argument("--rain-grad", action="store_true",
+                   help="rain above the highest gauge rises with the stakes' gradient (needs --precip-grad and --gauge-rain)")
     p.add_argument("--spechum-ratios", help="CSV of hruId, month, ratio for the months the station has no humidity for")
     p.add_argument("--correct", nargs="+", choices=VARIABLES, default=list(VARIABLES),
                    help="the variables to correct, default all; the others are copied unchanged")
@@ -496,6 +501,14 @@ def main():
         for j in np.nonzero(staked)[0]:
             glacier_factor[j] = ratio["pptrate"][j] * weight[:, j].sum() / (kept[:, j] * weight[:, j]).sum()
 
+    # rain above the highest gauge: the stakes' gradient carried up from it
+    rain_grad = np.ones(nh)
+    if a.rain_grad:
+        if not (a.precip_grad and a.gauge_rain and a.glacier_snow_factor):
+            raise SystemExit("--rain-grad needs --precip-grad, --gauge-rain and --glacier-snow-factor")
+        z_top = max(g[0] for g in gauge_sites)
+        rain_grad = 1.0 + gamma * np.maximum(0.0, np.asarray(z, float) - z_top)
+
     # write the corrected files
     os.makedirs(a.output, exist_ok=True)
     for f in files:
@@ -514,6 +527,12 @@ def main():
                 p_mult = np.where(staked[None, :], p_mult, g_mult)
             if a.glacier_snow_factor:
                 p_mult = g_mult if a.gauge_rain else np.where(staked[None, :], 1.0, p_mult)
+                if a.rain_grad:
+                    frac = snow_fraction(np.array(s["airtemp"][:], float) + offset[wet_file, m_file, cols],
+                                         np.array(s["spechum"][:], float) * q_ratio[wet_file, m_file, cols],
+                                         np.array(s["airpres"][:], float) * ratio["airpres"][None, :],
+                                         a.temp_crit_rain, a.temp_range)
+                    p_mult = p_mult * (1.0 + (rain_grad[None, :] - 1.0) * (1.0 - frac))
             elif staked.any():
                 frac = snow_fraction(np.array(s["airtemp"][:], float) + offset[wet_file, m_file, cols],
                                      np.array(s["spechum"][:], float) * q_ratio[wet_file, m_file, cols],
@@ -554,6 +573,8 @@ def main():
         w.writerow(["corrected", *a.correct])
         if a.precip_grad:
             w.writerow(["precipElevGrad_per_m", f"{gamma:.5f}"])
+        if a.rain_grad:
+            w.writerow(["rain_multiplier_above_gauges"] + [f"{x:.4f}" for x in rain_grad])
         if a.glacier_snow_factor:
             w.writerow(["frozenPrecipMultip_glacier"] + [f"{glacier_factor[j]:.4f}" for j in range(nh)])
         if staked.any():
