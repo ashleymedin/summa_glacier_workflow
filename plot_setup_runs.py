@@ -30,7 +30,7 @@ WORKFLOW = os.path.dirname(os.path.abspath(__file__))
 OBS = {"gulkana": ("data/domain_Gulkana/observations/calibration", "USGS_15478040_daily_flow.nc"),
        "wolverine": ("data/domain_Wolverine/observations/calibration", "USGS_15236900_daily_flow.nc")}
 TEMP = {"gulkana": "USGS_15478040_daily_temperature.nc", "wolverine": "USGS_15236900_daily_temperature.nc"}
-TEMP_COLORS = ["#7f7f7f", "#c0392b", "#9b59b6", "#16a085"]
+TEMP_COLORS = ["#7f7f7f", "#c0392b", "#9b59b6", "#16a085"]  # the second spec, red, is the preferred setup
 TEMP_HELD = "2019-10-01"  # the stream cases calibrate WY2006-2019 and hold out WY2020-2026
 COLORS = ["#1b6ca8", "#e07b39", "#3a923a", "#9b59b6"]
 START, HELD, END = "2005-10-01", "2015-10-01", "2026-09-30"  # run, held-out and end dates
@@ -214,7 +214,8 @@ def main():
         if to.max() > 200:
             to = to - 273.15
         span = (to.index.min() - pd.Timedelta(days=10), to.index.max() + pd.Timedelta(days=10))
-        ax[4].plot(to.index, to.values, ".", color="k", ms=2.5, label="USGS gauge")
+        tl = to.resample("D").mean()  # a missing day breaks the line
+        ax[4].plot(tl.index, tl.values, color="k", lw=1.1, label="USGS gauge", zorder=5)
         for (case, rerun, suffix, label), c in zip(temps, TEMP_COLORS):
             t = reach_temperature(case, rerun, suffix)
             e = (t.reindex(to.index) - to).dropna()
@@ -222,7 +223,7 @@ def main():
             score = f"RMSE {cal:.2f} / {hold:.2f} K" if len(e[e.index >= TEMP_HELD]) else f"RMSE {cal:.2f} K"
             t = t[span[0]:span[1]]
             t = t.where(t.index.month.isin(to.index.month.unique()))  # only the months the gauge records
-            ax[4].plot(t.index, t.values, color=c, lw=0.8, label=f"{label}: {score}", zorder=3)
+            ax[4].plot(t.index, t.values, color=c, lw=0.9, label=f"{label}: {score}", zorder=4 if c == TEMP_COLORS[1] else 3)
         ax[4].set_xlim(*span)
         ax[4].set_ylabel("Water temperature (°C)")
         ax[4].legend(fontsize=8, loc="upper left", ncol=2)
