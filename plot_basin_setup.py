@@ -220,11 +220,11 @@ def panel(ax, config, a, setup, keep_out, letter):
         for lon, lat, fitted in used_stakes(source, c, name):  # white: winter balance fitted by the forcing correction; grey: glacier-wide balance only
             px, py = gpd.GeoSeries([Point(lon, lat)], crs=4326).to_crs(crs).iloc[0].coords[0]
             ax.plot(px, py, marker="o", ms=4.5, mfc="white" if fitted else "#555555", mec="black", mew=1.0, ls="none", zorder=15)
-    if a.stations:  # the firn cores, which set the firn viscosity of both setups, under the stake they were drilled at
+    if a.stations and setup == "added":  # the firn cores, which set the firn viscosity of both setups, under the stake they were drilled at
         for lon, lat in core_sites(source, name):
             px, py = gpd.GeoSeries([Point(lon, lat)], crs=4326).to_crs(crs).iloc[0].coords[0]
             ax.plot(px, py, marker="h", ms=10, mfc=ORANGE, mec="black", mew=1.0, ls="none", zorder=13)
-    if a.stations:  # the on-ice station of Wilson et al. (2026), which sets the glacier wind and cooling of both setups
+    if a.stations and setup == "added":  # the on-ice station of Wilson et al. (2026), which sets the glacier wind and cooling of both setups
         for site in on_ice_sites(source):
             px, py = gpd.GeoSeries([Point(site["lon"], site["lat"])], crs=4326).to_crs(crs).iloc[0].coords[0]
             ax.plot(px, py, marker="D", ms=7, mfc=SKY, mec="black", mew=1.0, ls="none", zorder=14)
