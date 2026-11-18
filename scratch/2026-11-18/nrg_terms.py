@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Glacier surface energy balance of each stake summer in a rerun written with the energy terms (queue_nrg.sh), and
+"""Glacier surface energy balance (day-file dims time, hru, dom) of each stake summer in a rerun written with the energy terms (queue_nrg.sh), and
 how each term rises with the summer's positive degree-days; then the summer-balance sensitivity of each rerun.
 
     nrg_terms.py wolverine_added:990:472_nrg,472_cool06,472_ice065 gulkana_added:1480:468_nrg
@@ -57,17 +57,16 @@ for spec in sys.argv[1:]:
         with nc.Dataset(f) as d:
             t = pd.to_datetime(nc.num2date(d["time"][:], d["time"].units, only_use_cftime_datetimes=False,
                                            only_use_python_datetimes=True))
-            glac = np.ma.filled(d["domType"][:].astype(int), -1) == 2
+            glac = np.ma.filled(d["domType"][:].astype(int), -1) == 2  # (hru, dom)
             area = np.where(glac, np.ma.filled(d["DOMarea_mean"][0].astype(float), 0), 0)
-            nh = glac.any(axis=0).sum()
-            for h in range(glac.shape[1]):
-                if not glac[:, h].any():
+            for h in range(glac.shape[0]):
+                if not glac[h].any():
                     continue
                 rows = {}
                 for v in TERMS + ["scalarSnowAlbedo", "scalarSWE"]:
-                    x = np.ma.filled(d[v][:].astype(float), np.nan)
+                    x = np.ma.filled(d[v + "_mean"][:].astype(float), np.nan)[:, h, :]
                     x = np.where(np.abs(x) > 9000, np.nan, x)
-                    rows[v] = pd.Series(np.nansum(x[:, :, h] * area[:, h], axis=1) / area[:, h].sum(), index=t)
+                    rows[v] = pd.Series((x * area[h]).sum(axis=1) / area[h].sum(), index=t)
                 tab = {}
                 for a, b in ss:
                     w = slice(a.normalize(), b.normalize())
