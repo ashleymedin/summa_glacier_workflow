@@ -104,7 +104,7 @@ empty domain slot; a case's `stream:` and `wetland:` keys in `cases.yaml` run bo
    temperature, humidity and wind at model level 137 and the surface pressure, shortwave, longwave and
    precipitation rates, the fields of the 2008–2022 record. `remap_forcing.py` takes every month to the HRUs
    by overlap area and lapses air temperature at 6.5 K km⁻¹ from the cells' elevation to the HRU's
-   (`forcing/SUMMA_input`); it reproduces SYMFLUENCE's Gulkana forcing to float precision.
+   (`forcing/SUMMA_input`); it reproduces SYMFLUENCE's Gulkana forcing to float precision. The general domains scale the wind by month to CHELSA with one basin-wide ratio (`wind_climatology_basin`).
 6. **forcing.** The station correction:
    - air temperature by an offset per HRU, month and wet or dry hour;
    - humidity by a ratio on the same split;
@@ -113,7 +113,7 @@ empty domain slot; a case's `stream:` and `wetland:` keys in `cases.yaml` run bo
    - precipitation (`gauge_rain`) by the undercatch-corrected gauges' monthly ratio to the forcing: at
      Gulkana the 1480 and 1725 m gauges interpolated in elevation, about 1.15 in June and 1.5–3 in
      July–September, where ERA5 has half the gauged rain; at Wolverine the single 990 m gauge on every HRU,
-     0.36–0.69, where ERA5 has about twice the gauged precipitation;
+     0.36–0.69, where ERA5 has about twice the gauged precipitation; above the highest gauge, rain (`rain_grad`) rises with the stakes' `precipElevGrad`;
    - snowfall on the glacier domains (`glacier_snow_factor`) by the stakes' winter balances over that
      gauge-scaled snowfall, written to `corrections.csv` as `frozenPrecipMultip_glacier` (1 on an HRU
      without stakes), which `build_cases.py` puts in the case's `trialParams.nc`, with the stakes'
