@@ -68,7 +68,7 @@ def compare(case, run):
     print(g.unstack("period").to_string())
 
 
-for spec in sys.argv[1:]:
+for spec in sys.argv[1:] if __name__ == "__main__" else []:
     case, runs = spec.split(":")
     for run in runs.split(","):
         compare(case, run)
