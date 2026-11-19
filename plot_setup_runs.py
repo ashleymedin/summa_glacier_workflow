@@ -13,7 +13,8 @@ Each trial is the output of runs/rerun_trials.py --aligned, with and without --c
 score and every simulated balance is the calibration driver's own (its evaluation group in the timestep file). Rows:
 (a) daily discharge, with each trial's KGE; (b) its mean annual cycle on gauged days, each trial's glacier ice melt
 shaded; (c) the seasonal glacier-wide balances the driver scored against the USGS stakes; (d) the annual balances it
-scored against the WGMS annual mass-change estimates. Scores are calibration / held out.
+scored against the WGMS annual mass-change estimates. Scores are calibration / held out, the calibration score in
+parentheses where that target was not in the case's calibration (cases.yaml targets).
 """
 import glob
 import os
@@ -25,6 +26,7 @@ import matplotlib.pyplot as plt
 import netCDF4 as nc
 import numpy as np
 import pandas as pd
+import yaml
 
 WORKFLOW = os.path.dirname(os.path.abspath(__file__))
 OBS = {"gulkana": ("data/domain_Gulkana/observations/calibration", "USGS_15478040_daily_flow.nc"),
@@ -131,7 +133,13 @@ def split(df, score):
     return score(df[df.index < HELD]), score(df[df.index >= HELD])
 
 
-def bars(ax, sims, target, obs_label, title, seasonal=False):
+def targets(case):
+    """The targets a case calibrates on (cases.yaml)."""
+    spec = yaml.safe_load(open(os.path.join(WORKFLOW, "cases.yaml")))[case]
+    return spec.get("targets", ["discharge", "mass_balance", "stream_temperature"])
+
+
+def bars(ax, sims, target, obs_label, title, seasonal=False, cases=None):
     """Grouped bars by water year, observed black and each trial beside it. Every observation is drawn, a trial's bar
     only where the driver scored it. Seasonal: winter solid, summer hatched over it (a summer gain stays visible), and
     the observed net of a year with both seasons marked, to compare with the annual row."""
@@ -152,7 +160,8 @@ def bars(ax, sims, target, obs_label, title, seasonal=False):
     for k, ((label, _, ev), c) in enumerate(zip(sims, COLORS), start=1):
         e = ev[target]
         cal, hold = split(e, rmse)
-        draw(None, e.sim, k, c, f"{label}: RMSE {cal:.0f} / {hold:.0f} mm")
+        cal = f"{cal:.0f}" if cases is None or target in targets(cases[k - 1]) else f"({cal:.0f})"
+        draw(None, e.sim, k, c, f"{label}: RMSE {cal} / {hold:.0f} mm")
     if seasonal:
         n = o.groupby(wy(o.index)).agg(["sum", "count"])
         n = n[n["count"] == 2]["sum"]
@@ -206,9 +215,9 @@ def main():
 
     bars(ax[2], sims, "mass_balance", "USGS stakes",
          "(c) Seasonal balances by water year, winter solid and summer hatched (RMSE calibration / held out)",
-         seasonal=True)
+         seasonal=True, cases=[x[0] for x in specs])
     bars(ax[3], sims, "wgms_amce", "WGMS estimate",
-         "(d) Annual balances by water year (RMSE calibration / held out)")
+         "(d) Annual balances by water year (RMSE calibration / held out)", cases=[x[0] for x in specs])
     if temps:
         to = series(os.path.join(WORKFLOW, folder, TEMP[basin]), "t_obs").dropna()
         if to.max() > 200:
