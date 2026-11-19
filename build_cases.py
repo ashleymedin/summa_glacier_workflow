@@ -116,7 +116,8 @@ def set_param_line(params, name, value, lower, upper):
     lines = [l for l in open(params) if l.split("|")[0].strip() != name]
     if lines and not lines[-1].endswith("\n"):
         lines[-1] += "\n"
-    lines.append(f"{name:<26}| {value:12.6f} | {lower:12.4f} | {upper:12.4f}\n")
+    num = lambda x, d: f"{x:12.{d}f}" if abs(x) < 1e6 else f"{x:12.4e}"  # noqa: E731  SUMMA's reader takes no 20-digit fields
+    lines.append(f"{name:<26}| {num(value, 6)} | {num(lower, 4)} | {num(upper, 4)}\n")
     open(params, "w").writelines(lines)
 
 
