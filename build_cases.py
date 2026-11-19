@@ -96,6 +96,10 @@ def csv_row(path, key):
     return None
 
 
+# keys of cases.yaml a stream case takes from its parent when it lacks them
+INHERITED = ("upland_soil", "air_cooling", "firn_viscosity")
+
+
 def inherit_params(inputs, parent):
     """Every parameter line of the parent case's localParamInfo.txt and basinParamInfo.txt in place of the case's own;
     the case's lines the parent lacks (stream, wetland, reach) stay."""
@@ -634,7 +638,11 @@ def main():
     cases_dir = os.path.dirname(os.path.abspath(a.cases))
     for name in a.names or cases:
         if "parent" in cases[name]:
-            cases[name]["parent_dest"] = cases[cases[name]["parent"]]["dest"]
+            parent = cases[cases[name]["parent"]]
+            cases[name]["parent_dest"] = parent["dest"]
+            for key in INHERITED:  # the parent's soil and glacier factors, unless the stream case sets its own
+                if key in parent:
+                    cases[name].setdefault(key, parent[key])
         build(name, cases[name], cases_dir)
 
 

@@ -58,8 +58,10 @@ DOMAIN = [p for p in PAPER1 if p not in ("k_soil", "theta_sat", "vGn_n", "k_macr
 DOMAIN_CHAIN = ["theta_res@upland", "critSoilWilting@upland", "critSoilTranspire@upland", "fieldCapacity@upland",
                 "theta_sat@upland"]
 
-# stream: the domain search with the wetland's outflow time constant and its mean depth filled to the outlet; its area is the imagery's
-STREAM = DOMAIN + ["wetlandStorageK", "wetlandMinDepth"]
+# stream: the domain search with the wetland's outflow time constant, its mean depth filled to the outlet, its sheltering from the
+# wind and the reach width; its area is the imagery's. --pin-trial holds the rest at a glacier calibration's trial
+STREAM_ONLY = ["wetlandStorageK", "wetlandMinDepth", "wetlandWindFactor", "streamWidthMultip"]
+STREAM = DOMAIN + STREAM_ONLY
 
 SEARCHES = {
     "paper1": {"params": PAPER1, "logs": ["k_soil", "aquiferBaseflowRate", "k_macropore"],
@@ -75,7 +77,11 @@ SEARCHES = {
                           "frozenPrecipMultip@upland": (0.2, 3.0),       # ERA5 with CHELSA is 0.6 of the gauges at Gulkana, up to twice them at Wolverine
                           "frozenPrecipMultip@glacier": (0.2, 3.0)}},  # with blown and avalanched snow, Kneib et al. (2025)
 }
-SEARCHES["stream"] = dict(SEARCHES["domain"], params=STREAM, logs=SEARCHES["domain"]["logs"] + ["wetlandStorageK"])
+SEARCHES["stream"] = dict(SEARCHES["domain"], params=STREAM, logs=SEARCHES["domain"]["logs"] + ["wetlandStorageK"],
+                          bounds=dict(SEARCHES["domain"]["bounds"],
+                                      wetlandStorageK=(600.0, 86400.0),  # s; ten minutes to a day
+                                      wetlandWindFactor=(0.5, 1.0),      # sheltering by moraine and valley walls only takes wind away
+                                      streamWidthMultip=(0.5, 2.0)))     # spread of a width from drainage area (mizuRoute wscale)
 
 # fixed on the station-corrected cases, where the stakes set the glacier domains' snowfall through frozenPrecipMultip in
 # trialParams.nc (build_cases.set_glacier_snowfall); raw ERA5 searches it. The upland snowfall is searched on both, as the
@@ -91,9 +97,14 @@ RAW_MULTIPLIERS = ["frozenPrecipMultip@glacier"]
 
 
 def case_spec(case):
-    """A run's entry in cases.yaml."""
+    """A run's entry in cases.yaml, with the keys a stream case inherits from its parent (build_cases.INHERITED)."""
     with open(os.path.join(GLACIER, "cases.yaml")) as f:
-        return yaml.safe_load(f)[case]
+        cases = yaml.safe_load(f)
+    spec = cases[case]
+    for key in ("upland_soil", "air_cooling", "firn_viscosity"):
+        if "parent" in spec and key in cases[spec["parent"]]:
+            spec.setdefault(key, cases[spec["parent"]][key])
+    return spec
 
 
 def periods(case):
@@ -119,6 +130,8 @@ def search_for(case, name):
         types = np.asarray(d["domType"][:])
     if not np.any(types == 4):
         search["params"] = [q for q in search["params"] if not q.endswith("@glacDbr")]
+    if not os.path.exists(os.path.join(HERE, case, "topology.nc")):  # no reach
+        search["params"] = [q for q in search["params"] if q != "streamWidthMultip"]
     if not np.any(types == 5):
         search["params"] = [q for q in search["params"] if not q.startswith("wetland")]
         search["logs"] = [q for q in search["logs"] if not q.startswith("wetland")]
@@ -436,6 +449,9 @@ def main():
                         "(domain with the wetland's two parameters, scored on the water temperature too)")
     p.add_argument("--name", default="calibration",
                    help="folder of the calibration in <case>; its evaluation is <name>_evaluation")
+    p.add_argument("--pin-trial", metavar="NAME:SAMPLE",
+                   help="calibrate: hold every searched parameter but the stream ones (STREAM_ONLY) at that trial of "
+                        "<case>/<NAME>, e.g. calibration_5b:412")
     a = p.parse_args()
     run_dir = os.path.join(HERE, a.case)
     settings = os.path.join(run_dir, "summa_inputs")
@@ -443,9 +459,20 @@ def main():
 
     if a.mode == "calibrate":
         work = os.path.join(run_dir, a.name)
+        search = search_for(a.case, a.search)
+        pinned = None
+        if a.pin_trial:
+            name, sample = a.pin_trial.rsplit(":", 1)
+            with nc4.Dataset(calibration_file(os.path.join(run_dir, name))) as d:
+                pinned = {n: float(d[n][int(sample) - 1]) for n in searched_names(search)
+                          if n in d.variables and n not in STREAM_ONLY}
+            free = [n for n in searched_names(search) if n not in pinned]
+            if not set(free) <= set(STREAM_ONLY):
+                raise SystemExit(f"not in {name}, so not pinned: {', '.join(sorted(set(free) - set(STREAM_ONLY)))}")
+            print(f"pinned {len(pinned)} parameters at {a.pin_trial}; searching {', '.join(free)}", flush=True)
         config = config_text(a.case, run_dir, settings, work, cal0, cal1, cal0, cal1,
                              "nsga2", a.population * a.generations, a.population, temperature=a.search == "stream",
-                             search=search_for(a.case, a.search))
+                             search=search, pinned=pinned)
         run_driver(work, config, settings, a.ranks)
         print(f"calibration written to {calibration_file(work)}")
         return
