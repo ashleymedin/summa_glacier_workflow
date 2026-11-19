@@ -19,7 +19,7 @@ data:
   debris_thickness: data/external/Debris_thick
   ice_thickness: data/external/Thickness_data
 
-small_meltout: {dems: data/external/GlacierDEM/ArcticDEM_Wolverine_series, glaciers: [RGI60-01.09162], slowed: {early: 1.0, late: 0.5, split: 2018}}   # also ice whose strips stopped lowering after 2018 (Millan is too thick at the tongue)
+small_meltout: {dems: data/external/GlacierDEM/ArcticDEM_Wolverine_series, glaciers: [RGI60-01.09162], slowed: {early: 1.0, late: 0.5, split: 2018, below: 0.25}}   # also ice on the lowest quarter whose strips stopped lowering after 2018 (Millan is too thick at the tongue)
 glacier_dem: {dems: data/external/Copernicus_GLO30/*.tif, date: 2012/07/01, dhdt: data/external/Hugonnet/01_02_rgi60_2000-01-01_2020-01-01/dhdt/*.tif}  # TanDEM-X 2011-14; glacier cells off the surveys, carried to cold_start at the 2000-19 rates
 
 hru_bands: [950, 1315]                          # elevation band edges, m, of the HRUs (make_hrus.py)
