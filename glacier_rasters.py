@@ -30,8 +30,10 @@ at least its highest cells as accumulation. On the usgs_outline glacier, start-o
 take the nearest type. Debris is mapped from one image of about 2010, after the start, so with start_debris_scenes
 (late-summer imagery classes from check_glacier_imagery.py, near the start) a mapped debris cell where most of
 the scenes' clear pixels are ice starts clean, and a clean ablation cell inside its glacier where most are not
-starts as debris; added debris takes the nearest kept thickness. With stagnant_debris, a debris cell whose ArcticDEM strips (its dems) have lowered by under rate (0.5 m yr-1) since since
-(2010) is moraine, not glacier, and leaves the outline: debris-covered ice keeps lowering, ice-cored moraine barely does.
+starts as debris; added debris takes the nearest kept thickness. With stagnant_debris, a debris cell whose ArcticDEM strips (its dems) have lowered
+over their years by no more than the ice-free ground within 1.5 km of the glaciers (within two robust standard deviations of its median
+trend) is moraine, not glacier, and leaves the outline:
+debris-covered ice keeps lowering, ice-cored moraine barely does.
 Debris thickness is Rounce et al. (2021), nearest neighbour, with
 thicknesses at or below --min-debris (0.04 m) raised to it (Herreid 2021; Rounce et al. 2018). Glacier
 thickness is Millan et al. (2022), bilinear over his cells, zero off the outlines and filled from the nearest
@@ -636,11 +638,18 @@ def main():
     if c.get("stagnant_debris"):  # debris cells whose surface does not lower are moraine, not glacier
         sd = c["stagnant_debris"]
         years, heights = strip_heights(dem, rgi_id > 0, src, sorted(glob.glob(os.path.join(HERE, sd["dems"], "*.tif"))))
-        trend = height_trend(years, heights, sd.get("since", 2010.0))
-        drop = (dtype == DEBRIS_ABLATION) & np.isfinite(trend) & (trend > -sd.get("rate", 0.5))
+        trend = height_trend(years, heights, years.min())
         dx, dy = cell_size(src, dem.shape)
-        print(f"stagnant debris: {drop.sum()} cells ({drop.sum() * dx * dy / 1e6:.2f} km2) lower by under {sd.get('rate', 0.5)} m yr-1 "
-              f"since {sd.get('since', 2010.0):.0f} in {len(years)} strips; left off the glacier")
+        ground = (rgi_id == 0) & (distance_transform_edt(rgi_id == 0, sampling=(dy, dx)) <= 1500.0) & np.isfinite(trend)
+        mid = np.median(trend[ground])
+        spread = 1.4826 * np.median(np.abs(trend[ground] - mid))  # robust standard deviation of the ice-free ground's trends
+        rate = -(mid - 2 * spread)  # lowering not significant (2 sd) against the ground
+        drop = (dtype == DEBRIS_ABLATION) & np.isfinite(trend) & (trend > -rate)
+        deb = (dtype == DEBRIS_ABLATION) & np.isfinite(trend)
+        print(f"stagnant debris: ground of {ground.sum()} cells median {mid:.2f}, sd {spread:.2f}, 5th percentile "
+              f"{np.percentile(trend[ground], 5):.2f} m yr-1; debris median {np.median(trend[deb]):.2f} m yr-1")
+        print(f"stagnant debris: {drop.sum()} cells ({drop.sum() * dx * dy / 1e6:.2f} km2) lower by under {rate:.2f} m yr-1 "
+              f"in {len(years)} strips {years.min():.0f}-{years.max():.0f}; left off the glacier")
         rgi_id[drop] = 0
         dtype[drop] = UPLAND
     debris0 &= dtype == DEBRIS_ABLATION

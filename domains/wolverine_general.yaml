@@ -30,7 +30,7 @@ precip_climatology: data/external/CHELSA/CHELSA_bio12_1981-2010_V.2.1_Wolverine.
 wind_climatology: data/external/CHELSA/CHELSA_sfcWind_1981-2010_V.2.1_Wolverine.tif   # by month, each HRU's raw wind scaled to CHELSA's mean over it (acquire_climatology.py)
 wind_climatology_basin: true                     # one basin-wide ratio on every HRU, as the stations' forcing has one wind
 start_debris_scenes: [../domain_Wolverine/observations/imagery/imagery_landsat_2004-08-29.tif, ../domain_Wolverine/observations/imagery/imagery_landsat_2005-08-08.tif]  # imagery classes near the start; debris mapped ~2010 that they show as ice starts clean
-stagnant_debris: {dems: data/external/GlacierDEM/ArcticDEM_Wolverine_series, rate: 0.5, since: 2010}   # debris cells lowering under 0.5 m/yr in the strips since 2010 are moraine, not glacier
+stagnant_debris: {dems: data/external/GlacierDEM/ArcticDEM_Wolverine_series}   # debris cells lowering no faster than the ice-free ground in the strips are moraine, not glacier
 cold_start: 2004-10
 soil_offset: 1.5
 ice_temp: -1.0
