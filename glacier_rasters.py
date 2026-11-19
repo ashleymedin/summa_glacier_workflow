@@ -20,10 +20,7 @@ survey of that glacier, the bed under the ice lost between the two outlines is t
 after it (acquire_arcticdem.py, each levelled to the DEM on the ground around the glacier), and that change of
 the bed is carried harmonically over the glacier within reach (250 m) of them, to nothing at the ice-free ground.
 Glaciers with no survey outline take the same correction from a small_meltout series of strips, for the glaciers it lists (the ones the model holds): where the median of the strips since
-recent (2019) lies within near (5 m) of the bed and the height has changed under stable (0.3 m yr-1) since 2014; with
-slowed, also where the strips lowered faster than its early rate (1 m yr-1) before its split year (2018) and slower than its late
-rate (0.5 m yr-1) after, as ice does once it has gone, whatever the thickness map says, on its glacier's lowest part (below
-its below quantile of height, 0.5) and reaching the ice-free ground.
+recent (2019) lies within near (5 m) of the bed and the height has changed under stable (0.3 m yr-1) since 2014.
 
 Glacier outlines are RGI 6.0, replaced by the Herreid and Pellicciotti (2020) outline where it has one, and by a
 USGS survey outline (McNeil et al. 2019, doi:10.5066/P9R8BP3K) where the YAML's usgs_outline names one. Their
@@ -61,7 +58,7 @@ from rasterio.merge import merge
 from rasterio.transform import from_bounds
 from rasterio.warp import Resampling, calculate_default_transform, reproject
 from scipy.interpolate import griddata
-from scipy.ndimage import binary_dilation, binary_erosion, distance_transform_edt, label
+from scipy.ndimage import binary_erosion, distance_transform_edt
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import spsolve
 from shapely.affinity import rotate
@@ -419,7 +416,7 @@ def surface_and_bed(c, dem, glacier, grid, ice, outlines, surveys, start):
             held = outlines[outlines["RGIId"].isin(sm["glaciers"])].to_crs(grid.crs).geometry
             other = other & geometry_mask(list(held), transform=grid.transform, invert=True, out_shape=dem.shape)
         bed = series_melt_out_bed(dem, surface, bed, other, grid, sorted(glob.glob(os.path.join(HERE, sm["dems"], "*.tif"))),
-                                  every=glacier, **{k: v for k, v in sm.items() if k not in ("dems", "glaciers")})
+                                  **{k: v for k, v in sm.items() if k not in ("dems", "glaciers")})
     if ref:  # ice-free in the reference year: the bed is its surface (after melt_out_bed, which tapers Millan inward)
         bed = np.where(own & ~in_ref & np.isfinite(reference), reference, bed)
     dx, dy = cell_size(grid, dem.shape)
@@ -508,16 +505,14 @@ def height_trend(years, heights, since=2014.0, least=4):
 
 
 def series_melt_out_bed(dem, surface, bed, glacier, src, paths, near=5.0, stable=0.3, since=2014.0, recent=2019.0,
-                        reach=250.0, buffer=1500.0, slowed=None, every=None):
+                        reach=250.0, buffer=1500.0):
     """The bed where the ice of the glaciers in the mask has gone, from a series of ArcticDEM strips (acquire_arcticdem.py
     --series) when no outline says so: a cell has melted out where the median of its strips from recent (decimal year) on lies
     within near (m) of the bed, above or below, and its height has changed by under stable (m yr-1) since since. Each strip is levelled
-    to the DEM by their median difference on the ground (off every, all glaciers, else the mask) within buffer (m) of the glaciers. The bed there is the
+    to the DEM by their median difference on the ground (off all glaciers) within buffer (m) of the glaciers. The bed there is the
     strips' median, held at or below the surface, and its change is carried harmonically over the glaciers within reach (m)
-    of those cells, to nothing beyond. With slowed ({early, late, split}, m yr-1 and decimal year), a cell has also melted out
-    where its strips lowered faster than early from 2011 to split and slower than late from split on, below the below quantile
-    (0.5) of its glacier's surface (a connected part of the mask), in a patch of such cells reaching the ice-free ground."""
-    years, heights = strip_heights(dem, glacier if every is None else every, src, paths, buffer)
+    of those cells, to nothing beyond."""
+    years, heights = strip_heights(dem, glacier, src, paths, buffer)
     if not len(years):
         print("small glaciers: no strip covers them")
         return bed
@@ -526,20 +521,6 @@ def series_melt_out_bed(dem, surface, bed, glacier, src, paths, near=5.0, stable
         after = np.nanmedian(heights[use], axis=0) if use.any() else np.full(dem.shape, np.nan)
     slope = height_trend(years, heights, since)
     known = glacier & np.isfinite(after) & np.isfinite(slope) & (np.abs(after - bed) <= near) & (np.abs(slope) < stable)
-    if slowed:
-        split = slowed.get("split", 2018.0)
-        before = height_trend(years[years < split], heights[years < split], 2011.0, 3)
-        since_split = height_trend(years, heights, split, 3)
-        gone = glacier & np.isfinite(after) & (before < -slowed.get("early", 1.0)) & (since_split > -slowed.get("late", 0.5))
-        parts, n = label(glacier)
-        q = slowed.get("below", 0.5)
-        low = np.array([np.inf] + [np.quantile(surface[parts == i], q) for i in range(1, n + 1)])
-        gone &= surface < low[parts]  # the lower glacier, where the inversion is least reliable
-        patches, _ = label(gone)
-        edge = np.unique(patches[gone & binary_dilation(~(glacier if every is None else every))])
-        gone = np.isin(patches, edge[edge > 0])
-        print(f"small glaciers: {(gone & ~known).sum()} more cells whose lowering stopped after {split:.0f}")
-        known |= gone
     dx, dy = cell_size(src, dem.shape)
     close = distance_transform_edt(~known, sampling=(dy, dx)) <= reach
     change = harmonic_fill(np.where(known, np.minimum(after, surface) - bed, 0.0), known, glacier & close)
