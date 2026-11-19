@@ -8,7 +8,7 @@ export OMPI_MCA_mpi_yield_when_idle=1
 for c in gulkana_general:440 wolverine_general:465; do
   case=${c%%:*}; s=${c##*:}
   ( $PY rerun_trials.py $case calibration_1119r4 $s --ranks 2 --label slowed > $L/screen_${case}_slowed.log 2>&1
-    $PY ../compare_glacier_change.py ../domains/$case.yaml $case/calibration_1119r4_rerun/sample_${s}_slowed > $L/area_${case}_slowed.log 2>&1 ) &
+    true ) &
   $PY rerun_trials.py $case calibration_1119r4 $s --targets discharge,wgms_amce --aligned --ranks 2 --label slowed_aligned > $L/screen_${case}_slowed_aligned.log 2>&1 &
 done
 wait
