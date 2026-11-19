@@ -446,7 +446,9 @@ def build(name, spec, cases_dir):
     inputs = os.path.join(os.path.abspath(os.path.join(cases_dir, spec["dest"])), "summa_inputs")
     if "decisions" in spec:
         set_decisions(inputs, spec["decisions"])
-    subprocess.run([sys.executable, os.path.join(HERE, "domain_soil_params.py"), inputs], check=True)
+    soil = spec.get("upland_soil")
+    subprocess.run([sys.executable, os.path.join(HERE, "domain_soil_params.py"), inputs]
+                   + (["--upland", soil["class"], str(soil["sand"])] if soil else []), check=True)
     if "delta" in spec:
         wetland_trial_params(inputs, spec["wetland"], spec["delta"])
 

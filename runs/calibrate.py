@@ -71,9 +71,9 @@ SEARCHES = {
                           "frac_sand@upland": (0.0, 0.9),       # up to what the fixed clay (0.1) leaves
                           "frac_sand@glacDbr": (0.0, 0.9),
                           "albedoDecayRate": (0.2e6, 5.0e6),    # s; summer snow at Gulkana Site B decays in 2-6 days (Wilson et al. 2026)
-                          "frozenPrecipMultip": (0.2, 5.0),
-                          "frozenPrecipMultip@upland": (0.2, 5.0),       # ERA5 with CHELSA is 0.6 of the gauges at Gulkana, up to twice them at Wolverine
-                          "frozenPrecipMultip@glacier": (0.2, 5.0)}},  # with blown and avalanched snow, Kneib et al. (2025)
+                          "frozenPrecipMultip": (0.2, 3.0),
+                          "frozenPrecipMultip@upland": (0.2, 3.0),       # ERA5 with CHELSA is 0.6 of the gauges at Gulkana, up to twice them at Wolverine
+                          "frozenPrecipMultip@glacier": (0.2, 3.0)}},  # with blown and avalanched snow, Kneib et al. (2025)
 }
 SEARCHES["stream"] = dict(SEARCHES["domain"], params=STREAM, logs=SEARCHES["domain"]["logs"] + ["wetlandStorageK"])
 
@@ -81,6 +81,9 @@ SEARCHES["stream"] = dict(SEARCHES["domain"], params=STREAM, logs=SEARCHES["doma
 # trialParams.nc (build_cases.set_glacier_snowfall); raw ERA5 searches it. The upland snowfall is searched on both, as the
 # gauges miss the snow the wind takes off their orifice and drifts onto the upland
 STATION_FIXED = ["frozenPrecipMultip", "frozenPrecipMultip@glacier"]
+
+# fixed on a case with upland_soil in cases.yaml, its SoilGrids class (domain_soil_params.py); the macropores stay searched
+UPLAND_SOIL = ["k_soil@upland", "theta_sat@upland", "vGn_n@upland", "frac_sand@upland"] + DOMAIN_CHAIN
 
 # searched on raw ERA5 as multipliers of trialParams.nc's values, the glacier snowfall's elevation shape
 # (build_cases.glacier_snow_shape), so one number scales the snowfall of every glacier domain
@@ -108,6 +111,10 @@ def search_for(case, name):
         search["params"] = [q for q in search["params"] if q not in STATION_FIXED]
     else:
         search["multipliers"] = [q for q in RAW_MULTIPLIERS if q in search["params"]]
+    if case_spec(case).get("upland_soil"):
+        search["params"] = [q for q in search["params"] if q not in UPLAND_SOIL]
+        search["logs"] = [q for q in search["logs"] if q not in UPLAND_SOIL]
+        search["chains"] = [(c, g) for c, g in search["chains"] if not set(c) & set(UPLAND_SOIL)]
     with nc4.Dataset(os.path.join(HERE, case, "summa_inputs", "coldState.nc")) as d:
         types = np.asarray(d["domType"][:])
     if not np.any(types == 4):
