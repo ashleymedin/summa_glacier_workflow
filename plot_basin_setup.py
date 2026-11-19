@@ -97,18 +97,6 @@ def used_stakes(source, c, name):
     return [(float(r.longitude), float(r.latitude), r.site_name in fitted) for r in sites.itertuples() if r.site_name in used]
 
 
-def core_sites(source, name):
-    """The firn-core sites of a glacier with a core in the domain's observations/firn (files NAME_site_firn_date.csv), as (lon, lat)."""
-    folder = os.path.join(source, "observations", "firn")
-    path = os.path.join(folder, "Glacier_Firn_Sites.csv")
-    if not os.path.exists(path):
-        return []
-    t = pd.read_csv(path)
-    t = t[t["Glacier"] == name]
-    return [(float(r.longitude), float(r.latitude)) for r in t.itertuples()
-            if glob.glob(os.path.join(folder, f"{name.upper()}_{str(r.site_name).strip()}_firn_*.csv"))]
-
-
 def on_grid(path, like):
     """A raster resampled (nearest) onto the grid of the open raster `like`."""
     out = np.zeros(like.shape, dtype=np.float64)
@@ -220,10 +208,6 @@ def panel(ax, config, a, setup, keep_out, letter):
         for lon, lat, fitted in used_stakes(source, c, name):  # white: winter balance fitted by the forcing correction; grey: glacier-wide balance only
             px, py = gpd.GeoSeries([Point(lon, lat)], crs=4326).to_crs(crs).iloc[0].coords[0]
             ax.plot(px, py, marker="o", ms=4.5, mfc="white" if fitted else "#555555", mec="black", mew=1.0, ls="none", zorder=15)
-    if a.stations and setup == "added":  # the firn cores, which set the firn viscosity of both setups, under the stake they were drilled at
-        for lon, lat in core_sites(source, name):
-            px, py = gpd.GeoSeries([Point(lon, lat)], crs=4326).to_crs(crs).iloc[0].coords[0]
-            ax.plot(px, py, marker="h", ms=10, mfc=ORANGE, mec="black", mew=1.0, ls="none", zorder=13)
     if a.stations and setup == "added":  # the on-ice station of Wilson et al. (2026), which sets the glacier wind and cooling of both setups
         for site in on_ice_sites(source):
             px, py = gpd.GeoSeries([Point(site["lon"], site["lat"])], crs=4326).to_crs(crs).iloc[0].coords[0]
@@ -326,7 +310,6 @@ def main():
         handles.append(Line2D([], [], marker="o", ls="none", mfc="#555555", mec="black", ms=4.5, label=f"stake below {STAKE_MIN_ELEV:,.0f} m"))
     if a.stations:
         handles.append(Line2D([], [], marker="D", ls="none", mfc=SKY, mec="black", ms=6, label="on-ice weather station"))
-        handles.append(Line2D([], [], marker="h", ls="none", mfc=ORANGE, mec="black", ms=8, label="firn core"))
     if a.reaches:
         handles += [Line2D([], [], color="#08306b", lw=2.8, label="NHD stream, ice front to gauge (dotted: unmapped)"),
                     Line2D([], [], color=RED, lw=7, alpha=0.45, label="model reach, its stream length from the gauge"),

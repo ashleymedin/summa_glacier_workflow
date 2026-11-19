@@ -84,6 +84,11 @@ def drag(grid, fdir, acc, gid, glacier_id, possible, surface):
     """Cells the glacier may advance into by dragging its terminus downstream, none above the terminus surface."""
     acc_glacier, gridyx, shape0, shape1 = terminus_shapes(grid, fdir, acc, gid, glacier_id)
     ext_shape = ((shape0 == 1) & (shape1 == 0)).astype(np.uint8)
+    ncell = int(acc_glacier[acc_glacier > 0].size ** (2. / 3.))
+    if ext_shape.sum() > ncell:  # a tributary joining at the outlet is no terminus: take the glacier cells within 3 cells of the outlet
+        oy, ox = np.unravel_index(np.argmax(acc_glacier), acc_glacier.shape)
+        yy, xx = np.indices(shape0.shape)
+        ext_shape = ((shape0 == 1) & (np.maximum(abs(yy - oy), abs(xx - ox)) <= 3)).astype(np.uint8)
     y, x = np.where(ext_shape == 1)
     for i in range(x.size):  # thicken a terminus one cell thick to two
         if np.sum(ext_shape[y[i] - 1:y[i] + 2, x[i] - 1:x[i] + 2]) <= 4:
@@ -92,7 +97,6 @@ def drag(grid, fdir, acc, gid, glacier_id, possible, surface):
                 if 0 <= ny_ < ext_shape.shape[0] and 0 <= nx_ < ext_shape.shape[1] and shape0[ny_, nx_] == 1:
                     ext_shape[ny_, nx_] = 1
     size = ext_shape.sum()
-    ncell = int(acc_glacier[acc_glacier > 0].size ** (2. / 3.))
     extend = ext_shape
     added = 0
     cellxy = (gridyx[1], gridyx[0])
