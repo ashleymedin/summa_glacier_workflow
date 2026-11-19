@@ -85,10 +85,14 @@ def drag(grid, fdir, acc, gid, glacier_id, possible, surface):
     acc_glacier, gridyx, shape0, shape1 = terminus_shapes(grid, fdir, acc, gid, glacier_id)
     ext_shape = ((shape0 == 1) & (shape1 == 0)).astype(np.uint8)
     ncell = int(acc_glacier[acc_glacier > 0].size ** (2. / 3.))
-    if ext_shape.sum() > ncell:  # a tributary joining at the outlet is no terminus: take the glacier cells within 3 cells of the outlet
+    if ext_shape.sum() > ncell:  # a tributary joining at the outlet is no terminus: the glacier cells nearest the outlet, a quarter of the room
         oy, ox = np.unravel_index(np.argmax(acc_glacier), acc_glacier.shape)
         yy, xx = np.indices(shape0.shape)
-        ext_shape = ((shape0 == 1) & (np.maximum(abs(yy - oy), abs(xx - ox)) <= 3)).astype(np.uint8)
+        reach, near = 1, np.zeros_like(ext_shape)
+        while near.sum() < ncell // 4 and reach < max(shape0.shape):
+            near = ((shape0 == 1) & (np.maximum(abs(yy - oy), abs(xx - ox)) <= reach)).astype(np.uint8)
+            reach += 1
+        ext_shape = near
     y, x = np.where(ext_shape == 1)
     for i in range(x.size):  # thicken a terminus one cell thick to two
         if np.sum(ext_shape[y[i] - 1:y[i] + 2, x[i] - 1:x[i] + 2]) <= 4:

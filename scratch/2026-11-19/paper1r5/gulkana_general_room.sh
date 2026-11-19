@@ -1,5 +1,5 @@
 #!/bin/bash
-# Gulkana general rebuilt from its extension (terminus fallback in glacier_extend.py) before round 5b's general pair starts.
+# Gulkana general rebuilt after its rasters and extension (per-cell moraine test, terminus fallback) before round 5b's general pair starts.
 cd "$(dirname "$0")/../../.."
 PY=~/miniconda3/envs/glacier/bin/python
 L=runs/logs/2026-11-19r5b
