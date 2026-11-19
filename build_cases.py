@@ -46,6 +46,7 @@ import numpy as np
 import yaml
 
 from domain_config import load_config
+from shaw_cooling import shaw_k
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -124,7 +125,7 @@ def set_param_line(params, name, value, lower, upper):
 GLACIER_SNOW_GRAD = 0.002
 
 
-def set_precip_grad(inputs, source, c):
+def set_precip_grad(inputs, source, c, spec):
     """precipElevGrad and tempLapseRate in the case's localParamInfo.txt: the gradient from the station correction's
     corrections.csv (added), else GLACIER_SNOW_GRAD (general), the lapse rate the year's mean of the monthly ones the forcing was
     carried to the HRUs with (corrections.csv, else remap_forcing's remap.csv)."""
@@ -138,10 +139,26 @@ def set_precip_grad(inputs, source, c):
     if lapse is None:
         raise SystemExit(f"no lapse_rate_K_per_km in {source}/corrections.csv or remap.csv; rerun remap_forcing.py")
     set_param_line(params, "tempLapseRate", -np.mean(lapse[:12]) / 1000.0, 0.0, 0.0098)
-    set_glacier_factors(params, not os.path.exists(path))
+    set_glacier_factors(params, not os.path.exists(path), c, spec)
 
 
 GLACIER_DOMAIN_TYPES = (2, 3, 4)  # glacCln1, glacCln2, glacDbr
+
+# firn viscosity (Pa s) of Arthern et al. (2010)'s compaction law for a 1 mm grain radius, the largest of temperate firn:
+# r^2 exp(E_c / R T_frz) / k_c, with k_c = 9.2e-9 and E_c = 60 kJ/mol
+FIRN_VISCOSITY = 1.0e-3 ** 2 * np.exp(60.0e3 / (8.314 * 273.16)) / 9.2e-9
+
+
+def part_cooling(inputs, parts):
+    """glacierTempReduction by HRU in trialParams.nc of a merged domain, Shaw et al.'s k of each part's main_glacier."""
+    k = []
+    for c, folder in parts:
+        with nc4.Dataset(os.path.join(folder, "attributes.nc")) as a:
+            k += [shaw_k(c["main_glacier"])] * len(a.dimensions["hru"])
+    with nc4.Dataset(os.path.join(inputs, "trialParams.nc"), "a") as t:
+        var = t["glacierTempReduction"] if "glacierTempReduction" in t.variables else t.createVariable("glacierTempReduction", "f8", ("hru",))
+        var[:] = np.array(k)
+    print(f"{inputs}/trialParams.nc: glacierTempReduction by HRU", " ".join(f"{x:.3f}" for x in k))
 
 
 def set_glacier_snowfall(inputs, source):
@@ -231,10 +248,14 @@ def air_cooling_station(raw=False):
     raise SystemExit(f"no campaign factor in {path}")
 
 
-def set_glacier_factors(params, raw):
-    """glacierWindFactor and glacierTempReduction in localParamInfo.txt, Site B's against the case's forcing."""
+def set_glacier_factors(params, raw, c, spec):
+    """glacierWindFactor (Site B's against the case's forcing), glacierTempReduction (Shaw et al.'s k of the domain's
+    main_glacier, or Site B's where the case says air_cooling: site_b) and firnViscosity (the case's firn_viscosity, else
+    FIRN_VISCOSITY) in localParamInfo.txt."""
     set_wind_factor(params, wind_exposure_station(raw))
-    set_param_line(params, "glacierTempReduction", air_cooling_station(raw), 0.5, 0.9)
+    k = air_cooling_station(raw) if spec.get("air_cooling") == "site_b" else shaw_k(c["main_glacier"])
+    set_param_line(params, "glacierTempReduction", k, 0.0, 1.0)
+    set_param_line(params, "firnViscosity", spec.get("firn_viscosity", FIRN_VISCOSITY), 1.0e12, 1.0e14)
 
 
 def set_wind_factor(params, value):
@@ -532,7 +553,8 @@ def build_inputs(name, spec, cases_dir):
             write_trial_params(os.path.join(inputs, "trialParams.nc"), os.path.join(inputs, "attributes.nc"))
             if spec["forcing"] == "raw":
                 set_param_line(os.path.join(inputs, "localParamInfo.txt"), "precipElevGrad", GLACIER_SNOW_GRAD, 0.0, 0.005)
-                set_glacier_factors(os.path.join(inputs, "localParamInfo.txt"), True)
+                set_glacier_factors(os.path.join(inputs, "localParamInfo.txt"), True, parts[0][0], spec)
+                part_cooling(inputs, [(c, folder) for c, folder, _, _ in parts])
                 glacier_snow_shape(inputs, [glacier_part_ratios(c, folder) for c, folder, _, _ in parts])
             if all(top for _, _, _, top in parts):
                 merge_netcdf([top for _, _, _, top in parts], os.path.join(dest, "topology.nc"), ("hru", "seg"), topology_shift)
@@ -553,7 +575,7 @@ def build_inputs(name, spec, cases_dir):
         source = forcing_dir_of(c, spec["forcing"])
         files = forcing_files(source, months)
         if "stream" in spec:
-            set_precip_grad(inputs, source, c)
+            set_precip_grad(inputs, source, c, spec)
             built = stream_domain(c, spec, spec["stream"], spec["first_month"], spec["last_month"], tmp, files, source)
             for f in ("attributes.nc", "coldState.nc", "forcingFileList.txt"):
                 shutil.copy(os.path.join(built, "summa_inputs", f), os.path.join(inputs, f))
@@ -580,7 +602,7 @@ def build_inputs(name, spec, cases_dir):
         if "wetland" in spec:
             raise SystemExit(f"{name}: a wetland needs a stream, whose water column it copies")
 
-        set_precip_grad(inputs, source, c)
+        set_precip_grad(inputs, source, c, spec)
         shutil.copy(os.path.join(tmp, "attributes_glac.nc"), os.path.join(inputs, "attributes.nc"))
         shutil.copy(os.path.join(tmp, "coldstate_glac.nc"), os.path.join(inputs, "coldState.nc"))
         fit_trial_params(inputs)  # the template may be a case with another number of HRUs, as with a stream HRU

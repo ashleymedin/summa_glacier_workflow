@@ -8,6 +8,7 @@ pour_point: 63.24027778/-145.4680556            # lat/lon of the gauge
 utm_crs: EPSG:32606
 utm_epsg: 32606
 rgi6_region: 01Alaska
+main_glacier: RGI60-01.00570                    # the glacier its glacier-wide factors (Shaw et al. 2025 k) are taken for
 min_glacier_size_km2: 1
 min_debris_thickness: 0.04
 
