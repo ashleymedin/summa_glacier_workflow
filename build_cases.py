@@ -119,10 +119,9 @@ def set_param_line(params, name, value, lower, upper):
     open(params, "w").writelines(lines)
 
 
-# winter-balance elevation gradient of the snowfall (m-1), the exponential fit of the stake balance over ERA5's snowfall at
-# Wolverine (0.0018) and Gulkana (0.0016); the stakes alone give 0.0018-0.0020 there and at Lemon Creek
-# (scratch/2026-11-17/twin2/snow_ratio_form.py, bw_gradient.py)
-GLACIER_SNOW_GRAD = 0.0017
+# winter-balance elevation gradient of the snowfall (m-1): the median yearly slope of ln(bw) on stake elevation is 0.0018-0.0021
+# on six USGS glaciers of 0.8-290 km2 (scratch/2026-11-19/snow_gradient/bw_gradient_all.py)
+GLACIER_SNOW_GRAD = 0.002
 
 
 def set_precip_grad(inputs, source, c):
