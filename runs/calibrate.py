@@ -77,6 +77,7 @@ SEARCHES = {
                           "frozenPrecipMultip@upland": (0.2, 5.0),       # ERA5 with CHELSA is 0.6 of the gauges at Gulkana, up to twice them at Wolverine
                           "frozenPrecipMultip@glacier": (0.2, 5.0)}},  # with blown and avalanched snow, Kneib et al. (2025)
 }
+SEARCHES["domain_soil"] = dict(SEARCHES["domain"], soil=True)  # the upland soil searched even on a case with a SoilGrids class
 SEARCHES["stream"] = dict(SEARCHES["domain"], params=STREAM, logs=SEARCHES["domain"]["logs"] + ["wetlandStorageK"],
                           bounds=dict(SEARCHES["domain"]["bounds"],
                                       wetlandStorageK=(600.0, 86400.0),  # s; ten minutes to a day
@@ -123,7 +124,7 @@ def search_for(case, name):
         search["params"] = [q for q in search["params"] if q not in STATION_FIXED]
     else:
         search["multipliers"] = [q for q in RAW_MULTIPLIERS if q in search["params"]]
-    if case_spec(case).get("upland_soil"):
+    if case_spec(case).get("upland_soil") and not search.get("soil"):
         search["params"] = [q for q in search["params"] if q not in UPLAND_SOIL]
         search["logs"] = [q for q in search["logs"] if q not in UPLAND_SOIL]
         search["chains"] = [(c, g) for c, g in search["chains"] if not set(c) & set(UPLAND_SOIL)]
