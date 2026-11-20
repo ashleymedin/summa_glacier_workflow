@@ -264,7 +264,9 @@ varname_length = "length"
         e += ['transformation = "log"'] if p in search["logs"] else []
         return f'"{p}" = {{ {", ".join(e)} }}' if e else f'"{p}" = {{}}'
     multipliers = search.get("multipliers", [])
-    params = "\n".join(entry(p) for p in searched_names(search) if p not in multipliers)
+    names = searched_names(search)
+    names += [p for p in (pinned or {}) if p not in names]  # a pinned name@domain the search lacks
+    params = "\n".join(entry(p) for p in names if p not in multipliers)
     scaled = "\n\n[calibration.spatial_multipliers]\n\n" + "\n".join(entry(p) for p in multipliers) + "\n" if multipliers else ""
     lines.append(f'''
 [calibration]

@@ -57,7 +57,7 @@ def main():
     p.add_argument("--set", action="append", default=[], metavar="NAME=VALUE",
                    help="override an unsearched parameter's default, e.g. wallErosionRate=0")
     p.add_argument("--pin", action="append", default=[], metavar="NAME=VALUE",
-                   help="replace a searched parameter's calibrated value, e.g. windExposure=0.77")
+                   help="replace a searched parameter's calibrated value, e.g. windExposure=0.77, or add a name@domain one")
     p.add_argument("--forcing", help="forcing folder to rerun on, default the case's forcing_path.txt")
     p.add_argument("--extra", action="append", default=[], metavar="VAR", help="another daily-mean output variable")
     p.add_argument("--label", help="appended to each folder, sample_<n>_<label>")
@@ -77,7 +77,7 @@ def main():
         values = {s: {n: float(d[n][s - 1]) for n in names} for s in a.samples}
     for kv in a.pin:
         k, v = kv.split("=")
-        if k not in names:
+        if k not in names and "@" not in k:
             raise SystemExit(f"--pin {k}: not searched in {a.name}")
         for s in a.samples:
             values[s][k] = float(v)
