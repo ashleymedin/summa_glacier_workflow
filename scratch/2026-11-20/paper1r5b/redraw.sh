@@ -2,7 +2,7 @@
 # Paper-1 Figs 3-5 (glacier.tex) and Figs 4-6 (glacier_forcing_runs.tex) from the round-5b balanced trials; round-4 copies kept as *.r4.pdf.
 WF=$(cd "$(dirname "$0")/../../.." && pwd)
 PY=~/miniconda3/envs/glacier/bin/python
-R=calibration_rerun
+R=calibration_rerun_1120r5b
 F=~/Research/USask/Writeups/summa_sundials_svn/glacier/figs
 S=~/Research/USask/Writeups/summa_sundials_svn/coldstream/streamtemp/figs
 for f in $F/wolverine_best $F/gulkana_best $F/glacier_end $S/wolverine_imagery $S/gulkana_imagery $S/glacier_area; do
