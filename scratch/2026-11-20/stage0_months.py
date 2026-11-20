@@ -3,7 +3,8 @@
 round-3 trial 405: water-temperature RMSE and mean error by month, the first spring day the lake is above 0.5 degC (against
 Sentinel-2's openings, early to mid June 2017-2026) and the most snow on it before June.
 The *_wetprecip runs are on SUMMA wetland-precip (d1bfe962), where the lake takes its HRU's precipitation; *_wpsnow
-also give the lake the upland's snowfall multiplier (frozenPrecipMultip@wetland)."""
+also give the lake the upland's snowfall multiplier (frozenPrecipMultip@wetland); lake_alb70/85 add a lake ice albedo of
+0.7/0.5 or 0.85/0.65 (albedoFrznWat*@wetland)."""
 import glob
 import os
 import sys
@@ -27,7 +28,9 @@ RUNS = [("r3 405 nolake", "wolverine_stream/calibration_r3_rerun", "nolake"),
         ("5b 465 lake wp", "wolverine_stream/calibration_5b_rerun", "lake_wetprecip"),
         ("5b 465 delta wp", "wolverine_stream_delta/calibration_5b_rerun", "delta_wetprecip"),
         ("5b 465 lake wps", "wolverine_stream/calibration_5b_rerun", "lake_wpsnow"),
-        ("5b 465 delta wps", "wolverine_stream_delta/calibration_5b_rerun", "delta_wpsnow")]
+        ("5b 465 delta wps", "wolverine_stream_delta/calibration_5b_rerun", "delta_wpsnow"),
+        ("5b 465 lake a70", "wolverine_stream/calibration_5b_rerun", "lake_alb70"),
+        ("5b 465 lake a85", "wolverine_stream/calibration_5b_rerun", "lake_alb85")]
 
 
 def lake_snow(folder, label):
