@@ -73,9 +73,9 @@ SEARCHES = {
                           "frac_sand@upland": (0.0, 0.9),       # up to what the fixed clay (0.1) leaves
                           "frac_sand@glacDbr": (0.0, 0.9),
                           "albedoDecayRate": (0.2e6, 5.0e6),    # s; summer snow at Gulkana Site B decays in 2-6 days (Wilson et al. 2026)
-                          "frozenPrecipMultip": (0.2, 3.0),
+                          "frozenPrecipMultip": (0.2, 5.0),
                           "frozenPrecipMultip@upland": (0.2, 5.0),       # ERA5 with CHELSA is 0.6 of the gauges at Gulkana, up to twice them at Wolverine
-                          "frozenPrecipMultip@glacier": (0.2, 3.0)}},  # with blown and avalanched snow, Kneib et al. (2025)
+                          "frozenPrecipMultip@glacier": (0.2, 5.0)}},  # with blown and avalanched snow, Kneib et al. (2025)
 }
 SEARCHES["stream"] = dict(SEARCHES["domain"], params=STREAM, logs=SEARCHES["domain"]["logs"] + ["wetlandStorageK"],
                           bounds=dict(SEARCHES["domain"]["bounds"],
