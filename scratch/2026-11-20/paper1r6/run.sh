@@ -1,5 +1,5 @@
 #!/bin/bash
-# Round 6: round-5b inputs (fixed SoilGrids upland soil) with the upland snowfall multiplier searched over 0.2-5;
+# Round 6: round-5b inputs (fixed SoilGrids upland soil) with the upland and glacier snowfall multipliers searched over 0.2-5;
 # round 5b kept as calibration*_1120r5b. Two cases at a time, 4 ranks each, post_cal.py after each.
 cd "$(dirname "$0")/../../../runs"
 PY=~/miniconda3/envs/glacier/bin/python
