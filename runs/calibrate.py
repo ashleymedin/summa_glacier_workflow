@@ -60,7 +60,7 @@ DOMAIN_CHAIN = ["theta_res@upland", "critSoilWilting@upland", "critSoilTranspire
 
 # stream: the domain search with the wetland's outflow time constant, its mean depth filled to the outlet, its sheltering from the
 # wind and the reach width; its area is the imagery's. --pin-trial holds the rest at a glacier calibration's trial
-STREAM_ONLY = ["wetlandStorageK", "wetlandMinDepth", "wetlandWindFactor", "streamWidthMultip"]
+STREAM_ONLY = ["wetlandStorageK", "wetlandMinDepth", "wetlandWindFactor", "streamWidthMultip", "frozenPrecipMultip@wetland"]
 STREAM = DOMAIN + STREAM_ONLY
 
 SEARCHES = {
@@ -81,7 +81,8 @@ SEARCHES["stream"] = dict(SEARCHES["domain"], params=STREAM, logs=SEARCHES["doma
                           bounds=dict(SEARCHES["domain"]["bounds"],
                                       wetlandStorageK=(600.0, 86400.0),  # s; ten minutes to a day
                                       wetlandWindFactor=(0.5, 1.0),      # sheltering by moraine and valley walls only takes wind away
-                                      streamWidthMultip=(0.5, 2.0)))     # spread of a width from drainage area (mizuRoute wscale)
+                                      streamWidthMultip=(0.5, 2.0),      # spread of a width from drainage area (mizuRoute wscale)
+                                      **{"frozenPrecipMultip@wetland": (0.2, 3.0)}))  # lake and fan snow, with drift off the valley walls
 
 # fixed on the station-corrected cases, where the stakes set the glacier domains' snowfall through frozenPrecipMultip in
 # trialParams.nc (build_cases.set_glacier_snowfall); raw ERA5 searches it. The upland snowfall is searched on both, as the
