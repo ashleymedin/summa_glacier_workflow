@@ -2,7 +2,8 @@
 """Stage 0 of Paper 2: round-5b trial 465 on the Wolverine stream cases, scored as lake_heat.py scores its runs, beside
 round-3 trial 405: water-temperature RMSE and mean error by month, the first spring day the lake is above 0.5 degC (against
 Sentinel-2's openings, early to mid June 2017-2026) and the most snow on it before June.
-The *_wetprecip runs are on SUMMA wetland-precip (d1bfe962), where the lake takes its HRU's precipitation."""
+The *_wetprecip runs are on SUMMA wetland-precip (d1bfe962), where the lake takes its HRU's precipitation; *_wpsnow
+also give the lake the upland's snowfall multiplier (frozenPrecipMultip@wetland)."""
 import glob
 import os
 import sys
@@ -24,7 +25,9 @@ RUNS = [("r3 405 nolake", "wolverine_stream/calibration_r3_rerun", "nolake"),
         ("5b 465 lake", "wolverine_stream/calibration_5b_rerun", "lake"),
         ("5b 465 delta", "wolverine_stream_delta/calibration_5b_rerun", "delta"),
         ("5b 465 lake wp", "wolverine_stream/calibration_5b_rerun", "lake_wetprecip"),
-        ("5b 465 delta wp", "wolverine_stream_delta/calibration_5b_rerun", "delta_wetprecip")]
+        ("5b 465 delta wp", "wolverine_stream_delta/calibration_5b_rerun", "delta_wetprecip"),
+        ("5b 465 lake wps", "wolverine_stream/calibration_5b_rerun", "lake_wpsnow"),
+        ("5b 465 delta wps", "wolverine_stream_delta/calibration_5b_rerun", "delta_wpsnow")]
 
 
 def lake_snow(folder, label):
