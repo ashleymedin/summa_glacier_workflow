@@ -177,7 +177,7 @@ def has_obs(path, var, start, end):
 
 
 def config_text(case, run_dir, settings, work, start, end, score_start, score_end, algorithm, n_samples,
-                population, temperature, search=SEARCHES["paper1"], pinned=None, targets=None):
+                population, temperature, search=SEARCHES["paper1"], pinned=None, targets=None, seed=42):
     """The calibration driver's TOML for one search or one pinned trial; every pinned value is held by equal
     bounds, which override the search's own (pin_settings also pins the plain names in the parameter files).
     Every member of an ordered chain is searched."""
@@ -279,6 +279,7 @@ start_date = "{score_start}"
 end_date   = "{score_end}"
 
 n_samples = {n_samples}
+seed      = {seed}
 
 write_aligned = false
 
@@ -445,6 +446,7 @@ def main():
     p.add_argument("mode", choices=("calibrate", "evaluate"))
     p.add_argument("case", help="run folder, e.g. gulkana_added")
     p.add_argument("--population", type=int, default=32)
+    p.add_argument("--seed", type=int, default=42, help="calibrate: the search's random-number seed")
     p.add_argument("--generations", type=int, default=15)
     p.add_argument("--ranks", type=int, default=9, help="MPI ranks: one dispatcher and the workers")
     p.add_argument("--jobs", type=int, default=1, help="evaluate: front members rerun at once, each on --ranks ranks")
@@ -476,7 +478,7 @@ def main():
             print(f"pinned {len(pinned)} parameters at {a.pin_trial}; searching {', '.join(free)}", flush=True)
         config = config_text(a.case, run_dir, settings, work, cal0, cal1, cal0, cal1,
                              "nsga2", a.population * a.generations, a.population, temperature=a.search == "stream",
-                             search=search, pinned=pinned)
+                             search=search, pinned=pinned, seed=a.seed)
         run_driver(work, config, settings, a.ranks)
         print(f"calibration written to {calibration_file(work)}")
         return
