@@ -4,7 +4,7 @@
     plot_setup_runs.py <basin> <out.pdf> <case>:<name>:<sample>:<label> [...]
 
     ./plot_setup_runs.py wolverine figs/wolverine_best.pdf wolverine_added:calibration:459:added wolverine_general:calibration_rerun_nov11:396:general \
-        temp:wolverine_stream:calibration_added_rerun:459_nolake:"added, no lake"
+        temp:wolverine_stream_delta:stream_b_rerun:b432:"added, lake and delta"
 
 A spec starting with temp: is a rerun of the stream case (case:rerun folder:sample folder suffix:label), whose reach
 temperature at the gauge is drawn in a last row (e) against the gauge's daily water temperature.
