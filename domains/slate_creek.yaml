@@ -22,11 +22,11 @@ data:
   ice_thickness: data/external/Thickness_data
 
 hru_bands: [600, 800]                           # elevation band edges, m, of the HRUs (make_hrus.py)
-basin_within: huc12
-grus:                                           # GRUs (split_grus.py), each its own elevation bands (make_hrus.py)
-  - {name: Myrtle Creek, huc12: "190901010603", to: 3}
+basin_within: huc12                             # clip the basin to the USGS HUC12s draining to the gauge (acquire_nhd.py)
+grus:                                           # GRUs (split_grus.py), each its own elevation bands (make_hrus.py) and reach on its NHD stream (add_stream_grus.py)
+  - {name: Myrtle Creek, huc12: "190901010603", stream: Myrtle Creek, to: 3}
   - {name: upper Slate Creek, huc12: "190901010604", above: [-150.0471, 67.2196], stream: Slate Creek, to: 3}   # above the Myrtle Creek confluence (NHD)
-  - {name: lower Slate Creek, huc12: "190901010604"}                             # clip the basin to the USGS HUC12s draining to the gauge (acquire_nhd.py)
+  - {name: lower Slate Creek, huc12: "190901010604", stream: Slate Creek}                             # the rest, to the gauge
 
 forcing_period: {first: 2004-10, last: 2026-09}
 raw_data: raw_data_ncar                         # the raw ERA5 under forcing/ the forcing is made from: NCAR's (10 m wind)

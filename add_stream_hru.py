@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Give a single-GRU SUMMA domain one reach: a stream HRU and a one-reach mizuRoute topology.
+"""Give a single-GRU SUMMA domain one reach: a stream HRU and a one-reach mizuRoute topology (with --gru, a stream HRU for that
+GRU of a domain of several, its reach carrying the GRU's id, and no topology: add_stream_grus.py writes the network).
 
 The stream HRU is appended after the land HRUs.  Its first domain is an empty upland, its second the
 reach water column (two lake layers over a copy of the donor HRU's soil column), and any further
@@ -72,6 +73,7 @@ def main():
     p.add_argument("--elevation", type=float, required=True, help="mean reach elevation, m")
     p.add_argument("--latitude", type=float, required=True)
     p.add_argument("--longitude", type=float, required=True)
+    p.add_argument("--gru", type=int, help="gruId the stream HRU joins in a domain of several GRUs; no topology is written")
     a = p.parse_args()
 
     os.makedirs(os.path.join(a.output, "forcing"), exist_ok=True)
@@ -81,9 +83,9 @@ def main():
 
     with Dataset(os.path.join(a.settings, a.attributes)) as s:
         hru_ids = np.array(s["hruId"][:])
-        gru_id = int(np.array(s["gruId"][:]).ravel()[0])
-        if len(s.dimensions["gru"]) != 1:
-            raise SystemExit("only a single-GRU domain is handled")
+        gru_id = a.gru if a.gru is not None else int(np.array(s["gruId"][:]).ravel()[0])
+        if a.gru is None and len(s.dimensions["gru"]) != 1:
+            raise SystemExit("a domain of several GRUs needs --gru")
         land_area = float(np.sum(s["HRUarea"][:]))
         has_seg = "streamSegId" in s.variables
     donor = int(np.flatnonzero(hru_ids == a.donor_hru)[0])
@@ -103,6 +105,8 @@ def main():
             v = d.createVariable("streamSegId", "i4", ("hru",))
             v.long_name = "mizuRoute reach id of a stream HRU (0 = reach mapped from the GRU id)"
             v[:] = [0] * (len(hru_ids)) + [gru_id]
+        else:
+            d["streamSegId"][-1] = gru_id
 
     # cold state: an empty upland, then the reach column, lake layers over the donor's soil
     with Dataset(os.path.join(a.settings, a.cold_state)) as s:
@@ -188,6 +192,9 @@ def main():
     with open(os.path.join(settings, "forcingFileList.txt"), "w") as f:
         f.writelines(f"{n}\n" for n in chosen)
 
+    if a.gru is not None:
+        print(f"stream HRU {stream_id} ({area:.0f} m2) in GRU {gru_id}, {len(chosen)} forcing files")
+        return
     # the one reach, carrying the GRU's id, fed by the whole GRU
     with Dataset(os.path.join(a.output, "topology.nc"), "w", format="NETCDF4") as d:
         d.createDimension("hru", 1)
