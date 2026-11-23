@@ -211,7 +211,7 @@ def main():
         huc = gpd.read_file(os.path.join(project, "shapefiles", "nhd.gpkg"), layer="huc12")
         huc = huc[huc["gauge"] == 1].to_crs(grid.crs).geometry
         inside = rasterio.features.geometry_mask(list(huc), out_shape=catch.shape, transform=grid.affine, invert=True)
-        print(f"basin clipped to the gauge's HUC12: {int(np.sum(catch))} to {int(np.sum(np.asarray(catch) & inside))} cells")
+        print(f"basin clipped to the gauge's HUC12s: {int(np.sum(catch))} to {int(np.sum(np.asarray(catch) & inside))} cells")
         catch = np.asarray(catch) & inside
     else:
         inside = None

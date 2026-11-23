@@ -3,13 +3,13 @@
 
 From the National Map services (hydro.nationalmap.gov, no key), over the domain's bounding_box:
 
-  huc12          WBD 12-digit watersheds, with `gauge` 1 on the one holding the pour point
+  huc12          WBD 12-digit watersheds, with `gauge` 1 on the one holding the pour point and those draining to it
   flowlines      NHD flowlines (large scale)
   waterbodies    NHD lakes and ponds (large scale)
 
 one layer each of shapefiles/nhd.gpkg.
 
-glacier_extend.py clips the basin it delineates on the bed to the gauge's HUC12 when the YAML sets `basin_within: huc12`, so a
+glacier_extend.py clips the basin it delineates on the bed to the gauge's HUC12s when the YAML sets `basin_within: huc12`, so a
 glacier on the far side of a divide the bed puts in the wrong place is not taken into the basin, and plot_basin_setup.py draws
 the streams and lakes. Outside the US these files are absent and the basin is the delineated one, with glaciers held by --gru-threshold of their cells in
 it; README.md lists the national and global sources to use there (HydroBASINS, HydroRIVERS, HydroLAKES, Canada, Chile, Iceland).
@@ -64,7 +64,13 @@ def main():
     for name, (service, layer) in LAYERS.items():
         gdf = query(service, layer, (lon0, lat0, lon1, lat1))
         if name == "huc12":
-            gdf["gauge"] = [int(g.contains(Point(lon, lat))) for g in gdf.geometry]
+            up = set(gdf.huc12[[g.contains(Point(lon, lat)) for g in gdf.geometry]])
+            while True:                                     # and every HUC12 upstream of it, by tohuc
+                more = up | set(gdf.huc12[gdf.tohuc.isin(up)])
+                if more == up:
+                    break
+                up = more
+            gdf["gauge"] = gdf.huc12.isin(up).astype(int)
         gdf.to_file(out, layer=name, driver="GPKG")
         print(f"{name}: {len(gdf)} features -> {out}")
 
