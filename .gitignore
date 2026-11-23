@@ -5,6 +5,7 @@ __pycache__/
 data/*/forcing/SUMMA_input
 data/*/forcing/raw_data
 data/*/forcing/raw_levels
+data/*/forcing/raw_data_*
 data/*/observations/stations/
 runs/*/forcing/
 tests/*/forcing/
