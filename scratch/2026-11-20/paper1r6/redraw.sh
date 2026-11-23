@@ -3,7 +3,7 @@
 # round 5b (465, 472; same inputs, upland multiplier under round 5's cap of 3); round-5b figures kept as *.r5b.pdf.
 WF=$(cd "$(dirname "$0")/../../.." && pwd)
 PY=~/miniconda3/envs/glacier/bin/python
-G=calibration_rerun
+G=calibration_rerun_1120r6
 A=calibration_rerun_1120r5b
 F=~/Research/USask/Writeups/summa_sundials_svn/glacier/figs
 S=~/Research/USask/Writeups/summa_sundials_svn/coldstream/streamtemp/figs
