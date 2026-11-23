@@ -157,6 +157,7 @@ slate_stream:
   calibrate: [2005-10-01, 2006-09-30]
   evaluate: [2006-10-01, 2007-02-28]
   targets: [discharge, stream_temperature]
+  upland_soil: {class: loam, sand: 0.44}  # SoilGrids 2.0 (scratch/2026-11-24/soilgrids_slate.py)
 
 # the stream-temperature runs: the added setup (all of its parameters, from parent) with a stream HRU, a reach and a wetland domain in the terminus HRU, which takes the
 # glacier's runoff and releases it to the reach; hyporheic exchange and the bedrock layers on. Spun up over WY2005 like paper 1,
