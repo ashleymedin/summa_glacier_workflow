@@ -117,6 +117,18 @@ gulkana_added:
   upland_soil: {class: loam, sand: 0.49}  # SoilGrids 2.0 (scratch/2026-11-19/soilgrids_texture.py)
   air_cooling: site_b  # glacierTempReduction from Gulkana Site B against this forcing, not Shaw et al.'s k
 
+lemon_general:  # ends 2026-07 until NCAR or the CDS has Aug-Sep 2026
+  domain: lemon_creek_general
+  dest: runs/lemon_general
+  template: tests/wolverine/summa_inputs
+  first_month: 2004-10
+  last_month: 2026-07
+  forcing: raw
+  copy_forcing: false
+  calibrate: [2005-10-01, 2015-09-30]
+  evaluate: [2015-10-01, 2026-07-31]
+  targets: [discharge, wgms_amce]
+
 lemon_added:  # ends 2026-07 until NCAR or the CDS has Aug-Sep 2026
   domain: lemon_creek
   dest: runs/lemon_added

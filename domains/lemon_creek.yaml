@@ -53,7 +53,7 @@ ice_temp: -1.0
 stations: observations/stations
 stakes: observations/storage/mass_balance/Input_LemonCreek_Glaciological_Data.csv
 precip_grad: true
-correct: [pptrate]                              # temperature stays the pressure-level forcing's; check it against the 1280 m station
+# every variable corrected, as Wolverine and Gulkana: temperature from the airport lapsed to the 1280 m station
 gauge_shield: SA                                # Juneau Airport's ASOS all-weather gauge, single Alter assumed
 gauge_rain: true                                # precipitation the stakes leave scaled to the airport's undercatch-corrected catch, by month
 glacier_snow_factor: true                       # stake ratios as SUMMA's frozenPrecipMultip, glacier domains only

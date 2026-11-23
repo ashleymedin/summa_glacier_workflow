@@ -1,0 +1,36 @@
+# Lemon Creek Glacier, general setup: global data only (RGI outline, Copernicus surface carried back, Farinotti thickness), raw ERA5.
+# The run of this basin without the USGS survey, stations and stakes; the added-data setup is lemon_creek.yaml.
+project_dir: data/domain_LemonCreek_general
+domain: LemonCreek
+seed_from: data/domain_LemonCreek
+bounding_box: 58.45/-134.47/58.34/-134.27
+pour_point: 58.3915312/-134.4226873
+utm_crs: EPSG:32608
+utm_epsg: 32608
+rgi6_region: 01Alaska
+main_glacier: RGI60-01.01104                    # the glacier its glacier-wide factors (Shaw et al. 2025 k) are taken for
+min_glacier_size_km2: 1
+min_debris_thickness: 0.04
+
+landclass: {source: worldcover, igbp: {30: 19}}   # ESA WorldCover 2021, majority of each HRU's ice-free cells (upland_domain.py vegetation)
+
+data:
+  rgi: data/external/RGI_data
+  debris_extent: data/external/Debris_data
+  debris_thickness: data/external/Debris_thick
+  ice_thickness: data/external/Thickness_data
+ice_thickness_source: farinotti                 # Millan's RGI-1 tiles here stop at 136 W
+
+glacier_dem: {dems: "data/external/Copernicus_GLO30/Copernicus_DSM_COG_10_N58_00_W13[45]_00_DEM.tif", date: 2012/07/01, dhdt: "data/external/Hugonnet/01_02_rgi60_2000-01-01_2020-01-01/dhdt/N58W13[45]*.tif"}  # TanDEM-X 2011-14, carried to cold_start at the 2000-19 rates
+
+hru_bands: [600, 1000]                          # elevation band edges, m, of the HRUs (make_hrus.py)
+basin_within: huc12                             # clip the basin to the USGS HUC12s draining to the gauge (acquire_nhd.py)
+
+forcing_period: {first: 2004-10, last: 2026-09}
+raw_data: raw_data_ncar                         # NCAR's (10 m wind) until the CDS's in raw_data is complete, as lemon_creek.yaml
+precip_climatology: data/external/CHELSA/CHELSA_bio12_1981-2010_V.2.1_LemonCreek.tif   # each HRU's raw precipitation scaled by its CHELSA ratio to the ERA5 cells' (acquire_climatology.py)
+wind_climatology: data/external/CHELSA/CHELSA_sfcWind_1981-2010_V.2.1_LemonCreek.tif   # by month, each HRU's raw wind scaled to CHELSA's mean over it (acquire_climatology.py)
+wind_climatology_basin: true                     # one basin-wide ratio on every HRU
+cold_start: 2004-10
+soil_offset: 1.5
+ice_temp: -1.0

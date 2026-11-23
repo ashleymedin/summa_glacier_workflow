@@ -29,7 +29,9 @@ def seed(src, dst, domain):
     dem = os.path.join("attributes", "elevation", "dem", f"domain_{domain}_elv.tif")
     os.makedirs(os.path.join(dst, os.path.dirname(dem)), exist_ok=True)
     shutil.copy2(os.path.join(src, dem), os.path.join(dst, dem))
-    for rel in LINK:
+    links = list(LINK) + [os.path.join("forcing", d) for d in sorted(os.listdir(os.path.join(src, "forcing")))
+                          if d.startswith("raw_data_")] if os.path.isdir(os.path.join(src, "forcing")) else list(LINK)
+    for rel in links:   # raw_data and any other raw ERA5 folders (raw_data_ncar)
         target = os.path.join(dst, rel)
         os.makedirs(os.path.dirname(target), exist_ok=True)
         if not os.path.lexists(target):
