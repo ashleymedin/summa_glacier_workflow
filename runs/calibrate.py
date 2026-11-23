@@ -124,7 +124,7 @@ def periods(case):
 
 def search_for(case, name):
     """The named search, without the STATION_FIXED parameters on a station-corrected case, and without the debris
-    ones on a case with no debris-covered domain (domType 4), where they select nothing,
+    ones on a case with no debris-covered domain (domType 4), the glacier ones on a case with no glacier, where they select nothing,
     or the wetland ones on a case with no wetland domain (domType 5)."""
     search = dict(SEARCHES[name])
     if case_spec(case).get("forcing") == "station_corrected":
@@ -139,6 +139,9 @@ def search_for(case, name):
         types = np.asarray(d["domType"][:])
     if not np.any(types == 4):
         search["params"] = [q for q in search["params"] if not q.endswith("@glacDbr")]
+    if not np.any(np.isin(types, (2, 3, 4))):  # a basin without glaciers
+        search["params"] = [q for q in search["params"] if not q.endswith("@glacier")]
+        search["multipliers"] = [q for q in search.get("multipliers", []) if not q.endswith("@glacier")]
     if not np.any(types == 5):
         search["params"] = [q for q in search["params"] if not q.startswith("wetland")]
         search["logs"] = [q for q in search["logs"] if not q.startswith("wetland")]
@@ -156,6 +159,8 @@ CASES = {  # domain, observation files and gauge of each run
     "lemon": {"obs": "data/domain_LemonCreek/observations/calibration", "flow": "USGS_15052000_daily_flow.nc",
               "mb": "lemoncreek_mass_balance_seasonal.nc", "temp": "USGS_15052000_daily_temperature.nc",
               "grace": "lemoncreek_grace_tws.nc", "wgms_amce": "lemoncreek_wgms_amce.nc"},
+    "slate": {"obs": "data/domain_SlateCreek/observations/calibration", "flow": "USGS_15564879_daily_flow.nc",
+              "temp": "USGS_15564879_daily_temperature.nc", "grace": "slatecreek_grace_tws.nc"},
 }
 
 

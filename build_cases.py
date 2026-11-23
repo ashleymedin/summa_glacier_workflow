@@ -8,7 +8,8 @@ the domain's raw ERA5 (forcing/SUMMA_input) or the station correction (forcing/S
 over the case's months: copied into <dest>/forcing for a test, read in place for a run. The soil parameters
 that differ between the upland soil and the debris are then written into its trialParams.nc (domain_soil_params.py).
 
-  stream   the domain gets a stream HRU and a one-reach topology (add_stream_hru.py), whose forcing
+  stream   the domain gets a stream HRU and a one-reach topology (add_stream_hru.py), or with `stream: grus` a stream HRU
+           and reach per GRU of a split domain (add_stream_grus.py), whose forcing
            and topology are written into <dest>, with the mizuRoute parameters of `routing`
            (default tests/wolverine/mizuroute.param), their wscale set to the reach width;
            `outlet_elevation` (m, the domain DEM's at the gauge) makes the reach's friction heat that of the fall
@@ -258,8 +259,9 @@ def set_glacier_factors(params, raw, c, spec):
     main_glacier, or Site B's where the case says air_cooling: site_b) and firnViscosity (the case's firn_viscosity, else
     FIRN_VISCOSITY) in localParamInfo.txt."""
     set_wind_factor(params, wind_exposure_station(raw))
-    k = air_cooling_station(raw) if spec.get("air_cooling") == "site_b" else shaw_k(c["main_glacier"])
-    set_param_line(params, "glacierTempReduction", k, 0.0, 1.0)
+    if spec.get("air_cooling") == "site_b" or c.get("main_glacier"):  # a basin without glaciers keeps the template's
+        k = air_cooling_station(raw) if spec.get("air_cooling") == "site_b" else shaw_k(c["main_glacier"])
+        set_param_line(params, "glacierTempReduction", k, 0.0, 1.0)
     set_param_line(params, "firnViscosity", spec.get("firn_viscosity", FIRN_VISCOSITY), 1.0e12, 1.0e14)
 
 
@@ -363,6 +365,13 @@ def stream_domain(c, spec, stream, first, last, tmp, files, source):
     shutil.copy(os.path.join(tmp, "coldstate_glac.nc"), os.path.join(settings, "coldstate_glac.nc"))
     write_file_list(os.path.join(settings, "forcingFileList.txt"), [os.path.basename(f) for f in files])
     built = os.path.join(tmp, "built")
+    if stream == "grus":  # a reach per GRU of a split domain, as wide as mizuRoute makes it
+        routing = open(os.path.join(HERE, spec.get("routing", "tests/wolverine/mizuroute.param"))).read()
+        wscale = re.search(r"(?m)^\s*wscale\s*=\s*(\S+)", routing).group(1)
+        subprocess.run([sys.executable, os.path.join(HERE, "add_stream_grus.py"), os.path.join(HERE, "domains", f"{spec['domain']}.yaml"),
+                        settings, source, built, "--attributes", "attributes_glac.nc", "--cold-state", "coldstate_glac.nc",
+                        "--first-month", first, "--last-month", last, "--wscale", wscale], check=True)
+        return built
     subprocess.run([sys.executable, os.path.join(HERE, "add_stream_hru.py"),
                     settings, source, built, "--attributes", "attributes_glac.nc", "--cold-state", "coldstate_glac.nc",
                     "--first-month", first, "--last-month", last,
@@ -589,10 +598,11 @@ def build_inputs(name, spec, cases_dir):
             routing = os.path.join(dest, "mizuroute.param")
             if not os.path.exists(routing):
                 shutil.copy(os.path.join(cases_dir, spec.get("routing", "tests/wolverine/mizuroute.param")), routing)
-            set_reach_width(routing, os.path.join(dest, "topology.nc"), spec["stream"]["width"])
+            if spec["stream"] != "grus":
+                set_reach_width(routing, os.path.join(dest, "topology.nc"), spec["stream"]["width"])
             if "parent" in spec:
                 inherit_params(inputs, os.path.join(cases_dir, spec["parent_dest"], "summa_inputs"))
-            if "outlet_elevation" in spec["stream"]:  # the reach falls from the glacier front to its outlet
+            if spec["stream"] != "grus" and "outlet_elevation" in spec["stream"]:  # the reach falls from the glacier front to its outlet
                 set_param_line(os.path.join(inputs, "localParamInfo.txt"), "reachOutletElev",
                                spec["stream"]["outlet_elevation"], 0.0, 9000.0)
             if os.path.isdir(os.path.join(dest, "forcing")):

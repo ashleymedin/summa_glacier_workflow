@@ -112,14 +112,18 @@ def main():
     with Dataset(os.path.join(a.settings, a.cold_state)) as s:
         n_soil = int(s["nSoil"][0, donor, 0])
         n_toto = len(s.dimensions["midToto"])
+        n_dom = len(s.dimensions["dom"])
     n_lake = len(LAKE_DEPTHS)
-    extra = {"midToto": max(n_toto, n_lake + n_soil), "ifcToto": max(n_toto, n_lake + n_soil) + 1}
+    extra = {"midToto": max(n_toto, n_lake + n_soil), "ifcToto": max(n_toto, n_lake + n_soil) + 1,
+             "dom": max(n_dom, 2)}  # the reach needs a second domain; a land HRU's added one is unused
     zero_in_stream = {"scalarCanopyIce", "scalarCanopyLiq", "scalarSnowDepth", "scalarSWE", "scalarSfcMeltPond",
                       "glacMass4AreaChange", "scalarGlceWE", "scalarAblFrac", "nSnow", "nGlce"}
 
     def fill_state(name, dims, old, new):
         if "hru" not in dims:
             return
+        if name == "DOMelev" and n_dom < 2:
+            new[:, :-1, n_dom:] = -9999.0
         if dims[1:] != ("hru", "dom"):
             if dims == ("hru",):
                 new[-1] = stream_id

@@ -143,6 +143,21 @@ lemon_added:  # ends 2026-07 until NCAR or the CDS has Aug-Sep 2026
   targets: [discharge, mass_balance]
   upland_soil: {class: sandy loam, sand: 0.55}  # SoilGrids 2.0 (scratch/2026-11-24/soilgrids_lemon.py)
 
+# Slate Creek, no glacier: 3 GRUs, each with a stream HRU and a reach on its NHD stream (add_stream_grus.py), routed to the gauge.
+# The span is the 29 months with ERA5 pressure levels so far, to test the build; extend once the NCAR downloads finish.
+slate_stream:
+  domain: slate_creek
+  dest: runs/slate_stream
+  template: tests/wolverine/summa_inputs
+  first_month: 2004-10
+  last_month: 2007-02
+  forcing: raw
+  stream: grus
+  decisions: {deepTherml: bedrockLyrs, hyporhTdyn: proxy}
+  calibrate: [2005-10-01, 2006-09-30]
+  evaluate: [2006-10-01, 2007-02-28]
+  targets: [discharge, stream_temperature]
+
 # the stream-temperature runs: the added setup (all of its parameters, from parent) with a stream HRU, a reach and a wetland domain in the terminus HRU, which takes the
 # glacier's runoff and releases it to the reach; hyporheic exchange and the bedrock layers on. Spun up over WY2005 like paper 1,
 # calibrated WY2006-2019 so it holds four of Wolverine's water-temperature summers (2016-2019, six left for WY2020-2026);
