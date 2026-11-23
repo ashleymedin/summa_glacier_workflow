@@ -128,6 +128,7 @@ lemon_general:  # ends 2026-07 until NCAR or the CDS has Aug-Sep 2026
   calibrate: [2005-10-01, 2015-09-30]
   evaluate: [2015-10-01, 2026-07-31]
   targets: [discharge, wgms_amce]
+  upland_soil: {class: sandy loam, sand: 0.55}  # SoilGrids 2.0 (scratch/2026-11-24/soilgrids_lemon.py)
 
 lemon_added:  # ends 2026-07 until NCAR or the CDS has Aug-Sep 2026
   domain: lemon_creek
@@ -140,6 +141,7 @@ lemon_added:  # ends 2026-07 until NCAR or the CDS has Aug-Sep 2026
   calibrate: [2005-10-01, 2015-09-30]
   evaluate: [2015-10-01, 2026-07-31]
   targets: [discharge, mass_balance]
+  upland_soil: {class: sandy loam, sand: 0.55}  # SoilGrids 2.0 (scratch/2026-11-24/soilgrids_lemon.py)
 
 # the stream-temperature runs: the added setup (all of its parameters, from parent) with a stream HRU, a reach and a wetland domain in the terminus HRU, which takes the
 # glacier's runoff and releases it to the reach; hyporheic exchange and the bedrock layers on. Spun up over WY2005 like paper 1,

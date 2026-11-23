@@ -72,7 +72,7 @@ def on_ice_sites(source):
     return [{"lat": float(r.lat), "lon": float(r.lon), "elev": str(r.elev).strip()} for r in t.itertuples() if str(r.site).strip() in ON_ICE_SITES]
 
 
-STAKE_SITES = os.path.join(HERE, "data", "external", "Glacier_Mass_Balance_Sites", "Glacier_Mass_Balance_Data_Sites.csv")  # USGS release 10.5066/F7HD7SRF
+STAKE_SITES = os.path.join(HERE, "data", "external", "USGS_massBalance", "Glacier_Mass_Balance_Sites", "Glacier_Mass_Balance_Data_Sites.csv")  # USGS release 10.5066/F7HD7SRF
 STAKE_MIN_ELEV = 800.0  # correct_forcing_to_station.py --stake-min-elev
 
 
@@ -183,6 +183,14 @@ def panel(ax, config, a, setup, keep_out, letter):
     gpd.GeoSeries([LineString(seg).intersection(smooth_basin.geometry.union_all()) for seg in start.allsegs[0] if len(seg) > 1]).plot(ax=ax, color=PURPLE, linewidth=OUTLINE_LW, zorder=5)
     smooth_hrus.boundary.plot(ax=ax, color=GREEN, linewidth=HRU_LW, zorder=6)
     smooth_basin.boundary.plot(ax=ax, color="black", linewidth=1.8, zorder=7)
+    split = os.path.join(project, "shapefiles", "catchment", f"{name}_GRUs.shp")
+    if os.path.exists(split):  # the GRUs of split_grus.py, labelled by id
+        grus = gpd.read_file(split).to_crs(crs)
+        grus.set_geometry(grus.geometry.map(chaikin)).boundary.plot(ax=ax, color="black", linewidth=1.0, ls="--", zorder=7)
+        for g in grus.itertuples():
+            pt = g.geometry.representative_point()
+            ax.annotate(f"G{g.GRU_ID}", (pt.x, pt.y), fontsize=9, weight="bold", ha="center", zorder=15,
+                        bbox=dict(boxstyle="round,pad=0.2", fc="white", alpha=0.8, lw=0))
     lat, lon = (float(v) for v in c["pour_point"].split("/"))
     gx, gy = gpd.GeoSeries([Point(lon, lat)], crs=4326).to_crs(crs).iloc[0].coords[0]
     ax.plot(gx, gy, marker="^", ms=15, mfc=RED, mec="white", mew=1.5, ls="none", zorder=13)
@@ -290,17 +298,18 @@ def main():
     fig, axes = plt.subplots(len(a.basins), len(a.setups), figsize=(max(4.6 * len(a.setups), 6.6), 5.6 * len(a.basins)), squeeze=False)
     for i, basin in enumerate(a.basins):
         configs = {st: os.path.join(HERE, "domains", f"{basin}{'_general' if st == 'general' else ''}.yaml") for st in ("general", "added")}
+        configs = {st: cfg for st, cfg in configs.items() if os.path.exists(cfg)}  # a basin without glaciers has one setup
         keep_out = [g for st, cfg in configs.items() for g in gpd.read_file(glob.glob(os.path.join(load_config(cfg)["project_dir"], "shapefiles", "river_basins", "*.shp"))[0]).to_crs(32606).geometry]
         for j, setup in enumerate(a.setups):
             config = configs[setup]
             keep_crs = load_config(config)["utm_crs"]
             panel(axes[i, j], config, a, setup, [g for g in gpd.GeoSeries(keep_out, crs=32606).to_crs(keep_crs)], "abcdefgh"[i * len(a.setups) + j])
-            label = "general setup" if setup == "general" else "added-data setup"
-            axes[i, j].set_title(f"{basin.capitalize()}, {label}", fontsize=10)
+            label = "general setup" if setup == "general" else "added-data setup" if "general" in configs else "setup"
+            axes[i, j].set_title(f"{basin.replace('_', ' ').title()}, {label}", fontsize=10)
     handles = [Line2D([], [], color=CONTOUR, lw=0.5, label=f"{a.contour:g} m contours (labelled every {5 * a.contour:g} m)"),
                Patch(fc=ICE_FILL, ec=PURPLE, lw=OUTLINE_LW, label="glacier at the start"),
                Patch(fc=BROWN, ec=DEBRIS_EDGE, alpha=0.6, label="debris-covered ice"), Patch(fc=PINK, ec=PINK, lw=OUTLINE_LW, alpha=0.5, label="room to advance"),
-               Line2D([], [], color="black", lw=1.8, label="basin"), Line2D([], [], color=GREEN, lw=HRU_LW, label="HRUs"),
+               Line2D([], [], color="black", lw=1.8, label="basin"), Line2D([], [], color="black", lw=1.0, ls="--", label="GRUs (G)"), Line2D([], [], color=GREEN, lw=HRU_LW, label="HRUs"),
                Line2D([], [], marker="^", ls="none", mfc=RED, mec="white", ms=8, label="gauge")]
     if a.grids:
         handles.append(Line2D([], [], color=ORANGE, lw=1.2, label="flow-model grid"))

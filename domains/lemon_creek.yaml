@@ -28,6 +28,7 @@ millan_reference: {date: 2018/09/02, dem: data/external/GlacierDEM/JuneauIcefiel
 glacier_dem: {dems: "data/external/Copernicus_GLO30/Copernicus_DSM_COG_10_N58_00_W13[45]_00_DEM.tif", date: 2012/07/01, dhdt: "data/external/Hugonnet/01_02_rgi60_2000-01-01_2020-01-01/dhdt/N58W13[45]*.tif"}
 usgs_datum: -7.3                                # m added to USGS heights (WGS84 ellipsoid) to give the model DEM's: Copernicus less the 2018 survey on ice-free ground under 20 deg
 
+terminus: [-134.369, 58.4045]                  # main tongue's ice front, from the 1 Oct 2025 WorldView-2 (Esri) and 4 Sep 2025 Sentinel-2; no ArcticDEM strips here
 hru_bands: [600, 1000]                         # elevation band edges, m, of the HRUs (make_hrus.py)
 basin_within: huc12                             # clip the basin to the USGS HUC12 of the gauge (acquire_nhd.py)
 

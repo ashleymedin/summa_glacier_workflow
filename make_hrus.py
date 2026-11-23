@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Build a domain's GRU and HRUs from its basin: elevation bands of the setup's start surface, cut to the basin outline.
 
-The GRU is the basin of glacier_extend.py (shapefiles/river_basins), whole glaciers included. The HRUs are its elevation bands, the
+The GRU is the basin of glacier_extend.py (shapefiles/river_basins), whole glaciers included, or, where split_grus.py wrote
+shapefiles/catchment/<name>_GRUs.shp, each of those GRUs, numbered as there. The HRUs are each GRU's elevation bands, the
 YAML's hru_bands (edges in m, so n edges make n+1 HRUs), else bands hru_band_size (m, default 400) wide from the lowest elevation in
 the basin, as SYMFLUENCE's ELEVATION_BAND_SIZE did, numbered up from the lowest, each the union of the basin cells of the start surface (domain_<name>_glacier_elv.tif: MERIT, with the USGS survey surface on the benchmark glacier in the added-data setup, so the setups' HRUs differ) in the band, so a band can be several islands.
 A 3x3 median filter on the band numbers takes the single-cell speckle out. Writes
@@ -48,27 +49,33 @@ def main():
     band = np.where(inside, np.digitize(dem, edges) + 1, 0).astype(np.int16)
     smooth = median_filter(band, size=3)
     band = np.where(inside & (smooth > 0), smooth, band)
-    rows = []
-    for k in range(1, len(edges) + 2):
-        polys = [shape(g) for g, v in shapes(band, mask=band == k, transform=transform) if v == k]
-        if polys:
-            rows.append({"GRU_ID": 1, "HRU_ID": len(rows) + 1, "elevClass": k, "geometry": unary_union(polys)})
+    split = os.path.join(project, "shapefiles", "catchment", f"{name}_GRUs.shp")
+    grus = gpd.read_file(split).to_crs(4326) if os.path.exists(split) else gpd.GeoDataFrame({"GRU_ID": [1], "to_GRU": [0]}, geometry=[basin.union_all()], crs=4326)
+    rows, cells = [], []
+    for gru in grus.itertuples():
+        in_gru = geometry_mask([gru.geometry], transform=transform, invert=True, out_shape=dem.shape) & (band > 0)
+        for k in range(1, len(edges) + 2):
+            sel = in_gru & (band == k)
+            polys = [shape(g) for g, v in shapes(band, mask=sel, transform=transform) if v == k]
+            if polys:
+                rows.append({"GRU_ID": int(gru.GRU_ID), "HRU_ID": len(rows) + 1, "elevClass": k, "geometry": unary_union(polys)})
+                cells.append(sel)
     hrus = gpd.GeoDataFrame(rows, crs=4326)
     utm = hrus.to_crs(c["utm_crs"])
     hrus["HRU_area"] = utm.geometry.area.values
     centre = utm.geometry.centroid.to_crs(4326)
     hrus["center_lon"], hrus["center_lat"] = centre.x.values, centre.y.values
-    hrus["elev_mean"] = [float(np.nanmean(dem[band == k])) for k in hrus["elevClass"]]
+    hrus["elev_mean"] = [float(np.nanmean(dem[sel])) for sel in cells]
     out = os.path.join(project, "shapefiles", "catchment")
     os.makedirs(out, exist_ok=True)
     hrus.to_file(os.path.join(out, f"{name}_HRUs_elevation.shp"))
     whole = hrus.dissolve(by="GRU_ID").reset_index()
-    whole["gru_to_seg"], whole["HRU_ID"], whole["hru_type"] = 1, 1, "GRU"
+    whole["gru_to_seg"], whole["HRU_ID"], whole["hru_type"] = whole["GRU_ID"], 1, "GRU"  # each GRU's own reach, its id
     whole["GRU_area"] = whole.to_crs(c["utm_crs"]).geometry.area.values
     whole[["GRU_ID", "gru_to_seg", "GRU_area", "HRU_ID", "hru_type", "elev_mean", "center_lon", "center_lat", "HRU_area", "geometry"]].to_file(
         os.path.join(out, f"{name}_HRUs_GRUs.shp"))
-    print(f"{len(hrus)} HRUs from the bands {[round(e) for e in edges]} m: "
-          + ", ".join(f"{r.HRU_ID}: {r.HRU_area / 1e6:.2f} km2 at {r.elev_mean:.0f} m" for r in hrus.itertuples()))
+    print(f"{len(hrus)} HRUs in {len(grus)} GRU(s) from the bands {[round(e) for e in edges]} m: "
+          + ", ".join(f"{r.HRU_ID} (GRU {r.GRU_ID}): {r.HRU_area / 1e6:.2f} km2 at {r.elev_mean:.0f} m" for r in hrus.itertuples()))
 
 
 if __name__ == "__main__":

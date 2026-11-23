@@ -300,12 +300,13 @@ def canopy_top(mptable, veg):
     return np.array([heights[v - 1] for v in veg])
 
 
-def write_like(src, path, n_hru, values, skip=()):
-    """A copy of the netCDF src with its hru dimension n_hru long, each hru variable its first column repeated unless in values."""
+def write_like(src, path, n_hru, values, skip=(), n_gru=1):
+    """A copy of the netCDF src with its hru dimension n_hru long and gru n_gru, each hru or gru variable its first column
+    repeated unless in values."""
     with nc4.Dataset(src) as s, nc4.Dataset(path, "w") as d:
         d.setncatts({k: s.getncattr(k) for k in s.ncattrs()})
         for dim, v in s.dimensions.items():
-            d.createDimension(dim, n_hru if dim == "hru" else len(v))
+            d.createDimension(dim, n_hru if dim == "hru" else n_gru if dim == "gru" else len(v))
         for name, v in s.variables.items():
             if name in skip:
                 continue
@@ -315,9 +316,12 @@ def write_like(src, path, n_hru, values, skip=()):
             data = np.asarray(v[:])
             if name in values:
                 out[:] = values[name]
-            elif "hru" in v.dimensions:
-                ax = v.dimensions.index("hru")
-                out[:] = np.repeat(np.take(data, [0], axis=ax), n_hru, axis=ax)
+            elif "hru" in v.dimensions or "gru" in v.dimensions:
+                for dim, size in (("hru", n_hru), ("gru", n_gru)):
+                    if dim in v.dimensions:
+                        ax = v.dimensions.index(dim)
+                        data = np.repeat(np.take(data, [0], axis=ax), size, axis=ax)
+                out[:] = data
             else:
                 out[:] = data
     print(f"wrote {path}")
@@ -335,16 +339,18 @@ def upland(c, project, name):
     soil = majority(os.path.join(project, "attributes", "soilclass", f"domain_{name}_soil_classes.tif"), hrus)
     m_height = canopy_top(os.path.join(settings, "TBL_MPTABLE.TBL"), veg) + MHEIGHT_ABOVE
     print(f"HRU vegTypeIndex {veg}, soilTypeIndex {soil}, mHeight {list(m_height)} m")
+    gru = hrus["GRU_ID"].astype(int).values
+    gru_ids = np.unique(gru)
     write_like(os.path.join(template, "attributes.nc"), os.path.join(settings, "attributes.nc"), n,
-               {"hruId": ids, "gruId": [1], "hru2gruId": np.ones(n, int), "downHRUindex": np.zeros(n, int),
+               {"hruId": ids, "gruId": gru_ids, "hru2gruId": gru, "downHRUindex": np.zeros(n, int),
                 "vegTypeIndex": veg, "soilTypeIndex": soil, "mHeight": m_height, "HRUarea": hrus["HRU_area"].values,
                 "latitude": hrus["center_lat"].values, "longitude": hrus["center_lon"].values,
-                "elevation": hrus["elev_mean"].values})
-    write_like(os.path.join(template, "coldState.nc"), os.path.join(settings, "coldState.nc"), n, {"hruId": ids})
+                "elevation": hrus["elev_mean"].values}, n_gru=len(gru_ids))
+    write_like(os.path.join(template, "coldState.nc"), os.path.join(settings, "coldState.nc"), n, {"hruId": ids}, n_gru=len(gru_ids))
     with nc4.Dataset(os.path.join(template, "trialParams.nc")) as s:
         keep = [v for v in s.variables if v not in ("hruId", "gruId", "maxstep")]
     write_like(os.path.join(template, "trialParams.nc"), os.path.join(settings, "trialParams.nc"), n,
-               {"hruId": ids, "gruId": [1]}, skip=keep)
+               {"hruId": ids, "gruId": gru_ids}, skip=keep, n_gru=len(gru_ids))
 
 
 def vegetation(c, project, name):

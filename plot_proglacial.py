@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Satellite images of each glacier's terminus and gauge, with the stream reach from the NHD and the model's: plot_proglacial.py <out.pdf>
+"""Satellite images of each glacier's terminus and gauge, with the stream reach from the NHD and the model's:
+plot_proglacial.py <out.pdf> [domain ...] (default wolverine gulkana; also lemon_creek)
 
 Esri World Imagery (WorldView-2: Wolverine 29 Sep 2025, Gulkana 22 Jul 2024), fetched in Alaska Albers (EPSG:3338) so the axes are in
 metres; Wolverine in (a), Gulkana in (b). Drawn over them, in each panel, the ice front found from the ArcticDEM strips (nhd_reach.py), the NHD stream from it to the gauge (dark blue,
@@ -32,12 +33,15 @@ SITES = [("wolverine", "Wolverine Glacier and USGS 15236900", (-148.896667, 60.3
           [("proglacial lake\n0.021 km$^2$", -148.9113, 60.3745), ("delta", -148.9160, 60.3772), ("bedrock gorge", -148.9200, 60.3792)]),
          ("gulkana", "Gulkana Glacier and USGS 15478040", (-145.468056, 63.240278), (-145.4260, 63.2586), (-145.4470, 63.2500), 2100,
           [("moraine and\nbraided outwash", -145.4420, 63.2470), ("Phelan Creek", -145.4640, 63.2440)])]
+SITES.append(("lemon_creek", "Lemon Creek Glacier and USGS 15052000", (-134.4226873, 58.3915312), (-134.369, 58.4045), (-134.392, 58.4025), 2150,
+              [("upper lake", -134.3745, 58.4127), ("middle lake", -134.3745, 58.4078), ("lower lake", -134.3818, 58.4035)]))
 
 
 def main():
-    out = sys.argv[1]
-    fig, axes = plt.subplots(1, 2, figsize=(12, 6.2))
-    for ax, letter, (domain, title, gauge, term, centre, half, feats) in zip(axes, "ab", SITES):
+    out, names = sys.argv[1], sys.argv[2:] or ["wolverine", "gulkana"]
+    sites = [s for s in SITES if s[0] in names]
+    fig, axes = plt.subplots(1, len(sites), figsize=(6 * len(sites), 6.2), squeeze=False)
+    for ax, letter, (domain, title, gauge, term, centre, half, feats) in zip(axes[0], "abc", sites):
         c = load_config(os.path.join(HERE, "domains", f"{domain}.yaml"))
         cx, cy = T.transform(*centre)
         n = 1400
@@ -53,7 +57,8 @@ def main():
         front = gpd.read_file(nhd, layer="terminus").to_crs(3338).geometry.iloc[0]
         local = lambda g: ((np.array(g.xy[0]) - cx) / 1000, (np.array(g.xy[1]) - cy) / 1000)
         length = model_reach_length(c)
-        ax.plot(*local(cut_from_gauge(full, length)), color="#ff4d4d", lw=9, alpha=0.5, solid_capstyle="round", zorder=3, label=f"model reach, {length:g} m")
+        if length:  # a domain with a stream case
+            ax.plot(*local(cut_from_gauge(full, length)), color="#ff4d4d", lw=9, alpha=0.5, solid_capstyle="round", zorder=3, label=f"model reach, {length:g} m")
         ax.plot(*local(full), color="#08306b", lw=1.8, ls=":", zorder=4)
         ax.plot(*local(mapped), color="#08306b", lw=3.0, zorder=4, label=f"NHD stream, ice front to gauge ({full.length:.0f} m; dotted: unmapped)")
         tx, ty = (front.x - cx) / 1000, (front.y - cy) / 1000
@@ -65,7 +70,7 @@ def main():
             fx, fy = km(lon, lat)
             ax.annotate(lab, (fx, fy), color="white", fontsize=9, ha="center", va="center",
                         bbox=dict(boxstyle="round,pad=0.2", fc="black", alpha=0.35, lw=0))
-        x0, y0 = ext[0] + 0.1 * (ext[1] - ext[0]), ext[2] + 0.06 * (ext[3] - ext[2])
+        x0, y0 = ext[0] + 0.72 * (ext[1] - ext[0]), ext[2] + 0.06 * (ext[3] - ext[2])
         ax.plot([x0, x0 + 0.5], [y0, y0], color="white", lw=3)
         ax.text(x0 + 0.25, y0 + 0.03 * (ext[3] - ext[2]), "500 m", color="white", ha="center", fontsize=9)
         ax.text(0.02, 0.98, f"({letter})", transform=ax.transAxes, ha="left", va="top", fontsize=13, fontweight="bold",
