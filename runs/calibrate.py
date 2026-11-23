@@ -51,10 +51,14 @@ PAPER1_CHAIN = ["theta_res", "critSoilWilting", "critSoilTranspire", "fieldCapac
 # domain: the upland soil and the debris searched apart, the debris's other soil values fixed in trialParams.nc and its englacial
 # concentration in basinParamInfo.txt (0.44 kg m-3, Anderson et al. (2021) at Kennicott), which the glacier-wide balances cannot constrain;
 # the snowfall multiplier apart on the upland and the glaciers, where it takes in blown and avalanched snow;
-# frac_sand (with frac_clay fixed) sets the conductivity of the solids, which thCondSoil = funcSoilWet uses; frac_silt is their remainder
-DOMAIN = [p for p in PAPER1 if p not in ("k_soil", "theta_sat", "vGn_n", "k_macropore", "thCond_soil", "frozenPrecipMultip")] + \
+# frac_sand (with frac_clay fixed) sets the conductivity of the solids, which thCondSoil = funcSoilWet uses; frac_silt is their remainder.
+# Fixed in localParamInfo.txt, as the calibrations cannot identify them (scratch/2026-11-23/fix3): the snow's capillary retention at
+# 0.07 of pore volume (Colbeck 1974; Coleou and Lesaffre 1998), the canopy wind reduction at SUMMA's 0.28 (little canopy) and the
+# debris porosity at 0.3 (Fontrodona-Bach et al. 2025)
+DOMAIN = [p for p in PAPER1 if p not in ("k_soil", "theta_sat", "vGn_n", "k_macropore", "thCond_soil", "frozenPrecipMultip",
+                                         "Fcapil", "windReductionParam")] + \
          ["k_soil@upland", "k_macropore@upland", "theta_sat@upland", "vGn_n@upland", "frac_sand@upland",
-          "theta_sat@glacDbr", "frac_sand@glacDbr", "frozenPrecipMultip@upland", "frozenPrecipMultip@glacier"]
+          "frac_sand@glacDbr", "frozenPrecipMultip@upland", "frozenPrecipMultip@glacier"]
 DOMAIN_CHAIN = ["theta_res@upland", "critSoilWilting@upland", "critSoilTranspire@upland", "fieldCapacity@upland",
                 "theta_sat@upland"]
 
@@ -70,7 +74,6 @@ SEARCHES = {
     "domain": {"params": DOMAIN, "logs": ["k_soil@upland", "aquiferBaseflowRate", "k_macropore@upland"],
                "chains": [(DOMAIN_CHAIN, 0.025)],
                "bounds": {"theta_sat@upland": (0.35, 0.65),     # mineral soil
-                          "theta_sat@glacDbr": (0.2, 0.45),     # supraglacial debris, Fontrodona-Bach et al. (2025)
                           "frac_sand@upland": (0.0, 0.9),       # up to what the fixed clay (0.1) leaves
                           "frac_sand@glacDbr": (0.0, 0.9),
                           "albedoDecayRate": (0.2e6, 5.0e6),    # s; summer snow at Gulkana Site B decays in 2-6 days (Wilson et al. 2026)

@@ -6,7 +6,7 @@ coldState.nc: debris-covered ice (glacDbr) takes the debris value, every other d
 localParamInfo.txt, unless the parameter holds one value for all. The calibration's name@domainType
 parameters then override these per domain type.
 
-  debris   rock density of Conway and Rasmussen (2000); water retention and conductivity of the sand class
+  debris   rock density of Conway and Rasmussen (2000); porosity of Fontrodona-Bach et al. (2025); water retention and conductivity of the sand class
            of Carsel and Parrish (1988), since supraglacial debris has no measured hydraulic properties;
            wilting and transpiration points only kept in order below field capacity, as no plants grow
   upland   with --upland, the texture class of SoilGrids 2.0 (soilgrids_texture.py) with its Carsel and Parrish (1988)
@@ -36,7 +36,8 @@ DEBRIS = {"soil_dens_intr": 2700.,     # kg m-3
           "vGn_n": 2.68,               # -
           "k_soil": 8.25e-5,           # m s-1
           "k_macropore": 8.25e-5,      # m s-1, no macropores
-          "theta_mp": 0.15}            # -
+          "theta_mp": 0.15,            # -
+          "theta_sat": 0.30}           # -, the porosity most used for supraglacial debris (Fontrodona-Bach et al. 2025)
 ALL = {"frac_clay": 0.1}
 UPLAND_CLASS = {"sandy loam": {"theta_res": 0.065, "theta_sat": 0.41, "vGn_alpha": -7.5, "vGn_n": 1.89, "k_soil": 1.23e-5,
                                "critSoilWilting": 0.076, "critSoilTranspire": 0.087, "fieldCapacity": 0.098},
