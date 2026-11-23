@@ -52,9 +52,9 @@ def main():
     a = p.parse_args()
     c = load_config(a.config)
     dom, project = c["domain"], c["project_dir"]
-    raw = sorted(glob.glob(os.path.join(project, "forcing", "raw_data", f"domain_{dom}_ERA5_merged_*.nc")))
+    raw = sorted(glob.glob(os.path.join(c["raw_data"], f"domain_{dom}_ERA5_merged_*.nc")))
     if not raw:
-        raise SystemExit("no raw ERA5 in forcing/raw_data; run acquire_era5.py first")
+        raise SystemExit(f"no raw ERA5 in {c['raw_data']}; run acquire_era5.py first")
     with Dataset(raw[0]) as f:
         lat, lon = f["latitude"][:], f["longitude"][:]
     bounds = (lon.min() - MARGIN, lat.min() - MARGIN, lon.max() + MARGIN, lat.max() + MARGIN)

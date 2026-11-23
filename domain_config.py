@@ -16,6 +16,7 @@ def load_config(path):
     c["project_dir"] = resolve(c["project_dir"])
     c.setdefault("domain", os.path.basename(c["project_dir"].rstrip("/")).replace("domain_", "", 1))
     c["data"] = {k: resolve(v) for k, v in c.get("data", {}).items()}
+    c["raw_data"] = os.path.join(c["project_dir"], "forcing", c.get("raw_data", "raw_data"))   # the raw ERA5 the forcing is made from
     for key in ("precip_climatology", "wind_climatology"):
         if key in c:
             c[key] = resolve(c[key])

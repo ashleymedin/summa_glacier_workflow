@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Remap a domain's gridded ERA5 (forcing/raw_data and forcing/raw_levels) to its HRUs as SUMMA forcing
-(forcing/SUMMA_input).
+"""Remap a domain's gridded ERA5 (forcing/raw_data, or the folder under forcing/ the YAML's raw_data names, and
+forcing/raw_levels) to its HRUs as SUMMA forcing (forcing/SUMMA_input).
 
 Each HRU takes the mean of the ERA5 cells it overlaps, weighted by the overlap area: the 0.25-degree cell
 of each grid point is intersected with the HRU polygons of shapefiles/catchment/<domain>_HRUs_elevation.shp
@@ -227,9 +227,9 @@ def main():
     a = p.parse_args()
     c = load_config(a.config)
     dom, project = c["domain"], c["project_dir"]
-    raw = sorted(glob.glob(os.path.join(project, "forcing", "raw_data", f"domain_{dom}_ERA5_merged_*.nc")))
+    raw = sorted(glob.glob(os.path.join(c["raw_data"], f"domain_{dom}_ERA5_merged_*.nc")))
     if not raw:
-        raise SystemExit("no raw ERA5 in forcing/raw_data; run acquire_era5.py first")
+        raise SystemExit(f"no raw ERA5 in {c['raw_data']}; run acquire_era5.py first")
     hrus = gpd.read_file(os.path.join(project, "shapefiles", "catchment", f"{dom}_HRUs_elevation.shp")).sort_values("HRU_ID")
     with Dataset(raw[0]) as f:
         lat, lon = f["latitude"][:], f["longitude"][:]

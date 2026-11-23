@@ -31,6 +31,7 @@ hru_bands: [600, 1000]                         # elevation band edges, m, of the
 basin_within: huc12                             # clip the basin to the USGS HUC12 of the gauge (acquire_nhd.py)
 
 forcing_period: {first: 2004-10, last: 2026-09}
+raw_data: raw_data_ncar                         # the raw ERA5 under forcing/ the forcing is made from: NCAR's (10 m wind) until the CDS's in raw_data is complete
 observations:
   station_weather:                              # hourly, for the forcing correction (acquire_station_weather.py)
     - {source: isd, station: "70381025309", name: juneau_airport}                          # Juneau Airport, 6 m, 10 m wind
