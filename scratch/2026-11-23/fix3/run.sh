@@ -10,8 +10,9 @@ PINS="--pin Fcapil=0.06 --pin windReductionParam=0.28"
 DBR="--pin theta_sat@glacDbr=0.3"
 while read case name samples dbr; do
   for lab in asis fix3; do
+    ls $case/${name}_rerun/sample_${samples}_$lab/output/*_calibration.nc >/dev/null 2>&1 && continue
     pins=""; [ $lab = fix3 ] && pins="$PINS $([ $dbr = y ] && echo $DBR)"
-    $PY rerun_trials.py $case $name $samples --calibration-years --ranks 2 --jobs 1 $pins --label $lab \
+    $PY rerun_trials.py $case $name $samples --calibration-years --ranks 2 --jobs 1 $pins --label $lab < /dev/null \
       > $L/${case}_${name}_$lab.log 2>&1 &
   done
   wait
