@@ -1,6 +1,6 @@
 #!/bin/zsh
 # 20 Nov, Paper 2 Stage B on Wolverine: the 5b domain search and the stream's parameters (the lake's own snowfall multiplier, glacier air cooling and lapse rate among them, its ice albedo
-# held at 0.7/0.5; SUMMA white-ice 352e2d37), scored on discharge, seasonal
+# held at 0.7/0.5; SUMMA white-ice 3bc8b2d1), scored on discharge, seasonal
 # balance and water temperature, once round 5b (round5b.sh) has finished; 5b's balanced trial left May at 0.5-0.7 of the gauge,
 # which neither discharge KGE nor the balance constrains.
 cd "$(dirname "$0")/../../../runs"
