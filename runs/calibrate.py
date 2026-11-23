@@ -156,6 +156,9 @@ CASES = {  # domain, observation files and gauge of each run
                   "grace": "wolverine_grace_tws.nc", "wgms_amce": "wolverine_wgms_amce.nc"},
     "gulkana": {"obs": "data/domain_Gulkana/observations/calibration", "flow": "USGS_15478040_daily_flow.nc",
                 "mb": "gulkana_mass_balance_seasonal.nc", "temp": "USGS_15478040_daily_temperature.nc", "grace": "gulkana_grace_tws.nc", "wgms_amce": "gulkana_wgms_amce.nc"},
+    "lemon": {"obs": "data/domain_LemonCreek/observations/calibration", "flow": "USGS_15052000_daily_flow.nc",
+              "mb": "lemoncreek_mass_balance_seasonal.nc", "temp": "USGS_15052000_daily_temperature.nc",
+              "grace": "lemoncreek_grace_tws.nc", "wgms_amce": "lemoncreek_wgms_amce.nc"},
 }
 
 

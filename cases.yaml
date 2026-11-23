@@ -117,6 +117,18 @@ gulkana_added:
   upland_soil: {class: loam, sand: 0.49}  # SoilGrids 2.0 (scratch/2026-11-19/soilgrids_texture.py)
   air_cooling: site_b  # glacierTempReduction from Gulkana Site B against this forcing, not Shaw et al.'s k
 
+lemon_added:  # ends 2026-07 until NCAR or the CDS has Aug-Sep 2026
+  domain: lemon_creek
+  dest: runs/lemon_added
+  template: tests/wolverine/summa_inputs
+  first_month: 2004-10
+  last_month: 2026-07
+  forcing: station_corrected
+  copy_forcing: false
+  calibrate: [2005-10-01, 2015-09-30]
+  evaluate: [2015-10-01, 2026-07-31]
+  targets: [discharge, mass_balance]
+
 # the stream-temperature runs: the added setup (all of its parameters, from parent) with a stream HRU, a reach and a wetland domain in the terminus HRU, which takes the
 # glacier's runoff and releases it to the reach; hyporheic exchange and the bedrock layers on. Spun up over WY2005 like paper 1,
 # calibrated WY2006-2019 so it holds four of Wolverine's water-temperature summers (2016-2019, six left for WY2020-2026);

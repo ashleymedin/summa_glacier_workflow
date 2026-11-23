@@ -5,6 +5,7 @@ pour_point: 58.3915312/-134.4226873             # lat/lon of the gauge
 utm_crs: EPSG:32608                             # UTM 8N
 utm_epsg: 32608
 rgi6_region: 01Alaska
+main_glacier: RGI60-01.01104                    # the glacier its glacier-wide factors (Shaw et al. 2025 k) are taken for
 min_glacier_size_km2: 1
 min_debris_thickness: 0.04
 
@@ -55,4 +56,6 @@ precip_grad: true
 correct: [pptrate]                              # temperature stays the pressure-level forcing's; check it against the 1280 m station
 gauge_shield: SA                                # Juneau Airport's ASOS all-weather gauge, single Alter assumed
 gauge_rain: true                                # precipitation the stakes leave scaled to the airport's undercatch-corrected catch, by month
+glacier_snow_factor: true                       # stake ratios as SUMMA's frozenPrecipMultip, glacier domains only
+rain_grad: true                                 # rain above the airport rises with the stakes' gradient
 wind_10m: [6]                                   # the airport anemometer is at 10 m
