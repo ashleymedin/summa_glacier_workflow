@@ -5,7 +5,8 @@ Sentinel-2's openings, early to mid June 2017-2026) and the most snow on it befo
 The *_wetprecip runs are on SUMMA wetland-precip (d1bfe962), where the lake takes its HRU's precipitation; *_wpsnow
 also give the lake the upland's snowfall multiplier (frozenPrecipMultip@wetland); lake_alb70/85 add a lake ice albedo of
 0.7/0.5 or 0.85/0.65 (albedoFrznWat*@wetland); lake_cool50/100 give the lake the glacier's air cooling (wetlandAirCooling); lake_white(_m1) are on SUMMA
-white-ice, with (without) the lake's snowfall multiplier."""
+white-ice, with (without) the lake's snowfall multiplier; _alb/_cool/_both add a lake ice albedo of 0.7/0.5, the
+glacier's air cooling, or both; *_lapse0 add both and keep the lake's air at the HRU elevation (tempLapseRate@wetland=0)."""
 import glob
 import os
 import sys
@@ -35,7 +36,12 @@ RUNS = [("r3 405 nolake", "wolverine_stream/calibration_r3_rerun", "nolake"),
         ("5b 465 lake c50", "wolverine_stream/calibration_5b_rerun", "lake_cool50"),
         ("5b 465 lake c100", "wolverine_stream/calibration_5b_rerun", "lake_cool100"),
         ("5b 465 lake wht", "wolverine_stream/calibration_5b_rerun", "lake_white"),
-        ("5b 465 lake wht1", "wolverine_stream/calibration_5b_rerun", "lake_white_m1")]
+        ("5b 465 lake wht1", "wolverine_stream/calibration_5b_rerun", "lake_white_m1"),
+        ("5b 465 wht1 alb", "wolverine_stream/calibration_5b_rerun", "lake_white_m1_alb"),
+        ("5b 465 wht1 cool", "wolverine_stream/calibration_5b_rerun", "lake_white_m1_cool"),
+        ("5b 465 wht1 both", "wolverine_stream/calibration_5b_rerun", "lake_white_m1_both"),
+        ("5b 465 wht1 lps0", "wolverine_stream/calibration_5b_rerun", "lake_white_m1_lapse0"),
+        ("5b 465 wht lps0", "wolverine_stream/calibration_5b_rerun", "lake_white_lapse0")]
 
 
 def lake_snow(folder, label):
