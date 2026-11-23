@@ -415,6 +415,7 @@ def wetland_domain(inputs, wetland, domain):
         set_param_line(params, "wetlandSedConc", wetland["sed_conc"], 0.0, 0.01)
     if "settle_vel" in wetland:
         set_param_line(params, "wetlandSettleVel", wetland["settle_vel"], 0.0, 1.0)
+    set_param_line(params, "wetlandPoolCooling", wetland.get("pool_cooling", 0.0), 0.0, 10.0)  # K; listed so a rerun can --set it
     if "mask" in wetland:
         if max_area <= 0:
             raise SystemExit("wetland: a mask needs max_area")

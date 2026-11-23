@@ -245,3 +245,4 @@ wetlandMaxArea            | 57000.000000 |       0.0000 |   1.0000e+09
 wetlandShape              |     0.590000 |       0.1000 |      10.0000
 wetlandSedConc            |     0.000750 |       0.0000 |       0.0100
 wetlandSettleVel          |     0.000010 |       0.0000 |       1.0000
+wetlandPoolCooling        |     0.000000 |       0.0000 |      10.0000

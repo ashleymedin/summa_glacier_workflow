@@ -244,3 +244,4 @@ glacierTempReduction      |     0.789900 |       0.0000 |       1.0000
 firnViscosity             |   3.2363e+13 |   1.0000e+12 |   1.0000e+14
 reachOutletElev           |  1137.000000 |       0.0000 |    9000.0000
 wetlandMinDepth           |     0.050000 |       0.0100 |       0.5000
+wetlandPoolCooling        |     0.000000 |       0.0000 |      10.0000
