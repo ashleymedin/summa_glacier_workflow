@@ -41,7 +41,9 @@ RUNS = [("r3 405 nolake", "wolverine_stream/calibration_r3_rerun", "nolake"),
         ("5b 465 wht1 cool", "wolverine_stream/calibration_5b_rerun", "lake_white_m1_cool"),
         ("5b 465 wht1 both", "wolverine_stream/calibration_5b_rerun", "lake_white_m1_both"),
         ("5b 465 wht1 lps0", "wolverine_stream/calibration_5b_rerun", "lake_white_m1_lapse0"),
-        ("5b 465 wht lps0", "wolverine_stream/calibration_5b_rerun", "lake_white_lapse0")]
+        ("5b 465 wht lps0", "wolverine_stream/calibration_5b_rerun", "lake_white_lapse0"),
+        ("B 432 delta", "wolverine_stream_delta/stream_b_rerun", "b432"),
+        ("B 471 delta", "wolverine_stream_delta/stream_b_rerun", "b471")]
 
 
 def lake_snow(folder, label):
