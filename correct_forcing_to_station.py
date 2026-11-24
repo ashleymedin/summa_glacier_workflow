@@ -15,8 +15,8 @@ copies of the forcing.  Longwave is copied unchanged.
   SWRadAtm  multiplied, per HRU: the ratio of summed station to summed forcing incoming shortwave
   airpres   multiplied, per HRU: the ratio of mean station pressure, carried hypsometrically to the HRU
             elevation, to mean forcing pressure
-  windspd   multiplied, every HRU alike, per calendar month: the ratio of mean station wind to mean forcing
-            wind at the station's elevation, times --wind-exposure (default 1, the station's wind, which SUMMA's
+  windspd   multiplied, every HRU alike, per calendar month: the ratio of mean station wind (--wind-station, or the
+            longest wind record) to mean forcing wind at the station's elevation, times --wind-exposure (default 1, the station's wind, which SUMMA's
             windExposure then scales to the surface)
   pptrate   only with --stakes: the snowfall part multiplied, per HRU, by measured winter balance over the
             corrected forcing's snowfall at the stakes within --stake-window of the HRU (or the nearest such
@@ -295,6 +295,8 @@ def main():
                    help="the variables to correct, default all; the others are copied unchanged")
     p.add_argument("--wind-10m", type=int, nargs="+", default=[], metavar="ELEV",
                    help="stations (folder elevation) whose wind is at 10 m, carried to the gauge's 2 m for the catch efficiency")
+    p.add_argument("--wind-station", type=int, metavar="ELEV",
+                   help="station (folder elevation) the wind is scaled to; default the one with the longest wind record")
     p.add_argument("--fit-years", type=int, nargs=2, metavar=("FIRST", "LAST"),
                    help="fit every correction on water years FIRST to LAST (1 Oct to 30 Sep) only; it is applied to all of the forcing")
     a = p.parse_args()
@@ -372,7 +374,8 @@ def main():
     ratio = {v: np.ones(nh) for v in ("SWRadAtm", "airpres", "pptrate")}
     # wind: monthly ratio at the station with the most wind, the same for every HRU
     wind = np.ones(13)
-    wz = max(stations, key=lambda s: len(stations[s].get("U", {})))
+    wz = a.wind_station if a.wind_station is not None else max(stations, key=lambda s: len(stations[s].get("U", {})))
+    print(f"wind from {wz} m ({len(stations[wz].get('U', {}))} h)")
     if a.wind_exposure > 0:
         u_st = on_hours(stations[wz].get("U", {}))
         u_frc = along_elevation(z, frc["windspd"], wz)

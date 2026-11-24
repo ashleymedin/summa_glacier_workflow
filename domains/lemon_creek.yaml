@@ -60,3 +60,4 @@ gauge_rain: true                                # precipitation the stakes leave
 glacier_snow_factor: true                       # stake ratios as SUMMA's frozenPrecipMultip, glacier domains only
 rain_grad: true                                 # rain above the airport rises with the stakes' gradient
 wind_10m: [6]                                   # the airport anemometer is at 10 m
+wind_station: 1280                              # the glacier station's wind, not the sheltered sea-level airport's

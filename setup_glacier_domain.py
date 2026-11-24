@@ -99,6 +99,8 @@ def main():
             args += ["--correct", *c["correct"]]
         if c.get("wind_10m"):
             args += ["--wind-10m", *c["wind_10m"]]
+        if c.get("wind_station"):
+            args += ["--wind-station", str(c["wind_station"])]
         if c.get("precip_grad"):
             args += ["--precip-grad"]
             state = os.path.join(project, "settings", "SUMMA", "coldstate_glac.nc")  # the coldstate step's, from a previous setup
