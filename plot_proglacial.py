@@ -105,11 +105,22 @@ def main():
         mapped = gpd.read_file(nhd, layer="reach_mapped").to_crs(code).geometry.iloc[0]
         front = gpd.read_file(nhd, layer="terminus").to_crs(code).geometry.iloc[0]
         local = lambda g: ((np.array(g.xy[0]) - cx) / 1000, (np.array(g.xy[1]) - cy) / 1000)
-        length = model_reach_length(c)
+        split = os.path.join(HERE, "domains", f"{domain}_grus.yaml")
+        length = None if os.path.exists(split) else model_reach_length(c)
+        if os.path.exists(split):  # a split domain's reaches, one per GRU, in place of the one from the ice front
+            from add_stream_grus import gru_line
+            g = load_config(split)
+            lines = [gru_line(g, k).simplify(0) for k in range(1, len(g["grus"]) + 1)]
+            for k, line in enumerate(lines):
+                for n, q in enumerate(getattr(line.__class__, "geoms", None) and line.geoms or [line]):
+                    q = gpd.GeoSeries([q], crs=g["utm_crs"]).to_crs(code).iloc[0]
+                    ax.plot(*local(q), color="#ff4d4d", lw=6, alpha=0.6, solid_capstyle="round", zorder=3,
+                            label=f"model reach of each GRU ({', '.join(f'{x.length:.0f}' for x in lines)} m)" if k == n == 0 else None)
         if length:  # a domain with a stream case
             ax.plot(*local(cut_from_gauge(full, length)), color="#ff4d4d", lw=9, alpha=0.5, solid_capstyle="round", zorder=3, label=f"model reach, {length:g} m")
-        ax.plot(*local(full), color="#08306b", lw=1.8, ls=":", zorder=4)
-        ax.plot(*local(mapped), color="#08306b", lw=3.0, zorder=4, label=f"NHD stream, ice front to gauge ({full.length:.0f} m; dotted: unmapped)")
+        if not os.path.exists(split):
+            ax.plot(*local(full), color="#08306b", lw=1.8, ls=":", zorder=4)
+            ax.plot(*local(mapped), color="#08306b", lw=3.0, zorder=4, label=f"NHD stream, ice front to gauge ({full.length:.0f} m; dotted: unmapped)")
         tx, ty = (front.x - cx) / 1000, (front.y - cy) / 1000
         ax.plot(gx, gy, marker="^", ms=12, mfc="red", mec="white", mew=1.5, ls="none", zorder=6)
         ax.annotate("gauge", (gx, gy), xytext=(8, -14), textcoords="offset points", color="white", fontsize=10, weight="bold")

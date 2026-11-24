@@ -367,7 +367,7 @@ def stream_domain(c, spec, stream, first, last, tmp, files, source):
     built = os.path.join(tmp, "built")
     if stream == "grus":  # a reach per GRU of a split domain, as wide as mizuRoute makes it
         routing = open(os.path.join(HERE, spec.get("routing", "tests/wolverine/mizuroute.param"))).read()
-        wscale = re.search(r"(?m)^\s*wscale\s*=\s*(\S+)", routing).group(1)
+        wscale = str(spec.get("wscale") or re.search(r"(?m)^\s*wscale\s*=\s*(\S+)", routing).group(1))
         subprocess.run([sys.executable, os.path.join(HERE, "add_stream_grus.py"), os.path.join(HERE, "domains", f"{spec['domain']}.yaml"),
                         settings, source, built, "--attributes", "attributes_glac.nc", "--cold-state", "coldstate_glac.nc",
                         "--first-month", first, "--last-month", last, "--wscale", wscale], check=True)
@@ -488,6 +488,26 @@ def build(name, spec, cases_dir):
                    + (["--upland", soil["class"], str(soil["sand"])] if soil else []), check=True)
     if "delta" in spec:
         wetland_trial_params(inputs, spec["wetland"], spec["delta"])
+    if spec.get("glacier_k") == "length":
+        glacier_k_by_length(inputs, load_config(os.path.join(HERE, "domains", f"{spec['domain']}.yaml")))
+
+
+def glacier_k_by_length(inputs, c):
+    """glacStor_kIce, kSnow and kFirn of each GRU in trialParams.nc: basinParamInfo.txt's times the length (RGI Lmax) of the GRU's
+    longest glacier over main_glacier's, so a calibration searches one spatial multiplier of each."""
+    import geopandas as gpd
+    path = glob.glob(os.path.join(HERE, c["data"]["rgi"], "*rgi60*", "*rgi60*.shp"))[0]
+    names = [g for e in c["grus"] for g in e["glaciers"]]
+    length = gpd.read_file(path, where=f"RGIId in ({', '.join(repr(n) for n in names)})", ignore_geometry=True).set_index("RGIId")["Lmax"]
+    ratio = np.array([max(length[g] for g in e["glaciers"]) for e in c["grus"]]) / length[c["main_glacier"]]
+    with nc4.Dataset(os.path.join(inputs, "trialParams.nc"), "a") as t:
+        ratio = ratio[np.asarray(t["gruId"][:], int) - 1]
+        for line in open(os.path.join(inputs, "basinParamInfo.txt")):
+            name = line.split("|")[0].strip()
+            if name.startswith("glacStor_k"):
+                var = t[name] if name in t.variables else t.createVariable(name, "f8", ("gru",))
+                var[:] = float(line.split("|")[1].strip().replace("d", "e")) * ratio
+    print(f"{inputs}/trialParams.nc: glacStor_k of each GRU x", " ".join(f"{x:.3f}" for x in ratio))
 
 
 # wetland keys of cases.yaml and the SUMMA parameters they set
@@ -600,6 +620,9 @@ def build_inputs(name, spec, cases_dir):
             routing = os.path.join(dest, "mizuroute.param")
             if not os.path.exists(routing):
                 shutil.copy(os.path.join(cases_dir, spec.get("routing", "tests/wolverine/mizuroute.param")), routing)
+            if spec.get("wscale"):
+                text = open(routing).read()
+                open(routing, "w").write(re.sub(r"(?m)^(\s*wscale\s*=\s*)\S+", lambda m: f"{m.group(1)}{spec['wscale']}", text))
             if spec["stream"] != "grus":
                 set_reach_width(routing, os.path.join(dest, "topology.nc"), spec["stream"]["width"])
             if "parent" in spec:

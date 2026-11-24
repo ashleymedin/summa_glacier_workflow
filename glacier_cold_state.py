@@ -202,7 +202,8 @@ def read_glacier_grids(project_dir, domain, utm_epsg, hru_ids, gru_ids, hru2gru,
             debris_gr[box] = np.where(outside, 0.0, debris[y0:y1, x0:x1])
             acc_area[j, i] = cell_area * np.sum(mask[box][ctype[box] == CLEAN1])
             abl_area[j, i] = cell_area * np.sum(mask[box][(ctype[box] == CLEAN2) | (ctype[box] == DEBRIS)])
-            glacier_hrus = np.unique(cell2hru[box][mask[box] == 1])
+            held = (mask[box] == 1) & ((ctype[box] > UPLAND) | (n_gru == 1))  # in a split domain the ice only, not its advance room
+            glacier_hrus = np.unique(cell2hru[box][held])
             if len(glacier_hrus) == 1:
                 single_glac_hru.append(glacier_hrus[0])
     dim_y, dim_x = ny.max(), nx.max()

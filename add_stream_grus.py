@@ -21,6 +21,7 @@ import geopandas as gpd
 import numpy as np
 import rasterio
 from netCDF4 import Dataset
+from shapely.geometry import LineString, Point
 from shapely.ops import linemerge, unary_union
 
 from domain_config import load_config
@@ -28,9 +29,39 @@ from domain_config import load_config
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
+def trace(c, r):
+    """The line through `points` (lon, lat), on along the NHD flowlines from their nearest point to `to`, less the water bodies it
+    crosses where `lakes: false`."""
+    nhd = os.path.join(c["project_dir"], "shapefiles", "nhd.gpkg")
+    xy = lambda p: gpd.GeoSeries([Point(*p)], crs=4326).to_crs(c["utm_crs"]).iloc[0]
+    flow = gpd.read_file(nhd, layer="flowlines").to_crs(c["utm_crs"]).explode(index_parts=False).geometry
+    flow = [LineString([q[:2] for q in g.coords]) for g in flow]
+    start, end = xy(r["points"][-1]), xy(r["to"])
+    last = min(flow, key=lambda g: g.distance(end))
+    end = last.interpolate(last.project(end))
+    line = min(flow, key=lambda g: g.distance(start))
+    path = [(p.x, p.y) for p in map(xy, r["points"])]
+    d = line.project(start)
+    while True:
+        stop = line.project(end) if line.distance(end) < 1 else line.length
+        path += [line.interpolate(d).coords[0]] + [q for q in line.coords if d < line.project(Point(q)) < stop] + [line.interpolate(stop).coords[0]]
+        if line.distance(end) < 1:
+            break
+        tail = Point(line.coords[-1])
+        line = min((g for g in flow if Point(g.coords[0]).distance(tail) < 1), key=lambda g: g.length, default=None)
+        if line is None:
+            raise SystemExit(f"the NHD flowlines end before {r['to']}")
+        d = 0.0
+    out = LineString(path)
+    return out.difference(gpd.read_file(nhd, layer="waterbodies").to_crs(c["utm_crs"]).union_all()) if r.get("lakes") is False else out
+
+
 def gru_line(c, k):
     """The reach of GRU k in the domain's UTM: its NHD stream inside the GRU."""
     project, name, crs = c["project_dir"], c["domain"], c["utm_crs"]
+    r = c["grus"][k - 1].get("reach")
+    if r:  # points of the stream above NHD's (`points`), then NHD's flowlines downstream from the last of them to `to`
+        return trace(c, r)
     gru = gpd.read_file(os.path.join(project, "shapefiles", "catchment", f"{name}_GRUs.shp")).to_crs(crs).set_index("GRU_ID").loc[k].geometry
     flow = gpd.read_file(os.path.join(project, "shapefiles", "nhd.gpkg"), layer="flowlines").to_crs(crs)
     line = unary_union(flow[flow.gnis_name == c["grus"][k - 1]["stream"]].geometry).intersection(gru)

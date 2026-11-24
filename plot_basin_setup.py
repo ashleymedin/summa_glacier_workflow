@@ -323,12 +323,15 @@ def main():
     p.add_argument("--reaches", action="store_true", help="the NHD reach from the terminus to the gauge (dark blue) and the model's (red), from its stream length, or each GRU's reach")
     p.add_argument("--glaciers", action="store_true", help="each RGI glacier's outline apart and its id, instead of the ice's outline")
     p.add_argument("--streams", action="store_true", help="the NHD streams and lakes, and the terminus-to-gauge windows of the YAML")
+    p.add_argument("--split", action="store_true", help="the added-data setup in its GRUs (<basin>_grus.yaml) where there is one")
     a = p.parse_args()
     fig, axes = plt.subplots(len(a.basins), len(a.setups), figsize=(max(4.6 * len(a.setups), 6.6), 5.6 * len(a.basins)), squeeze=False)
     from plot_proglacial import SCENES
     used = []
     for i, basin in enumerate(a.basins):
         configs = {st: os.path.join(HERE, "domains", f"{basin}{'_general' if st == 'general' else ''}.yaml") for st in ("general", "added")}
+        if a.split and os.path.exists(os.path.join(HERE, "domains", f"{basin}_grus.yaml")):
+            configs["added"] = os.path.join(HERE, "domains", f"{basin}_grus.yaml")
         configs = {st: cfg for st, cfg in configs.items() if os.path.exists(cfg)}  # a basin without glaciers has one setup
         keep_out = [g for st, cfg in configs.items() for g in gpd.read_file(glob.glob(os.path.join(load_config(cfg)["project_dir"], "shapefiles", "river_basins", "*.shp"))[0]).to_crs(32606).geometry]
         for j, setup in enumerate(a.setups):

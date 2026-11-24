@@ -5,7 +5,7 @@ The GRU is the basin of glacier_extend.py (shapefiles/river_basins), whole glaci
 shapefiles/catchment/<name>_GRUs.shp, each of those GRUs, numbered as there. The HRUs are each GRU's elevation bands, the
 YAML's hru_bands (edges in m, so n edges make n+1 HRUs), else bands hru_band_size (m, default 400) wide from the lowest elevation in
 the basin, as SYMFLUENCE's ELEVATION_BAND_SIZE did, numbered up from the lowest, each the union of the basin cells of the start surface (domain_<name>_glacier_elv.tif: MERIT, with the USGS survey surface on the benchmark glacier in the added-data setup, so the setups' HRUs differ) in the band, so a band can be several islands.
-A 3x3 median filter on the band numbers takes the single-cell speckle out. Writes
+With hru_min_km2 a smaller band of a GRU joins its larger neighbour. A 3x3 median filter on the band numbers takes the single-cell speckle out. Writes
 
   shapefiles/catchment/<name>_HRUs_elevation.shp   GRU_ID, HRU_ID, elevClass, with HRU_area, centre and elev_mean (hru_attributes.py
                                                    writes the true values)
@@ -54,9 +54,17 @@ def main():
     rows, cells = [], []
     for gru in grus.itertuples():
         in_gru = geometry_mask([gru.geometry], transform=transform, invert=True, out_shape=dem.shape) & (band > 0)
+        bands = band.copy()
+        if c.get("hru_min_km2"):  # a band smaller than this in the GRU joins its larger neighbouring band
+            lat = transform.f + transform.e * (np.arange(dem.shape[0]) + 0.5)
+            cell = abs(transform.a * transform.e) * 111320.0 * 110574.0 * np.cos(np.radians(lat))[:, None] / 1e6 * np.ones(dem.shape)
+            size = {k: cell[in_gru & (band == k)].sum() for k in range(1, len(edges) + 2)}
+            for k, s in size.items():
+                if 0 < s < c["hru_min_km2"]:
+                    bands[in_gru & (band == k)] = max((n for n in (k - 1, k + 1) if n in size), key=lambda n: size[n])
         for k in range(1, len(edges) + 2):
-            sel = in_gru & (band == k)
-            polys = [shape(g) for g, v in shapes(band, mask=sel, transform=transform) if v == k]
+            sel = in_gru & (bands == k)
+            polys = [shape(g) for g, v in shapes(bands, mask=sel, transform=transform) if v == k]
             if polys:
                 rows.append({"GRU_ID": int(gru.GRU_ID), "HRU_ID": len(rows) + 1, "elevClass": k, "geometry": unary_union(polys)})
                 cells.append(sel)

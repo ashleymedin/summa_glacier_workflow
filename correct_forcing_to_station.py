@@ -273,6 +273,7 @@ def main():
                    help="lowest stake used, m: below the gap between Wolverine's terminus stakes (440-650 m) and the next up (990 m)")
     p.add_argument("--stake-window", type=float, default=200.0, help="stakes within this of an HRU's elevation, m")
     p.add_argument("--glacier-state", help="cold state with DOMelev; stakes then belong to the nearest glacier domain's HRU")
+    p.add_argument("--stake-gru", type=int, help="GRU whose glaciers hold the stakes, in a domain of several (with --glacier-state)")
     p.add_argument("--precip-grad", action="store_true",
                    help="fit SUMMA's precipElevGrad to the stakes with the stake ratios, each stake on its nearest HRU")
     p.add_argument("--temp-crit-rain", type=float, default=273.16, help="wet-bulb rain/snow threshold, K")
@@ -306,6 +307,7 @@ def main():
 
     with Dataset(a.attributes) as d:
         hru_elev = dict(zip(np.array(d["hruId"][:]).astype(int), np.array(d["elevation"][:], float)))
+        gru_of = dict(zip(np.array(d["hruId"][:]).astype(int), np.array(d["hru2gruId"][:]).astype(int)))
     stations = {int(os.path.basename(s)): read_station(s)
                 for s in sorted(glob.glob(os.path.join(a.stations, "*"))) if os.path.basename(s).isdigit()}
     if len(stations) < 2:
@@ -329,6 +331,7 @@ def main():
             for v in frc:
                 frc[v].append(np.array(d[v][:], float))
     hours = np.concatenate(hours)
+    hru_gru = [gru_of[int(h)] for h in hru_ids]
     frc = {v: np.concatenate(x) for v, x in frc.items()}
     month = np.array([(EPOCH + timedelta(hours=int(h))).month for h in hours])
     in_fit = (hours >= FIT_HOURS[0]) & (hours < FIT_HOURS[1]) if FIT_HOURS else np.ones(len(hours), bool)
@@ -446,6 +449,8 @@ def main():
                     ze, typ = np.array(d["DOMelev"][0], float), np.array(d["domType"][0])
                     ids = np.array(d["hruId"][:]).astype(int)
                 dom_elev = [(list(hru_ids).index(ids[h]), ze[h, k]) for h, k in zip(*np.nonzero(np.isin(typ, (2, 3))))]
+                if a.stake_gru:  # the stakes are on this GRU's glaciers
+                    dom_elev = [(j, e) for j, e in dom_elev if hru_gru[j] == a.stake_gru]
                 print("glacier domains (HRU index, elevation):", [(j, round(e)) for j, e in dom_elev])
             ratio["pptrate"], used, cover, gamma = stake_ratios_graded(a.stakes, hours, z, snow_at, a.stake_min_elev, dom_elev)
         else:
@@ -503,6 +508,12 @@ def main():
         kept = gauge_month[month[:, None], np.arange(nh)[None, :]] if a.gauge_rain else np.ones_like(snow)
         for j in np.nonzero(staked)[0]:
             glacier_factor[j] = ratio["pptrate"][j] * weight[:, j].sum() / (kept[:, j] * weight[:, j]).sum()
+        if a.stake_gru:  # the other GRUs' glaciers get the snowfall of the staked HRU nearest in elevation, up the stakes' gradient
+            amount = (kept * weight).sum(axis=0)
+            for j in range(nh):
+                if hru_gru[j] != a.stake_gru and z[j] > a.stake_min_elev - 200.0:
+                    n = min(np.nonzero(staked)[0], key=lambda q: abs(z[q] - z[j]))
+                    glacier_factor[j] = glacier_factor[n] * amount[n] / amount[j] * (1.0 + gamma * (z[j] - z[n]))
 
     # rain above the highest gauge: the stakes' gradient carried up from it
     rain_grad = np.ones(nh)

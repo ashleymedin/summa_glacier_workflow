@@ -74,7 +74,7 @@ def main():
     if "zonal" in a.steps:
         run(py, os.path.join(HERE, "glacier_zonal_stats.py"), a.config)
     if "era5" in a.steps:
-        if not c.get("seed_from"):  # a seeded domain reads the source domain's raw_data
+        if not c.get("seed_from") and not os.path.islink(os.path.join(project, "forcing", "raw_data")):  # linked raw data is another domain's
             for script, source in (("acquire_era5.py", ()), ("acquire_era5_levels.py", ()), ("acquire_era5_levels.py", ("--source", "cds"))):
                 run(py, os.path.join(HERE, script), c["forcing_period"]["first"], c["forcing_period"]["last"], a.config, *source)
         run(py, os.path.join(HERE, "remap_forcing.py"), a.config)
@@ -101,6 +101,8 @@ def main():
             args += ["--wind-10m", *c["wind_10m"]]
         if c.get("wind_station"):
             args += ["--wind-station", str(c["wind_station"])]
+        if c.get("stake_gru"):
+            args += ["--stake-gru", str(c["stake_gru"])]
         if c.get("precip_grad"):
             args += ["--precip-grad"]
             state = os.path.join(project, "settings", "SUMMA", "coldstate_glac.nc")  # the coldstate step's, from a previous setup

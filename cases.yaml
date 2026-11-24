@@ -143,6 +143,20 @@ lemon_added:  # ends 2026-07 until NCAR or the CDS has Aug-Sep 2026
   targets: [discharge, mass_balance]
   upland_soil: {class: sandy loam, sand: 0.55}  # SoilGrids 2.0 (scratch/2026-11-24/soilgrids_lemon.py)
 
+lemon_grus:  # lemon_added in 3 GRUs (northern glacier and lakes, Ptarmigan, Lemon Creek Glacier and valley), each with its own reservoirs and grids
+  domain: lemon_creek_grus
+  dest: runs/lemon_grus
+  template: tests/wolverine/summa_inputs
+  first_month: 2004-10
+  last_month: 2026-07
+  forcing: station_corrected
+  copy_forcing: false
+  calibrate: [2005-10-01, 2015-09-30]
+  evaluate: [2015-10-01, 2026-07-31]
+  targets: [discharge, mass_balance]
+  glacier_k: length
+  upland_soil: {class: sandy loam, sand: 0.55}
+
 # Slate Creek, no glacier: 3 GRUs, each with a stream HRU and a reach on its NHD stream (add_stream_grus.py), routed to the gauge.
 # The span is the 29 months with ERA5 pressure levels so far, to test the build; extend once the NCAR downloads finish.
 slate_stream:
@@ -206,6 +220,24 @@ lemon_stream:
   forcing: station_corrected
   stream: {length: 4660, slope: 0.097, width: 12.5, elevation: 438, latitude: 58.4023, longitude: -134.3979, outlet_elevation: 221}
   wetland: {area: 150000, hru: 2, elevation: 761, depth: 11, outlet_depth: [11, 7, 17], fetch: 250}
+  decisions: {deepTherml: bedrockLyrs, hyporhTdyn: proxy}
+  calibrate: [2005-10-01, 2019-09-30]
+  evaluate: [2019-10-01, 2026-07-31]
+  targets: [discharge, mass_balance, stream_temperature]
+
+# lemon_stream in the 3 GRUs: a reach each, the lake chain (one wetland) in the northern glacier's GRU, so it takes only that glacier's water
+lemon_stream_grus:
+  domain: lemon_creek_grus
+  dest: runs/lemon_stream_grus
+  parent: lemon_grus
+  template: tests/wolverine/summa_inputs
+  first_month: 2004-10
+  last_month: 2026-07
+  forcing: station_corrected
+  stream: grus
+  wscale: 0.00221                               # 12.5 m wide at the gauge
+  glacier_k: length
+  wetland: {area: 150000, hru: 1, elevation: 761, depth: 11, outlet_depth: [11, 7, 17], fetch: 250}
   decisions: {deepTherml: bedrockLyrs, hyporhTdyn: proxy}
   calibrate: [2005-10-01, 2019-09-30]
   evaluate: [2019-10-01, 2026-07-31]
