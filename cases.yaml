@@ -143,7 +143,7 @@ lemon_added:  # ends 2026-07 until NCAR or the CDS has Aug-Sep 2026
   targets: [discharge, mass_balance]
   upland_soil: {class: sandy loam, sand: 0.55}  # SoilGrids 2.0 (scratch/2026-11-24/soilgrids_lemon.py)
 
-lemon_grus:  # replaces lemon_added, in 3 GRUs (northern glacier and lakes, Ptarmigan, Lemon Creek Glacier and valley), each with its own reservoirs and grids
+lemon_grus:  # replaces lemon_added, in 3 GRUs (Thomas Glacier and lakes, Ptarmigan, Lemon Creek Glacier and valley), each with its own reservoirs and grids
   domain: lemon_creek_grus
   dest: runs/lemon_grus
   template: tests/wolverine/summa_inputs
@@ -157,7 +157,7 @@ lemon_grus:  # replaces lemon_added, in 3 GRUs (northern glacier and lakes, Ptar
   glacier_k: length
   balance_gru: 3                                # the stakes' glacier
   mb_file: lemoncreek_mass_balance_seasonal_2006.nc   # the balances that start inside the run
-  geodetic: {"01506": [1, 1], "01105": [2, 1]}  # Hugonnet et al.: the northern glacier (G1) and Ptarmigan (G2); the stakes score Lemon Creek Glacier (G3)
+  geodetic: {"01506": [1, 1], "01105": [2, 1]}  # Hugonnet et al.: Thomas Glacier (G1) and Ptarmigan (G2); the stakes score Lemon Creek Glacier (G3)
   gru_snow: [1, 2]                              # glacier snowfall multipliers searched; G3's is the stakes'
   albedo_gru: [1, 2, 3]                         # with --search domain_gru
   upland_soil: {class: sandy loam, sand: 0.55}
@@ -230,7 +230,7 @@ lemon_stream:
   evaluate: [2019-10-01, 2026-07-31]
   targets: [discharge, mass_balance, stream_temperature]
 
-# lemon_stream in the 3 GRUs: a reach each, the lake chain (one wetland) in the northern glacier's GRU, so it takes only that glacier's water
+# lemon_stream in the 3 GRUs: a reach each, the lake chain (one wetland) in Thomas Glacier's GRU, so it takes only that glacier's water
 lemon_stream_grus:
   domain: lemon_creek_grus
   dest: runs/lemon_stream_grus
@@ -243,7 +243,7 @@ lemon_stream_grus:
   gauge_reach: 3
   balance_gru: 3
   mb_file: lemoncreek_mass_balance_seasonal_2006.nc
-  geodetic: {"01506": [1, 1], "01105": [2, 1]}  # Hugonnet et al.: the northern glacier (G1) and Ptarmigan (G2); the stakes score Lemon Creek Glacier (G3)
+  geodetic: {"01506": [1, 1], "01105": [2, 1]}  # Hugonnet et al.: Thomas Glacier (G1) and Ptarmigan (G2); the stakes score Lemon Creek Glacier (G3)
   wscale: 0.00221                               # 12.5 m wide at the gauge
   glacier_k: length
   wetland: {area: 150000, hru: 1, elevation: 761, depth: 11, outlet_depth: [11, 7, 17], fetch: 250}

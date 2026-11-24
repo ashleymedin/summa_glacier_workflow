@@ -42,6 +42,7 @@ from domain_config import load_config
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PURPLE, PINK, RED, BLUE, GREEN, ORANGE, BROWN = "#7b2d8e", "#e8629c", "#c0392b", "#1f78b4", "#1a9850", "#e08214", "#a8773f"
+GLACIER_NAMES = {101104: "\nLemon Creek Glacier", 101105: "\nPtarmigan Glacier", 101506: "\nThomas Glacier"}  # under the RGI id
 NAVY = "#08306b"  # the stream from the ice front, or the reaches of the GRUs
 YELLOW = "#ffd400"  # the proglacial image's area
 SKY = "#56b4e9"  # the on-ice station
@@ -200,7 +201,7 @@ def panel(ax, config, a, setup, keep_out, letter, front_project=None):
             if part.sum() >= 25 and (part & ~outside).mean() > 0.5 * part.mean():
                 dist = distance_transform_edt(part)
                 row, col = np.unravel_index(np.argmax(dist), dist.shape)
-                ax.annotate(f"{g // 100000}.{g % 100000:05d}", (xs[col], ys[row]), fontsize=6.5, color=PURPLE, weight="bold", ha="center", va="center", zorder=15, path_effects=HALO)
+                ax.annotate(f"{g // 100000}.{g % 100000:05d}{GLACIER_NAMES.get(int(g), '')}", (xs[col], ys[row]), fontsize=6.5, color=PURPLE, weight="bold", ha="center", va="center", zorder=15, path_effects=HALO)
     smooth_hrus.boundary.plot(ax=ax, color=GREEN, linewidth=HRU_LW, zorder=6)
     smooth_basin.boundary.plot(ax=ax, color="black", linewidth=1.8, zorder=7)
     split = os.path.join(project, "shapefiles", "catchment", f"{name}_GRUs.shp")
@@ -209,7 +210,7 @@ def panel(ax, config, a, setup, keep_out, letter, front_project=None):
         grus.set_geometry(grus.geometry.map(chaikin)).boundary.plot(ax=ax, color="black", linewidth=1.0, ls="--", zorder=7)
         for g in grus.itertuples():
             pt = g.geometry.representative_point()
-            ax.annotate(f"G{g.GRU_ID}", (pt.x, pt.y), fontsize=9, weight="bold", ha="center", zorder=15,
+            ax.annotate(f"G{g.GRU_ID}", (pt.x, pt.y), xytext=(-26, -4) if a.glaciers else (0, 0), textcoords="offset points", fontsize=9, weight="bold", ha="center", zorder=15,
                         bbox=dict(boxstyle="round,pad=0.2", fc="white", alpha=0.8, lw=0))
     lat, lon = (float(v) for v in c["pour_point"].split("/"))
     gx, gy = gpd.GeoSeries([Point(lon, lat)], crs=4326).to_crs(crs).iloc[0].coords[0]

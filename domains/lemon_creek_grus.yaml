@@ -32,11 +32,11 @@ usgs_datum: -7.3                                # m added to USGS heights (WGS84
 terminus: [-134.369, 58.4045]                  # main tongue's ice front, from the 1 Oct 2025 WorldView-2 (Esri) and 4 Sep 2025 Sentinel-2; no ArcticDEM strips here
 hru_bands: [600, 1000]                         # elevation band edges, m, of the HRUs (make_hrus.py)
 hru_min_km2: 0.1                                # the 6 cells of GRU 1 below 600 m join its next band
-merge_glaciers: none                            # the northern glacier (01506) drains to the lakes, another GRU than Lemon Creek Glacier's
-lakes:                                          # water not in the NHD: the upper lake, outlined on the 30 Jul 2020 Maxar image (the first point of each GRU's reach is its glacier's ice edge on that of 1 Oct 2025, the northern glacier's of 30 Jul 2020)
+merge_glaciers: none                            # Thomas Glacier (01506) drains to the lakes, another GRU than Lemon Creek Glacier's
+lakes:                                          # water not in the NHD: the upper lake, outlined on the 30 Jul 2020 Maxar image (the first point of each GRU's reach is its glacier's ice edge on that of 1 Oct 2025, Thomas Glacier's of 30 Jul 2020)
   - [[-134.3744, 58.4145], [-134.3722, 58.4143], [-134.3718, 58.4136], [-134.3737, 58.4130], [-134.3722, 58.4118], [-134.3717, 58.4112], [-134.3731, 58.4103], [-134.3760, 58.4113], [-134.3768, 58.4122], [-134.3765, 58.4137]]
 grus:                                           # GRUs (split_grus.py), by the stream their glaciers' water reaches
-  - {name: northern glacier and lakes, glaciers: [RGI60-01.01506], to: 3, reach: {points: [[-134.3681, 58.4132], [-134.3698, 58.4123], [-134.3708, 58.4116], [-134.3718, 58.4112], [-134.37295, 58.41051]], to: [-134.38062, 58.40133], lakes: false}}
+  - {name: Thomas Glacier and lakes, glaciers: [RGI60-01.01506], to: 3, reach: {points: [[-134.3681, 58.4132], [-134.3698, 58.4123], [-134.3708, 58.4116], [-134.3718, 58.4112], [-134.37295, 58.41051]], to: [-134.38062, 58.40133], lakes: false}}
   - {name: Ptarmigan Glacier, glaciers: [RGI60-01.01105], above: [-134.3778, 58.3963], within: 100, to: 3, reach: {points: [[-134.3762, 58.3757], [-134.3740, 58.3766], [-134.3724, 58.3772], [-134.3721, 58.3778], [-134.3720, 58.3790], [-134.3720, 58.3796], [-134.3727, 58.3803], [-134.37369, 58.38108]], to: [-134.38218, 58.3995]}}
   - {name: Lemon Creek Glacier and valley, glaciers: [RGI60-01.01104, RGI60-01.01102, RGI60-01.01103, RGI60-01.25476], reach: {points: [[-134.3722, 58.4024], [-134.37308, 58.4022], [-134.37601, 58.40095], [-134.3784, 58.40132], [-134.38062, 58.40133]], to: [-134.4226873, 58.3915312]}}
 sliver_cells: 10                                # the 6 cells the USGS outline leaves of 01102 join Lemon Creek Glacier

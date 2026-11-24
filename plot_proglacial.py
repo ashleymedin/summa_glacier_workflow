@@ -36,11 +36,11 @@ SITES = [("wolverine", "Wolverine Glacier and USGS 15236900", (-148.896667, 60.3
          ("gulkana", "Gulkana Glacier and USGS 15478040", (-145.468056, 63.240278), (-145.4260, 63.2586), (-145.4470, 63.2500), 2100,
           [("moraine and\nbraided outwash", -145.4420, 63.2470), ("Phelan Creek", -145.4640, 63.2440)])]
 SITES.append(("lemon_creek", "Lemon Creek Glacier and USGS 15052000", (-134.4226873, 58.3915312), (-134.369, 58.4045), (-134.3935, 58.3955), 2550,
-              [("middle lake\n(Lake Thomas)", -134.3850, 58.4090), ("lower lake", -134.3880, 58.4050), ("upper lake", -134.3815, 58.4135),
-               ("Thomas Glacier\n(northern)", -134.3585, 58.4155), ("Ptarmigan Glacier", -134.3680, 58.3738), ("Lemon Creek\nGlacier", -134.3610, 58.3960)]))
+              [("Lake Thomas", -134.3850, 58.4090), ("lower lake", -134.3880, 58.4050), ("upper lake", -134.3815, 58.4135),
+               ("Thomas Glacier", -134.3585, 58.4155), ("Ptarmigan Glacier", -134.3680, 58.3738), ("Lemon Creek\nGlacier", -134.3610, 58.3960)]))
 # a domain drawn on a Sentinel-2 scene (item id, half width of a second, closer panel of it, its centre and features)
 SCENES = {"lemon_creek": ("S2A_MSIL2A_20240818T201851_R071_T08VNK_20240819T014500", 1000, (-134.3745, 58.4080),
-                          [("middle lake\n(Lake Thomas)", -134.3805, 58.4078), ("lower lake", -134.3835, 58.4025), ("upper lake", -134.3795, 58.4130)])}
+                          [("Lake Thomas", -134.3805, 58.4078), ("lower lake", -134.3835, 58.4025), ("upper lake", -134.3795, 58.4130)])}
 
 
 def epsg(domain):
