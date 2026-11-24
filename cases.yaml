@@ -155,6 +155,9 @@ lemon_grus:  # lemon_added in 3 GRUs (northern glacier and lakes, Ptarmigan, Lem
   evaluate: [2015-10-01, 2026-07-31]
   targets: [discharge, mass_balance]
   glacier_k: length
+  balance_gru: 3                                # the stakes' glacier
+  mb_file: lemoncreek_mass_balance_seasonal_2006.nc   # the balances that start inside the run
+  geodetic: {"01506": [1, 1], "01105": [2, 0]}  # Hugonnet et al.: the northern glacier scored, Ptarmigan reported only
   upland_soil: {class: sandy loam, sand: 0.55}
 
 # Slate Creek, no glacier: 3 GRUs, each with a stream HRU and a reach on its NHD stream (add_stream_grus.py), routed to the gauge.
@@ -235,6 +238,10 @@ lemon_stream_grus:
   last_month: 2026-07
   forcing: station_corrected
   stream: grus
+  gauge_reach: 3
+  balance_gru: 3
+  mb_file: lemoncreek_mass_balance_seasonal_2006.nc
+  geodetic: {"01506": [1, 1], "01105": [2, 0]}
   wscale: 0.00221                               # 12.5 m wide at the gauge
   glacier_k: length
   wetland: {area: 150000, hru: 1, elevation: 761, depth: 11, outlet_depth: [11, 7, 17], fetch: 250}

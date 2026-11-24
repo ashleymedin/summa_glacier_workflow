@@ -11,7 +11,7 @@ def load(name):
     u, i = np.unique((h - np.timedelta64(1, "h")).astype("datetime64[D]"), return_inverse=True); q = np.ma.filled(e["averageRoutedRunoff"][:], 0).reshape(len(h), -1) @ A; avg = np.bincount(i, q) / np.bincount(i)
     ga = get("basin__GlacierArea_mean"); mc = get("basin__GlacierMassChange_mean") if "basin__GlacierMassChange_mean" in d.variables else None
     return dict(t=np.array([np.datetime64(x, "D") for x in t]), q_t=u, avg=avg, glac=get("glacierRoutedRunoff_mean") @ A, ga=ga, mc=mc, A=A, vars=list(d.variables))
-R = {n: load(n) for n in ("one", "equal", "length")}
+R = {n: load(n) for n in ("one", "equal", "length", "flat")}
 def nse(x, y): return 1 - ((x - y) ** 2).sum() / ((y - y.mean()) ** 2).sum()
 def kge(s, o):
     r = np.corrcoef(s, o)[0, 1]; return 1 - np.sqrt((r - 1) ** 2 + (s.std() / o.std() - 1) ** 2 + (s.mean() / o.mean() - 1) ** 2), r, s.mean() / o.mean(), s.std() / o.std()

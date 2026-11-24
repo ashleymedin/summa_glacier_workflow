@@ -6,8 +6,8 @@ from netCDF4 import Dataset
 W = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 EXE = os.path.expanduser("~/Research/SummaSundials/summa_wetprecip/bin/summa_sundials_mizuroute.exe")
 procs = []
-for name, case in (("one", "lemon_added"), ("equal", "lemon_grus"), ("length", "lemon_grus")):
-    if len(sys.argv) > 1 and name not in sys.argv[1:]: continue
+for name, case in (("one", "lemon_added"), ("equal", "lemon_grus"), ("length", "lemon_grus"), ("flat", "lemon_grus")):
+    if name not in (sys.argv[1:] or ("one", "equal", "length")): continue
     d = f"{W}/runs/lemon_grus/test/{name}"; shutil.rmtree(d, ignore_errors=True)
     os.makedirs(d + "/output"); os.makedirs(d + "/state")
     src = f"{W}/runs/lemon_added/default/settings" if name == "one" else f"{W}/runs/lemon_grus/summa_inputs"

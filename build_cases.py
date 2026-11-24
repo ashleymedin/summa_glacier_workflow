@@ -167,9 +167,10 @@ def part_cooling(inputs, parts):
     print(f"{inputs}/trialParams.nc: glacierTempReduction by HRU", " ".join(f"{x:.3f}" for x in k))
 
 
-def set_glacier_snowfall(inputs, source):
+def set_glacier_snowfall(inputs, source, snow_top=None):
     """frozenPrecipMultip (dom, hru) in trialParams.nc: the stake ratio of each HRU on its glacier domains and 1 elsewhere,
-    from the station correction's corrections.csv; without one (raw ERA5), the snowfall shape of glacier_snow_shape."""
+    from the station correction's corrections.csv; without one (raw ERA5), the snowfall shape of glacier_snow_shape. With snow_top
+    (m, the highest stake) a glacier domain above it gets the snowfall at that elevation, flat above."""
     factor = csv_row(os.path.join(source, "corrections.csv"), "frozenPrecipMultip_glacier")
     if factor is None:
         glacier_snow_shape(inputs, [csv_row(os.path.join(source, "remap.csv"), "precip_ratio")])
@@ -187,7 +188,15 @@ def set_glacier_snowfall(inputs, source):
         if "glacierSnowFactor" in t.variables:
             raise SystemExit(f"{inputs}/trialParams.nc holds glacierSnowFactor, which SUMMA no longer has; rebuild it")
         var = t["frozenPrecipMultip"] if "frozenPrecipMultip" in t.variables else t.createVariable("frozenPrecipMultip", "f8", ("dom", "hru"))
-        var[:] = np.where(np.isin(types, GLACIER_DOMAIN_TYPES), np.array(factor)[None, :], 1.0)
+        value = np.where(np.isin(types, GLACIER_DOMAIN_TYPES), np.array(factor)[None, :], 1.0)
+        if snow_top:
+            grad = csv_row(os.path.join(source, "corrections.csv"), "precipElevGrad_per_m")[0]
+            with nc4.Dataset(os.path.join(inputs, "coldState.nc")) as c, nc4.Dataset(os.path.join(inputs, "attributes.nc")) as at:
+                z = np.ma.filled(c["DOMelev"][:], 0).reshape(types.shape[::-1]).T
+                z0 = np.asarray(at["elevation"][:], float)[None, :]
+            high = np.isin(types, GLACIER_DOMAIN_TYPES) & (z > snow_top)
+            value = np.where(high, value * (1.0 + grad * (snow_top - z0)) / np.maximum(1.0 + grad * (z - z0), 0.1), value)
+        var[:] = value
     print(f"{inputs}/trialParams.nc: glacier frozenPrecipMultip", " ".join(f"{x:.3f}" for x in factor))
 
 
@@ -504,9 +513,20 @@ def glacier_k_by_length(inputs, c):
         ratio = ratio[np.asarray(t["gruId"][:], int) - 1]
         for line in open(os.path.join(inputs, "basinParamInfo.txt")):
             name = line.split("|")[0].strip()
-            if name.startswith("glacStor_k"):
+            if name.startswith("glacStor_k"):  # its lower limit takes the smallest glacier's k too
                 var = t[name] if name in t.variables else t.createVariable(name, "f8", ("gru",))
                 var[:] = float(line.split("|")[1].strip().replace("d", "e")) * ratio
+    path = os.path.join(inputs, "basinParamInfo.txt")
+    lines = open(path).read().splitlines(True)
+    marked = any("scaled lower limit" in l for l in lines)
+    for n, line in enumerate(lines):
+        if line.split("|")[0].strip().startswith("glacStor_k") and not marked:
+            q = line.rstrip("\n").split("|")
+            low = float(q[2].replace("d", "e")) * ratio.min() / 3.0
+            lines[n] = f"{q[0]}|{q[1]}| {low:12.4f} |{q[3]}\n"
+    if not marked:
+        lines.insert(0, "! glacStor_k scaled lower limit (glacier_k: length)\n")
+        open(path, "w").writelines(lines)
     print(f"{inputs}/trialParams.nc: glacStor_k of each GRU x", " ".join(f"{x:.3f}" for x in ratio))
 
 
@@ -637,7 +657,7 @@ def build_inputs(name, spec, cases_dir):
             if "delta" in spec:  # after the lake, so it takes the next domain slot of the same HRU
                 wet += f", delta in HRU {delta_domain(inputs, spec['delta'], spec['wetland'])}"
             fit_trial_params(inputs)
-            set_glacier_snowfall(inputs, source)
+            set_glacier_snowfall(inputs, source, c.get("snow_top"))
             print(f"{name}: stream HRU added{wet}, {len(files)} forcing files in {dest}/forcing")
             return
         if "wetland" in spec:
@@ -647,7 +667,7 @@ def build_inputs(name, spec, cases_dir):
         shutil.copy(os.path.join(tmp, "attributes_glac.nc"), os.path.join(inputs, "attributes.nc"))
         shutil.copy(os.path.join(tmp, "coldstate_glac.nc"), os.path.join(inputs, "coldState.nc"))
         fit_trial_params(inputs)  # the template may be a case with another number of HRUs, as with a stream HRU
-        set_glacier_snowfall(inputs, source)
+        set_glacier_snowfall(inputs, source, c.get("snow_top"))
         write_file_list(os.path.join(inputs, "forcingFileList.txt"), [os.path.basename(f) for f in files])
         if copy_forcing:
             forcing = os.path.join(dest, "forcing")

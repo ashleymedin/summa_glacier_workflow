@@ -14,7 +14,7 @@ for rid in ids:
             m = geometry_mask([q], out_shape=r.shape, transform=r.transform, invert=True); z = r.read(1)
             v = z[m & (z > -50) & (z < 50)]; s.append(v)
     v = np.concatenate(s); print(f"{rid} GRU {ids[rid] + 1}: dh/dt {v.mean():+.2f} m/yr, {v.mean() * 850:+.0f} mm w.e./yr ({len(v)} cells)")
-d = nc.Dataset(glob.glob("runs/lemon_grus/test/length/output/*_day.nc")[0]); t = nc.num2date(d["time"][:], d["time"].units); y = np.array([x.year + (x.month > 9) for x in t]); m = np.ma.filled(d["basin__GlacierMassChange_mean"][:], 0) * 86400
+d = nc.Dataset(glob.glob(f"runs/lemon_grus/test/{__import__('sys').argv[1] if len(__import__('sys').argv) > 1 else 'length'}/output/*_day.nc")[0]); t = nc.num2date(d["time"][:], d["time"].units); y = np.array([x.year + (x.month > 9) for x in t]); m = np.ma.filled(d["basin__GlacierMassChange_mean"][:], 0) * 86400
 for k in (2006, 2010, 2015, 2019, 2022, 2025): print(k, "annual balance per GRU mm", m[y == k].sum(0).round(0))
 print("WY2006-19 mean", (m[(y >= 2006) & (y <= 2019)].sum(0) / 14).round(0))
 o = nc.Dataset("runs/lemon_grus/test/one/output/" + "lemon_added_day.nc"); mo = np.ma.filled(o["basin__GlacierMassChange_mean"][:], 0).ravel() * 86400; print("one GRU WY2006-19", round(mo[(y >= 2006) & (y <= 2019)].sum() / 14))
