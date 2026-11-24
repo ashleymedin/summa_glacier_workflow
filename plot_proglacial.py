@@ -4,7 +4,7 @@ plot_proglacial.py <out.pdf> [domain ...] (default wolverine gulkana; also lemon
 
 Esri World Imagery (WorldView-2: Wolverine 29 Sep 2025, Gulkana 22 Jul 2024), fetched in Alaska Albers (EPSG:3338; Lemon Creek in UTM) so the axes are in
 metres; Wolverine in (a), Gulkana in (b). Drawn over them, in each panel, the ice front found from the ArcticDEM strips (nhd_reach.py), the NHD stream from it to the gauge (dark blue,
-dotted where NHD does not map it), with the model's stream length (cases.yaml) in the legend, or a split domain's reach of each GRU.
+dashed where NHD does not map it), with the model's stream length (cases.yaml) in the legend, or a split domain's reach of each GRU.
 Gauges from the USGS monitoring-location service.
 """
 import io
@@ -35,12 +35,12 @@ SITES = [("wolverine", "Wolverine Glacier and USGS 15236900", (-148.896667, 60.3
           [("proglacial lake\n0.021 km$^2$", -148.9113, 60.3745), ("delta", -148.9160, 60.3772), ("bedrock gorge", -148.9200, 60.3792)]),
          ("gulkana", "Gulkana Glacier and USGS 15478040", (-145.468056, 63.240278), (-145.4260, 63.2586), (-145.4470, 63.2500), 2100,
           [("moraine and\nbraided outwash", -145.4420, 63.2470), ("Phelan Creek", -145.4640, 63.2440)])]
-SITES.append(("lemon_creek", "Lemon Creek Glacier and USGS 15052000", (-134.4226873, 58.3915312), (-134.369, 58.4045), (-134.3920, 58.4025), 2400,
-              [("middle lake", -134.3820, 58.4090), ("lower lake", -134.3880, 58.4056), ("upper lake", -134.3805, 58.4135),
-               ("northern glacier", -134.3605, 58.4190), ("Lemon Creek\nGlacier", -134.3610, 58.3960)]))
+SITES.append(("lemon_creek", "Lemon Creek Glacier and USGS 15052000", (-134.4226873, 58.3915312), (-134.369, 58.4045), (-134.3935, 58.3955), 2550,
+              [("middle lake\n(Lake Thomas)", -134.3850, 58.4090), ("lower lake", -134.3880, 58.4050), ("upper lake", -134.3815, 58.4135),
+               ("Thomas Glacier\n(northern)", -134.3585, 58.4155), ("Ptarmigan Glacier", -134.3680, 58.3738), ("Lemon Creek\nGlacier", -134.3610, 58.3960)]))
 # a domain drawn on a Sentinel-2 scene (item id, half width of a second, closer panel of it, its centre and features)
-SCENES = {"lemon_creek": ("S2A_MSIL2A_20240818T201851_R071_T08VNK_20240819T014500", 1000, (-134.3745, 58.4085),
-                          [("middle lake", -134.3800, 58.4078), ("lower lake", -134.3835, 58.4025), ("upper lake", -134.3795, 58.4135)])}
+SCENES = {"lemon_creek": ("S2A_MSIL2A_20240818T201851_R071_T08VNK_20240819T014500", 1000, (-134.3745, 58.4080),
+                          [("middle lake\n(Lake Thomas)", -134.3805, 58.4078), ("lower lake", -134.3835, 58.4025), ("upper lake", -134.3795, 58.4130)])}
 
 
 def epsg(domain):
@@ -113,26 +113,29 @@ def main():
             from add_stream_grus import reach_parts
             g = load_config(split)
             parts = [reach_parts(g, k) for k in range(1, len(g["grus"]) + 1)]
-            named = "stream reach of each GRU ({} m; dotted: not on NHD)".format(", ".join(f"{x[0].length:.0f}" for x in parts))
+            named = "stream reach of each GRU ({} m; dashed: not on NHD)".format(", ".join(f"{x[0].length:.0f}" for x in parts))
             for _, on, off in parts:
-                for geom, kw in ((on, dict(lw=3.0, label=named)), (off, dict(lw=1.8, ls=":"))):
+                for geom, kw in ((on, dict(lw=3.0, label=named)), (off, dict(lw=3.0, ls=(0, (2.2, 0.9))))):
                     for q in getattr(geom, "geoms", [geom]):
                         if q.length > 0:
                             q = gpd.GeoSeries([q], crs=g["utm_crs"]).to_crs(code).iloc[0]
                             ax.plot(*local(q), color=NAVY, zorder=4, path_effects=LIGHT, **kw)
         if not os.path.exists(split):
-            ax.plot(*local(full), color=NAVY, lw=1.8, ls=":", zorder=4)
-            ax.plot(*local(mapped), color=NAVY, lw=3.0, zorder=4, label=f"NHD stream, ice front to gauge, {full.length:.0f} m" + (f"\n(model reach {length:g} m; dotted: unmapped)" if length else " (dotted: unmapped)"))
-        tx, ty = (front.x - cx) / 1000, (front.y - cy) / 1000
+            ax.plot(*local(full), color=NAVY, lw=3.0, ls=(0, (2.2, 0.9)), zorder=4, path_effects=LIGHT)
+            ax.plot(*local(mapped), color=NAVY, lw=3.0, zorder=4, label=f"NHD stream, ice front to gauge, {full.length:.0f} m" + (f"\n(model reach {length:g} m; dashed: unmapped)" if length else " (dashed: unmapped)"))
         ax.plot(gx, gy, marker="^", ms=12, mfc="red", mec="white", mew=1.5, ls="none", zorder=6)
         ax.annotate("gauge", (gx, gy), xytext=(8, -14), textcoords="offset points", color="white", fontsize=10, weight="bold")
-        ax.plot(tx, ty, marker="o", ms=9, mfc="none", mec="yellow", mew=2, ls="none", zorder=6)
-        ax.annotate("ice front", (tx, ty), xytext=(-10, 12) if item else (8, 6), textcoords="offset points", color="yellow", fontsize=10, weight="bold")
+        fronts = [km(*q["reach"]["points"][0]) for q in g["grus"]] if os.path.exists(split) else [((front.x - cx) / 1000, (front.y - cy) / 1000)]
+        for n, (tx, ty) in enumerate(fronts):
+            if ext[0] < tx < ext[1] and ext[2] < ty < ext[3]:
+                ax.plot(tx, ty, marker="o", ms=9, mfc="none", mec="yellow", mew=2, ls="none", zorder=6, label="recent ice front" if len(fronts) > 1 else None)
+                if len(fronts) == 1:
+                    ax.annotate("ice front", (tx, ty), xytext=(8, 6), textcoords="offset points", color="yellow", fontsize=10, weight="bold")
         for lab, lon, lat in feats:
             fx, fy = km(lon, lat)
             ax.annotate(lab, (fx, fy), color="white", fontsize=9, ha="center", va="center",
                         bbox=dict(boxstyle="round,pad=0.2", fc="black", alpha=0.35, lw=0))
-        x0, y0 = ext[0] + 0.72 * (ext[1] - ext[0]), ext[2] + 0.06 * (ext[3] - ext[2])
+        x0, y0 = ext[0] + (0.05 if centre2 else 0.72) * (ext[1] - ext[0]), ext[2] + 0.06 * (ext[3] - ext[2])
         ax.plot([x0, x0 + 0.5], [y0, y0], color="white", lw=3)
         ax.text(x0 + 0.25, y0 + 0.03 * (ext[3] - ext[2]), "500 m", color="white", ha="center", fontsize=9)
         ax.text(0.02, 0.98, f"({letter})", transform=ax.transAxes, ha="left", va="top", fontsize=13, fontweight="bold",
@@ -146,7 +149,7 @@ def main():
         uniq = dict(zip(labels, handles))
         if domain in SCENES:  # under the closer panel's partner, off the glacier
             if centre2:
-                ax.legend(uniq.values(), uniq.keys(), loc="upper left", bbox_to_anchor=(0, -0.01), ncol=1, fontsize=8, frameon=False)
+                ax.legend(uniq.values(), uniq.keys(), loc="upper left", bbox_to_anchor=(0, -0.01), ncol=2, fontsize=8, frameon=False, labelcolor="black")
         else:
             ax.legend(uniq.values(), uniq.keys(), loc="upper right", fontsize=8, framealpha=0.85)
     fig.tight_layout()

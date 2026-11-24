@@ -83,6 +83,7 @@ SEARCHES = {
                           "frozenPrecipMultip@glacier": (0.2, 5.0)}},  # with blown and avalanched snow, Kneib et al. (2025)
 }
 SEARCHES["domain_soil"] = dict(SEARCHES["domain"], soil=True)  # the upland soil searched even on a case with a SoilGrids class
+SEARCHES["domain_gru"] = dict(SEARCHES["domain"])  # with the glacier albedo by GRU (cases.yaml albedo_gru)
 SEARCHES["stream"] = dict(SEARCHES["domain"], params=STREAM, logs=SEARCHES["domain"]["logs"] + ["wetlandStorageK"],
                           bounds=dict(SEARCHES["domain"]["bounds"],
                                       wetlandStorageK=(600.0, 86400.0),  # s; ten minutes to a day
@@ -139,6 +140,17 @@ def search_for(case, name):
         ks = ["glacStor_kIce", "glacStor_kSnow", "glacStor_kFirn"]
         search["multipliers"] = search.get("multipliers", []) + ks
         search["bounds"] = dict(search["bounds"], **{k: (0.334, 2.0) for k in ks[:1]}, glacStor_kSnow=(0.334, 1.66), glacStor_kFirn=(0.334, 1.73))
+    snow = [f"frozenPrecipMultip@glacier_gru{g}" for g in case_spec(case).get("gru_snow", [])]  # a multiplier of the glacier snowfall of these GRUs
+    if snow:  # (the SUMMA of branch gru-select)
+        search["multipliers"] = search.get("multipliers", []) + snow
+        search["params"] = search["params"] + snow
+        search["bounds"] = dict(search["bounds"], **{q: (0.4, 1.5) for q in snow})
+    if name == "domain_gru":  # the snow albedo of each GRU's glaciers apart, and of the upland
+        for q in ("albedoDecayRate", "albedoMax"):
+            apart = [f"{q}@upland"] + [f"{q}@glacier_gru{g}" for g in case_spec(case)["albedo_gru"]]
+            search["params"] = [n for n in search["params"] if n != q] + apart
+            if q in search["bounds"]:
+                search["bounds"] = dict(search["bounds"], **{n: search["bounds"][q] for n in apart})
     with nc4.Dataset(os.path.join(HERE, case, "summa_inputs", "coldState.nc")) as d:
         types = np.asarray(d["domType"][:])
     if not np.any(types == 4):

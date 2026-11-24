@@ -158,6 +158,8 @@ lemon_grus:  # replaces lemon_added, in 3 GRUs (northern glacier and lakes, Ptar
   balance_gru: 3                                # the stakes' glacier
   mb_file: lemoncreek_mass_balance_seasonal_2006.nc   # the balances that start inside the run
   geodetic: {"01506": [1, 1], "01105": [2, 1]}  # Hugonnet et al.: the northern glacier (G1) and Ptarmigan (G2); the stakes score Lemon Creek Glacier (G3)
+  gru_snow: [1, 2]                              # glacier snowfall multipliers searched; G3's is the stakes'
+  albedo_gru: [1, 2, 3]                         # with --search domain_gru
   upland_soil: {class: sandy loam, sand: 0.55}
 
 # Slate Creek, no glacier: 3 GRUs, each with a stream HRU and a reach on its NHD stream (add_stream_grus.py), routed to the gauge.

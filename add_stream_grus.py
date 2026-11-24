@@ -21,7 +21,7 @@ import geopandas as gpd
 import numpy as np
 import rasterio
 from netCDF4 import Dataset
-from shapely.geometry import LineString, Point
+from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import linemerge, unary_union
 
 from domain_config import load_config
@@ -53,7 +53,16 @@ def trace(c, r):
             raise SystemExit(f"the NHD flowlines end before {r['to']}")
         d = 0.0
     out = LineString(path)
-    return out.difference(gpd.read_file(nhd, layer="waterbodies").to_crs(c["utm_crs"]).union_all()) if r.get("lakes") is False else out
+    if r.get("lakes") is not False:
+        return out
+    water = gpd.read_file(nhd, layer="waterbodies").to_crs(c["utm_crs"]).geometry
+    water = water[water.area < 1e6]  # not the icefield's ice masses
+    return out.difference(unary_union(list(water) + list(yaml_lakes(c))))
+
+
+def yaml_lakes(c):
+    """The YAML's `lakes:`, outlines (lon, lat) of water the NHD lacks, in the domain's UTM."""
+    return gpd.GeoSeries([Polygon(q) for q in c.get("lakes", [])], crs=4326).to_crs(c["utm_crs"])
 
 
 def gru_line(c, k):

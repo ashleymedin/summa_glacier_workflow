@@ -246,18 +246,25 @@ def panel(ax, config, a, setup, keep_out, letter, front_project=None):
         if os.path.exists(nhd):
             full = gpd.read_file(nhd, layer="reach").to_crs(crs).geometry.iloc[0]
             mapped = gpd.read_file(nhd, layer="reach_mapped").to_crs(crs)
-            ax.plot(*full.xy, color=NAVY, lw=1.6, ls=":", zorder=15)
+            ax.plot(*full.xy, color=NAVY, lw=2.8, ls=(0, (2.2, 0.9)), zorder=15)
             mapped.plot(ax=ax, color=NAVY, linewidth=2.8, zorder=15)
-    if a.reaches and (c.get("main_glacier") or name in ("Wolverine", "Gulkana")):
+    if a.reaches and not c.get("grus") and (c.get("main_glacier") or name in ("Wolverine", "Gulkana")):
         nhd = os.path.join(front_project or project, "shapefiles", "nhd.gpkg")
         if os.path.exists(nhd):
             tf = gpd.read_file(nhd, layer="terminus").to_crs(crs).geometry.iloc[0]
             ax.plot(tf.x, tf.y, marker="o", ms=9, mfc="none", mec="#f1c40f", mew=2.2, ls="none", zorder=16)
+    if a.reaches and any(g.get("reach") for g in c.get("grus", [])):  # each GRU's recent ice edge, where its reach starts
+        for g in c["grus"]:
+            tf = gpd.GeoSeries([Point(*g["reach"]["points"][0])], crs=4326).to_crs(crs).iloc[0]
+            ax.plot(tf.x, tf.y, marker="o", ms=9, mfc="none", mec="#f1c40f", mew=2.2, ls="none", zorder=16)
+    if a.reaches and c.get("lakes"):
+        from add_stream_grus import yaml_lakes
+        yaml_lakes(c).plot(ax=ax, color="#a6cee3", edgecolor=BLUE, linewidth=0.6, zorder=9)
     if a.reaches and c.get("grus"):  # the reach of each GRU (add_stream_grus.py), labelled by id; dotted off the NHD lines
         from add_stream_grus import reach_parts
         for k in range(1, len(c["grus"]) + 1):
             line, on, off = reach_parts(c, k)
-            for geom, kw in ((on, dict(lw=2.8)), (off, dict(lw=1.6, ls=":"))):
+            for geom, kw in ((on, dict(lw=2.8)), (off, dict(lw=2.8, ls=(0, (2.2, 0.9))))):
                 for part in getattr(geom, "geoms", [geom]):
                     if part.length > 0:
                         ax.plot(*part.xy, color=NAVY, zorder=15, **kw)
@@ -382,7 +389,7 @@ def main():
         handles.append(Line2D([], [], marker="D", ls="none", mfc=SKY, mec="black", ms=6, label="on-ice weather station"))
     if a.reaches:
         handles.append(Line2D([], [], color=NAVY, lw=2.8, label="stream reach (R) of each GRU" if grus and not any(not c.get("grus") for c in confs) else "stream, ice front to gauge" + (", or reach (R) of each GRU" if grus else "")))
-        handles[-1].set_label(handles[-1].get_label() + " (dotted: not on NHD)")
+        handles[-1].set_label(handles[-1].get_label() + " (dashed: not on NHD)")
     if a.reaches and glaciers:
         handles.append(Line2D([], [], marker="o", ls="none", mfc="none", mec="#f1c40f", mew=2.2, ms=9, label="recent ice front"))
     if a.network:
