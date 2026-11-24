@@ -8,6 +8,7 @@ attributes/glaciers, the glacier-capable versions of the type and RGI id rasters
   domain_<name>_domain_type_extend.tif   glaciers less than --gru-threshold inside the basin made upland
   domain_<name>_rgi_id_extend.tif        each glacier's id extended over the cells it may advance into
 
+With burn_streams: <m> in the YAML the NHD flowlines (acquire_nhd.py) are burnt that deep into the bed DEM before the delineation.
 With basin_within: huc12 in the YAML the basin is clipped to the HUC12 holding the gauge (acquire_nhd.py), and a glacier is modelled when
 most of its area is in that watershed (the USGS decides where its runoff goes) and most of it drains to the gauge on the bed;
 the basin then holds every modelled glacier whole. Advance room not joined to its glacier is dropped, and glaciers whose advance room
@@ -34,7 +35,7 @@ from scipy import ndimage
 import rasterio
 import rasterio.features
 from pysheds.grid import Grid
-from shapely.geometry import Polygon
+from shapely.geometry import LineString, Polygon
 
 from domain_config import load_config
 
@@ -42,15 +43,23 @@ SURROUND = {0: (0, -1), 1: (1, -1), 2: (1, 0), 3: (1, 1), 4: (0, 1), 5: (-1, 1),
 NEXT_CELL = {64: (0, -1), 128: (1, -1), 1: (1, 0), 2: (1, 1), 4: (0, 1), 8: (-1, 1), 16: (-1, 0), 32: (-1, -1)}
 
 
-def delineate(bed_path, pour_lat, pour_lon, snap_threshold=1000):
-    """Lumped basin above the pour point on the bed DEM: grid, flow direction, accumulation, basin mask."""
+def delineate(bed_path, pour_lat, pour_lon, snap_threshold=1000, streams=None, burn=0.0):
+    """Lumped basin above the pour point on the bed DEM: grid, flow direction, accumulation, basin mask. With `streams` (geometries
+    in the DEM's CRS) they are burnt `burn` m into it, and the cells from the outlet found to the pour point join the basin."""
     grid = Grid.from_raster(bed_path)
     dem = grid.read_raster(bed_path)
-    conditioned = grid.resolve_flats(grid.fill_depressions(grid.fill_pits(dem)))
+    z = dem.copy()
+    if streams is not None:
+        z[rasterio.features.rasterize([(g, 1) for g in streams], out_shape=dem.shape, transform=grid.affine, all_touched=True) == 1] -= burn
+    conditioned = grid.resolve_flats(grid.fill_depressions(grid.fill_pits(z)))
     fdir = grid.flowdir(conditioned)
     acc = grid.accumulation(fdir)
     x, y = grid.snap_to_mask(acc > snap_threshold, (pour_lon, pour_lat))
     catch = grid.catchment(x=x, y=y, fdir=fdir, xytype="coordinate")
+    if streams is not None:
+        tail = rasterio.features.rasterize([(LineString([(x, y), (pour_lon, pour_lat)]), 1)], out_shape=dem.shape, transform=grid.affine, all_touched=True)
+        catch = np.asarray(catch) | (tail == 1)
+        print(f"streams burnt {burn:g} m: outlet at {x:.4f} {y:.4f}, joined to the gauge by {int(tail.sum())} cells")
     return grid, dem, fdir, acc, catch
 
 
@@ -202,8 +211,13 @@ def main():
     os.makedirs(out_basin, exist_ok=True)
 
     lat, lon = (float(v) for v in c["pour_point"].split("/"))
-    grid, dem, fdir, acc, catch = delineate(os.path.join(dem_dir, f"domain_{name}_bedrock_elv.tif"), lat, lon)
     watershed = os.path.join(project, "shapefiles", "nhd.gpkg")
+    bed_path = os.path.join(dem_dir, f"domain_{name}_bedrock_elv.tif")
+    streams = None
+    if c.get("burn_streams"):  # a floodplain too flat for the DEM to hold the stream to its channel
+        with rasterio.open(bed_path) as src:
+            streams = gpd.read_file(watershed, layer="flowlines").to_crs(src.crs).geometry
+    grid, dem, fdir, acc, catch = delineate(bed_path, lat, lon, streams=streams, burn=float(c.get("burn_streams", 0.0)))
     if c.get("basin_within") == "huc12" and not os.path.exists(watershed):
         print(f"basin_within is set but {watershed} is missing (acquire_nhd.py is US only): the basin is the delineated one, "
               f"glaciers need --gru-threshold of their cells in it")

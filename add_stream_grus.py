@@ -28,18 +28,24 @@ from domain_config import load_config
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
+def gru_line(c, k):
+    """The reach of GRU k in the domain's UTM: its NHD stream inside the GRU."""
+    project, name, crs = c["project_dir"], c["domain"], c["utm_crs"]
+    gru = gpd.read_file(os.path.join(project, "shapefiles", "catchment", f"{name}_GRUs.shp")).to_crs(crs).set_index("GRU_ID").loc[k].geometry
+    flow = gpd.read_file(os.path.join(project, "shapefiles", "nhd.gpkg"), layer="flowlines").to_crs(crs)
+    line = unary_union(flow[flow.gnis_name == c["grus"][k - 1]["stream"]].geometry).intersection(gru)
+    return linemerge(line) if line.geom_type == "MultiLineString" else line
+
+
 def reaches(c, wscale):
     """{gru: dict(length, slope, elevation, latitude, longitude, down, width, donor)} from the GRUs, NHD and the surface DEM."""
     project, name = c["project_dir"], c["domain"]
     crs = c["utm_crs"]
-    grus = gpd.read_file(os.path.join(project, "shapefiles", "catchment", f"{name}_GRUs.shp")).to_crs(crs).set_index("GRU_ID")
     hrus = gpd.read_file(os.path.join(project, "shapefiles", "catchment", f"{name}_HRUs_elevation.shp"))
-    flow = gpd.read_file(os.path.join(project, "shapefiles", "nhd.gpkg"), layer="flowlines").to_crs(crs)
     dem = rasterio.open(os.path.join(project, "attributes", "elevation", "dem", f"domain_{name}_elv.tif"))
     out = {}
     for k, g in enumerate(c["grus"], start=1):
-        line = unary_union(flow[flow.gnis_name == g["stream"]].geometry).intersection(grus.loc[k].geometry)
-        line = linemerge(line) if line.geom_type == "MultiLineString" else line
+        line = gru_line(c, k)
         pts = [line.interpolate(f, normalized=True) for f in np.linspace(0, 1, 101)]
         ll = gpd.GeoSeries(pts, crs=crs).to_crs(dem.crs)
         z = np.array([v[0] for v in dem.sample([(p.x, p.y) for p in ll])], float)

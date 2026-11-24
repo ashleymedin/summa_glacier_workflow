@@ -22,6 +22,7 @@ data:
   ice_thickness: data/external/Thickness_data
 
 hru_bands: [600, 800]                           # elevation band edges, m, of the HRUs (make_hrus.py)
+burn_streams: 20                                # m the NHD flowlines are lowered for the delineation: unburnt, Slate Creek leaves its channel on the Koyukuk floodplain above the gauge
 basin_within: huc12                             # clip the basin to the USGS HUC12s draining to the gauge (acquire_nhd.py)
 grus:                                           # GRUs (split_grus.py), each its own elevation bands (make_hrus.py) and reach on its NHD stream (add_stream_grus.py)
   - {name: Myrtle Creek, huc12: "190901010603", stream: Myrtle Creek, to: 3}

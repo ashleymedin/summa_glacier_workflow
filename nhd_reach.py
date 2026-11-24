@@ -79,8 +79,9 @@ def model_reach_length(c):
     with open(os.path.join(HERE, "cases.yaml")) as f:
         cases = yaml.safe_load(f)
     name = c["domain"].lower()
-    found = [v["stream"]["length"] for v in cases.values() if v.get("domain", "").replace("_general", "") == name and "stream" in v]
-    found += [m["stream"]["length"] for v in cases.values() for m in v.get("merge", []) if m.get("domain") == name and "stream" in m]
+    plain = lambda d: d.replace("_general", "").replace("_", "")
+    parts = [p for v in cases.values() for p in [v] + v.get("merge", [])]
+    found = [p["stream"]["length"] for p in parts if isinstance(p.get("stream"), dict) and plain(p.get("domain", "")) == name]
     return max(found) if found else None
 
 
