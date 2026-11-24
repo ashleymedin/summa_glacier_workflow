@@ -143,7 +143,7 @@ lemon_added:  # ends 2026-07 until NCAR or the CDS has Aug-Sep 2026
   targets: [discharge, mass_balance]
   upland_soil: {class: sandy loam, sand: 0.55}  # SoilGrids 2.0 (scratch/2026-11-24/soilgrids_lemon.py)
 
-lemon_grus:  # lemon_added in 3 GRUs (northern glacier and lakes, Ptarmigan, Lemon Creek Glacier and valley), each with its own reservoirs and grids
+lemon_grus:  # replaces lemon_added, in 3 GRUs (northern glacier and lakes, Ptarmigan, Lemon Creek Glacier and valley), each with its own reservoirs and grids
   domain: lemon_creek_grus
   dest: runs/lemon_grus
   template: tests/wolverine/summa_inputs
