@@ -29,7 +29,7 @@ import netCDF4 as nc4
 import numpy as np
 import pandas as pd
 import rasterio
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import distance_transform_edt, gaussian_filter, label
 from matplotlib import patheffects
 from matplotlib.colors import LightSource
 from matplotlib.lines import Line2D
@@ -180,8 +180,20 @@ def panel(ax, config, a, setup, keep_out, letter):
         ax.contour(xs, ys, soft(debris & ~outside), levels=[0.5], colors=[DEBRIS_EDGE], linewidths=OUTLINE_LW, zorder=3)
     ax.contourf(xs, ys, soft(ext & ~glc, 0.45), levels=[0.5, 1.5], colors=[PINK], alpha=0.45, zorder=3)
     ax.contour(xs, ys, soft(ext & ~glc, 0.45), levels=[0.5], colors=[PINK], linewidths=OUTLINE_LW, zorder=4)
-    start = ax.contour(xs, ys, soft(glc), levels=[0.5], linewidths=0)  # outline traced on cell edges, clipped to the basin polygon
-    gpd.GeoSeries([LineString(seg).intersection(smooth_basin.geometry.union_all()) for seg in start.allsegs[0] if len(seg) > 1]).plot(ax=ax, color=PURPLE, linewidth=OUTLINE_LW, zorder=5)
+    ids = on_grid(os.path.join(project, "attributes", "glaciers", f"domain_{name}_rgi_id.tif"), like).astype(int)
+    for m in [ids == g for g in np.unique(ids[glc & ~outside])] if a.glaciers else [glc]:  # outline traced on cell edges, clipped to the basin polygon
+        start = ax.contour(xs, ys, soft(m, 0.6 if a.glaciers else 1.0), levels=[0.5], linewidths=0)
+        gpd.GeoSeries([LineString(seg).intersection(smooth_basin.geometry.union_all()) for seg in start.allsegs[0] if len(seg) > 1]).plot(ax=ax, color=PURPLE, linewidth=1.1 if a.glaciers else OUTLINE_LW, zorder=5)
+    if a.glaciers:
+        for g in np.unique(ids[glc & ~outside]):
+            lab, n = label(ids == g, structure=np.ones((3, 3)))
+            if n == 0:
+                continue
+            part = lab == np.argmax(np.bincount(lab.ravel())[1:]) + 1
+            if part.sum() >= 25 and (part & ~outside).mean() > 0.5 * part.mean():
+                dist = distance_transform_edt(part)
+                row, col = np.unravel_index(np.argmax(dist), dist.shape)
+                ax.annotate(f"{g // 100000}.{g % 100000:05d}", (xs[col], ys[row]), fontsize=6.5, color=PURPLE, weight="bold", ha="center", va="center", zorder=15, path_effects=HALO)
     smooth_hrus.boundary.plot(ax=ax, color=GREEN, linewidth=HRU_LW, zorder=6)
     smooth_basin.boundary.plot(ax=ax, color="black", linewidth=1.8, zorder=7)
     split = os.path.join(project, "shapefiles", "catchment", f"{name}_GRUs.shp")
@@ -309,6 +321,7 @@ def main():
     p.add_argument("--stations", action="store_true", help="the USGS weather stations")
     p.add_argument("--network", action="store_true", help="the YAML's stream_network: its reaches (R) and tributary GRUs (G) at their positions")
     p.add_argument("--reaches", action="store_true", help="the NHD reach from the terminus to the gauge (dark blue) and the model's (red), from its stream length, or each GRU's reach")
+    p.add_argument("--glaciers", action="store_true", help="each RGI glacier's outline apart and its id, instead of the ice's outline")
     p.add_argument("--streams", action="store_true", help="the NHD streams and lakes, and the terminus-to-gauge windows of the YAML")
     a = p.parse_args()
     fig, axes = plt.subplots(len(a.basins), len(a.setups), figsize=(max(4.6 * len(a.setups), 6.6), 5.6 * len(a.basins)), squeeze=False)
@@ -323,8 +336,8 @@ def main():
             used.append(config)
             keep_crs = load_config(config)["utm_crs"]
             panel(axes[i, j], config, a, setup, [g for g in gpd.GeoSeries(keep_out, crs=32606).to_crs(keep_crs)], "abcdefgh"[i * len(a.setups) + j])
-            label = "general setup" if setup == "general" else "added-data setup" if "general" in configs else "setup"
-            axes[i, j].set_title(f"{basin.replace('_', ' ').title()}, {label}", fontsize=10)
+            kind = "general setup" if setup == "general" else "added-data setup" if "general" in configs else "setup"
+            axes[i, j].set_title(f"{basin.replace('_', ' ').title()}, {kind}", fontsize=10)
     confs = [load_config(cfg) for cfg in used]
     glaciers = [c for c in confs if c.get("main_glacier") or c["domain"] in ("Wolverine", "Gulkana")]
     grus = any(c.get("grus") for c in confs)

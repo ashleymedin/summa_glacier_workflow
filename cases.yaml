@@ -192,8 +192,10 @@ wolverine_stream_delta:
   targets: [discharge, mass_balance, stream_temperature]
 
 # Lemon Creek's reach, ice front to gauge through the lake chain: the NHD path (nhd_reach.py, 4657 m), slope and mean elevation its fall on
-# the bed DEM, width the median of the gauge's 244 measurements at USGS 15052000 (12.5 m). The lakes (about 0.15 km2 in three) are not
-# in yet: a wetland of fixed area needs a depth
+# the bed DEM, width the median of the gauge's 244 measurements at USGS 15052000 (12.5 m). The three lakes are one
+# wetland of fixed area (0.15 km2 in late-summer 2025; open water since before the start, so no mask), in the 600-1000 m HRU that holds the
+# upper two. The DEMs hold their water surface, so the depth is the banks' slopes carried under the water, 11 m, 7-17 m by the slope taken
+# (scratch/2026-11-24/lemon_lake_depth.py); the elevation is area-weighted (851, 712 and 543 m)
 lemon_stream:
   domain: lemon_creek
   dest: runs/lemon_stream
@@ -203,6 +205,7 @@ lemon_stream:
   last_month: 2026-07
   forcing: station_corrected
   stream: {length: 4660, slope: 0.097, width: 12.5, elevation: 438, latitude: 58.4023, longitude: -134.3979, outlet_elevation: 221}
+  wetland: {area: 150000, hru: 2, elevation: 761, depth: 11, outlet_depth: [11, 7, 17], fetch: 250}
   decisions: {deepTherml: bedrockLyrs, hyporhTdyn: proxy}
   calibrate: [2005-10-01, 2019-09-30]
   evaluate: [2019-10-01, 2026-07-31]

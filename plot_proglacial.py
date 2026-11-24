@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Satellite images of each glacier's terminus and gauge, with the stream reach from the NHD and the model's:
-plot_proglacial.py <out.pdf> [domain ...] (default wolverine gulkana; also lemon_creek, on Sentinel-2 with a closer Esri panel)
+plot_proglacial.py <out.pdf> [domain ...] (default wolverine gulkana; also lemon_creek, on Sentinel-2 with a closer panel)
 
 Esri World Imagery (WorldView-2: Wolverine 29 Sep 2025, Gulkana 22 Jul 2024), fetched in Alaska Albers (EPSG:3338; Lemon Creek in UTM) so the axes are in
 metres; Wolverine in (a), Gulkana in (b). Drawn over them, in each panel, the ice front found from the ArcticDEM strips (nhd_reach.py), the NHD stream from it to the gauge (dark blue,
@@ -36,7 +36,7 @@ SITES = [("wolverine", "Wolverine Glacier and USGS 15236900", (-148.896667, 60.3
 SITES.append(("lemon_creek", "Lemon Creek Glacier and USGS 15052000", (-134.4226873, 58.3915312), (-134.369, 58.4045), (-134.3920, 58.4025), 2400,
               [("middle lake", -134.3820, 58.4090), ("lower lake", -134.3880, 58.4056), ("upper lake", -134.3805, 58.4135),
                ("northern glacier", -134.3605, 58.4190), ("Lemon Creek\nGlacier", -134.3610, 58.3960)]))
-# a domain drawn on a Sentinel-2 scene (item id, half width of a second, closer panel on Esri World Imagery, its centre and features)
+# a domain drawn on a Sentinel-2 scene (item id, half width of a second, closer panel of it, its centre and features)
 SCENES = {"lemon_creek": ("S2A_MSIL2A_20240818T201851_R071_T08VNK_20240819T014500", 1000, (-134.3745, 58.4085),
                           [("middle lake", -134.3800, 58.4078), ("lower lake", -134.3835, 58.4025), ("upper lake", -134.3795, 58.4135)])}
 
@@ -93,7 +93,7 @@ def main():
         code = epsg(domain)
         cx, cy = project(domain, *centre)
         ext = [-half / 1000, half / 1000, -half / 1000, half / 1000]
-        ax.imshow(sentinel2(item, cx, cy, half, code) if item else esri(cx, cy, half, code), extent=ext)
+        ax.imshow(sentinel2(SCENES[domain][0], cx, cy, half, code) if domain in SCENES else esri(cx, cy, half, code), extent=ext)
         if centre2:  # the closer panel's area
             x2, y2 = project(domain, *centre2)
             ax.add_patch(plt.Rectangle(((x2 - half2 - cx) / 1000, (y2 - half2 - cy) / 1000), half2 / 500, half2 / 500, fill=False, ec="yellow", lw=1.4, ls="--", zorder=5))

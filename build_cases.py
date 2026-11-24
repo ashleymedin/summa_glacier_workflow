@@ -422,6 +422,8 @@ def wetland_domain(inputs, wetland, domain):
         set_param_line(params, "wetlandShape", wetland["shape"], 0.1, 10.0)
     if "sed_conc" in wetland:
         set_param_line(params, "wetlandSedConc", wetland["sed_conc"], 0.0, 0.01)
+    if "fetch" in wetland:
+        set_param_line(params, "lakeFetch", wetland["fetch"], 0.0, 1e5)
     if "settle_vel" in wetland:
         set_param_line(params, "wetlandSettleVel", wetland["settle_vel"], 0.0, 1.0)
     set_param_line(params, "wetlandPoolCooling", wetland.get("pool_cooling", 0.0), 0.0, 10.0)  # K; listed so a rerun can --set it
