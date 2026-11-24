@@ -206,7 +206,7 @@ def has_obs(path, var, start, end):
 
 
 def config_text(case, run_dir, settings, work, start, end, score_start, score_end, algorithm, n_samples,
-                population, temperature, search=SEARCHES["paper1"], pinned=None, targets=None, seed=42):
+                population, temperature, search=SEARCHES["paper1"], pinned=None, targets=None, seed=42, geodetic_base=None):
     """The calibration driver's TOML for one search or one pinned trial; every pinned value is held by equal
     bounds, which override the search's own (pin_settings also pins the plain names in the parameter files).
     Every member of an ordered chain is searched."""
@@ -414,6 +414,7 @@ metric     = "rmse"
         base = datetime.date.fromisoformat(score_start)
         if base.year >= 2019 or not has_obs(os.path.join(obs, f"lemoncreek_hugonnet_{g}.nc"), "mb_obs", str(base), score_end):
             continue
+        base = datetime.date.fromisoformat(geodetic_base or score_start)  # the change since then, scored in the scoring years only
         lines.append(f'''
 
 [[calibration.target]]
@@ -511,6 +512,7 @@ def main():
     p.add_argument("--name", default="calibration",
                    help="folder of the calibration in <case>; its evaluation is <name>_evaluation")
     p.add_argument("--cal-end", help="calibrate: end the calibration years here (YYYY-MM-DD) instead of at the case's, for a cheap test")
+    p.add_argument("--score-start", help="calibrate: score from here (YYYY-MM-DD); the run still starts at the case's, so the glacier has its history")
     p.add_argument("--pin-trial", metavar="NAME:SAMPLE",
                    help="calibrate: hold every searched parameter but the stream ones (STREAM_ONLY) at that trial of "
                         "<case>/<NAME>, e.g. calibration_5b:412")
@@ -534,9 +536,9 @@ def main():
             if not set(free) <= set(STREAM_ONLY):
                 raise SystemExit(f"not in {name}, so not pinned: {', '.join(sorted(set(free) - set(STREAM_ONLY)))}")
             print(f"pinned {len(pinned)} parameters at {a.pin_trial}; searching {', '.join(free)}", flush=True)
-        config = config_text(a.case, run_dir, settings, work, cal0, cal1, cal0, cal1,
+        config = config_text(a.case, run_dir, settings, work, cal0, cal1, a.score_start or cal0, cal1,
                              "nsga2", a.population * a.generations, a.population, temperature=a.search == "stream",
-                             search=search, pinned=pinned, seed=a.seed)
+                             search=search, pinned=pinned, seed=a.seed, geodetic_base=cal0)
         run_driver(work, config, settings, a.ranks)
         print(f"calibration written to {calibration_file(work)}")
         return

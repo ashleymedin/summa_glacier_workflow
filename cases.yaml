@@ -151,8 +151,8 @@ lemon_grus:  # replaces lemon_added, in 3 GRUs (Thomas Glacier and lakes, Ptarmi
   last_month: 2026-07
   forcing: station_corrected
   copy_forcing: false
-  calibrate: [2005-10-01, 2015-09-30]
-  evaluate: [2015-10-01, 2026-07-31]
+  calibrate: [2005-10-01, 2022-09-30]
+  evaluate: [2022-10-01, 2026-07-31]
   targets: [discharge, mass_balance]
   glacier_k: length
   balance_gru: 3                                # the stakes' glacier
@@ -206,8 +206,8 @@ wolverine_stream_delta:
   delta: {area: 0, max_area: 12000, elevation: 430, outlet_depth: 0.1, shape: 1.0, sed_conc: 0.0, settle_vel: 1.0, fetch: 0,
           use_mask: 1, feeds_next: 1}
   decisions: {deepTherml: bedrockLyrs, hyporhTdyn: proxy}
-  calibrate: [2005-10-01, 2019-09-30]
-  evaluate: [2019-10-01, 2026-09-30]
+  calibrate: [2005-10-01, 2022-09-30]
+  evaluate: [2022-10-01, 2026-09-30]
   targets: [discharge, mass_balance, stream_temperature]
 
 # Lemon Creek's reach, ice front to gauge through the lake chain: the NHD path (nhd_reach.py, 4657 m), slope and mean elevation its fall on
@@ -246,10 +246,11 @@ lemon_stream_grus:
   geodetic: {"01506": [1, 1], "01105": [2, 1]}  # Hugonnet et al.: Thomas Glacier (G1) and Ptarmigan (G2); the stakes score Lemon Creek Glacier (G3)
   wscale: 0.00221                               # 12.5 m wide at the gauge
   glacier_k: length
+  gru_snow: [1, 2]                              # as lemon_grus
   wetland: {area: 150000, hru: 1, elevation: 761, depth: 11, outlet_depth: [11, 7, 17], fetch: 250}
   decisions: {deepTherml: bedrockLyrs, hyporhTdyn: proxy}
-  calibrate: [2005-10-01, 2019-09-30]
-  evaluate: [2019-10-01, 2026-07-31]
+  calibrate: [2005-10-01, 2022-09-30]
+  evaluate: [2022-10-01, 2026-07-31]
   targets: [discharge, mass_balance, stream_temperature]
 
 gulkana_stream:
