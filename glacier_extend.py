@@ -15,6 +15,9 @@ the basin then holds every modelled glacier whole. Advance room not joined to it
 meets share one grid (under the id of the largest). --merge body also joins a glacier whose room reaches another glacier's body, as
 the Root glacier's would the Kennicott's; the YAML's merge_glaciers sets it, and the default (room) leaves the Wolverine and Gulkana setups as they are. Without it the glacier needs --gru-threshold of its cells inside the basin.
 
+The YAML's sliver_cells joins a glacier of fewer cells to the one it touches most, and its min_room gives each glacier at least that many
+cells of room (the lowest free ones touching it).
+
 Extension, largest glacier first, by --method:
   drag  the terminus (the glacier's highest-accumulation cells) is shifted cell by cell down the flow
         direction until it has added (glacier cells)^(2/3) cells or meets the basin edge or another glacier,
@@ -256,6 +259,13 @@ def main():
             print(f"glacier {int(g)} not modelled: {np.sum((gid == g) & catch) / np.sum(gid == g):.0%} of its cells in the basin"
                   + (f", {np.sum((gid == g) & inside) / np.sum(gid == g):.0%} in the gauge's HUC12" if inside is not None else ""))
     glaciers = np.array(glaciers)[np.argsort(np.bincount(gid.ravel())[glaciers])[::-1]] if glaciers else np.array([])
+    for g in [g for g in glaciers if np.sum(gid == g) < int(c.get("sliver_cells", 0))]:  # what another outline has left of it
+        near = gid[ndimage.binary_dilation(gid == g, structure=np.ones((3, 3))) & np.isin(gid, [h for h in glaciers if h != g])]
+        if near.size:
+            to = np.bincount(near).argmax()
+            print(f"glacier {int(g)}: {int(np.sum(gid == g))} cells, a sliver beside glacier {int(to)}, joined to it")
+            gid[gid == g] = to
+            glaciers = glaciers[glaciers != g]
     original = gid.copy()
     eight = np.ones((3, 3))
     for g in glaciers:
@@ -268,6 +278,15 @@ def main():
         if np.sum((extend == 1) & ~joined):
             print(f"glacier {int(g)}: {int(np.sum((extend == 1) & ~joined))} cells of advance room not joined to the glacier dropped")
         extend = np.where((extend == 1) & joined, 1, 0)
+        short = int(c.get("min_room", 0)) - int(np.sum((extend == 1) & (gid != g)))
+        while short > 0:  # a glacier boxed in by another: the lowest free cell touching it
+            free = ndimage.binary_dilation((gid == g) | (extend == 1), structure=eight) & (possible == 1) & (gid == 0) & (extend == 0)
+            if not free.any():
+                print(f"glacier {int(g)}: no free cell beside it for its min_room")
+                break
+            extend[np.unravel_index(np.argmin(np.where(free, dem_surf, np.inf)), free.shape)] = 1
+            short -= 1
+            print(f"glacier {int(g)}: lowest free cell beside it added to its advance room (min_room)")
         gid[extend == 1] = g
         possible[extend == 1] = 0
 

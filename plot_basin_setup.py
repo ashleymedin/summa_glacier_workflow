@@ -42,6 +42,7 @@ from domain_config import load_config
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PURPLE, PINK, RED, BLUE, GREEN, ORANGE, BROWN = "#7b2d8e", "#e8629c", "#c0392b", "#1f78b4", "#1a9850", "#e08214", "#a8773f"
+NAVY = "#08306b"  # the stream from the ice front, or the reaches of the GRUs
 YELLOW = "#ffd400"  # the proglacial image's area
 SKY = "#56b4e9"  # the on-ice station
 CONTOUR, CONTOUR_INDEX = "#8a8a8a", "#5a5a5a"  # contour lines and the labelled ones, the same in both figures
@@ -128,7 +129,7 @@ def chaikin(geom, n=3):
     return LineString(cut(geom.coords, geom.coords[0] == geom.coords[-1]))
 
 
-def panel(ax, config, a, setup, keep_out, letter):
+def panel(ax, config, a, setup, keep_out, letter, front_project=None):
     c = load_config(config)
     project, name = c["project_dir"], c["domain"]
     with rasterio.open(os.path.join(project, "attributes", "elevation", "dem", f"domain_{name}_glacier_elv_utm.tif")) as r:
@@ -181,6 +182,12 @@ def panel(ax, config, a, setup, keep_out, letter):
     ax.contourf(xs, ys, soft(ext & ~glc, 0.45), levels=[0.5, 1.5], colors=[PINK], alpha=0.45, zorder=3)
     ax.contour(xs, ys, soft(ext & ~glc, 0.45), levels=[0.5], colors=[PINK], linewidths=OUTLINE_LW, zorder=4)
     ids = on_grid(os.path.join(project, "attributes", "glaciers", f"domain_{name}_rgi_id.tif"), like).astype(int)
+    if a.glaciers:  # advance room of a cell or two, lost in the blur
+        lab, n = label(ext & ~glc, structure=np.ones((3, 3)))
+        for k in range(1, n + 1):
+            if (lab == k).sum() <= 8:
+                row, col = np.nonzero(lab == k)
+                ax.plot(xs[col].mean(), ys[row].mean(), marker="s", ms=4.5, mfc=PINK, mec="black", mew=0.5, ls="none", zorder=14)
     for m in [ids == g for g in np.unique(ids[glc & ~outside])] if a.glaciers else [glc]:  # outline traced on cell edges, clipped to the basin polygon
         start = ax.contour(xs, ys, soft(m, 0.6 if a.glaciers else 1.0), levels=[0.5], linewidths=0)
         gpd.GeoSeries([LineString(seg).intersection(smooth_basin.geometry.union_all()) for seg in start.allsegs[0] if len(seg) > 1]).plot(ax=ax, color=PURPLE, linewidth=1.1 if a.glaciers else OUTLINE_LW, zorder=5)
@@ -235,28 +242,27 @@ def panel(ax, config, a, setup, keep_out, letter):
             ax.plot(px, py, marker="D", ms=7, mfc=SKY, mec="black", mew=1.0, ls="none", zorder=14)
             ax.annotate(f"{site['elev']} m", (px, py), xytext=(8, 6), textcoords="offset points", fontsize=6, zorder=14, path_effects=HALO)
     if a.reaches and not c.get("grus"):
-        from nhd_reach import cut_from_gauge, model_reach_length
-        nhd = os.path.join(project, "shapefiles", "nhd.gpkg")
+        nhd = os.path.join(front_project or project, "shapefiles", "nhd.gpkg")  # the observed ice front is the same on both setups: the added-data domain's
         if os.path.exists(nhd):
             full = gpd.read_file(nhd, layer="reach").to_crs(crs).geometry.iloc[0]
             mapped = gpd.read_file(nhd, layer="reach_mapped").to_crs(crs)
-            length = model_reach_length(c)
-            if length:  # the model's reach follows the stream from the gauge, straight on beyond the front when it is longer
-                model = cut_from_gauge(full, length)
-                ax.plot(*model.xy, color=RED, lw=7, alpha=0.45, solid_capstyle="round", zorder=14)
-            ax.plot(*full.xy, color="#08306b", lw=1.6, ls=":", zorder=15)
-            mapped.plot(ax=ax, color="#08306b", linewidth=2.8, zorder=15)
+            ax.plot(*full.xy, color=NAVY, lw=1.6, ls=":", zorder=15)
+            mapped.plot(ax=ax, color=NAVY, linewidth=2.8, zorder=15)
+    if a.reaches and (c.get("main_glacier") or name in ("Wolverine", "Gulkana")):
+        nhd = os.path.join(front_project or project, "shapefiles", "nhd.gpkg")
+        if os.path.exists(nhd):
             tf = gpd.read_file(nhd, layer="terminus").to_crs(crs).geometry.iloc[0]
             ax.plot(tf.x, tf.y, marker="o", ms=9, mfc="none", mec="#f1c40f", mew=2.2, ls="none", zorder=16)
-    if a.reaches and c.get("grus"):  # the model's reach of each GRU (add_stream_grus.py), labelled by id
-        from add_stream_grus import gru_line
+    if a.reaches and c.get("grus"):  # the reach of each GRU (add_stream_grus.py), labelled by id; dotted off the NHD lines
+        from add_stream_grus import reach_parts
         for k in range(1, len(c["grus"]) + 1):
-            line = gru_line(c, k)
-            for part in getattr(line, "geoms", [line]):
-                ax.plot(*part.xy, color=RED, lw=6, alpha=0.45, solid_capstyle="round", zorder=14)
-                ax.plot(*part.xy, color="#08306b", lw=1.6, zorder=15)
+            line, on, off = reach_parts(c, k)
+            for geom, kw in ((on, dict(lw=2.8)), (off, dict(lw=1.6, ls=":"))):
+                for part in getattr(geom, "geoms", [geom]):
+                    if part.length > 0:
+                        ax.plot(*part.xy, color=NAVY, zorder=15, **kw)
             mid = line.interpolate(0.35, normalized=True)
-            ax.plot(mid.x, mid.y, marker="o", ms=13, mfc="white", mec="#08306b", mew=1.4, ls="none", zorder=17)
+            ax.plot(mid.x, mid.y, marker="o", ms=13, mfc="white", mec=NAVY, mew=1.4, ls="none", zorder=17)
             ax.annotate(f"R{k}", (mid.x, mid.y), ha="center", va="center", fontsize=7, zorder=18)
     if a.network and c.get("stream_network"):
         import json
@@ -286,8 +292,8 @@ def panel(ax, config, a, setup, keep_out, letter):
             if lake["name"].endswith("reach"):
                 ax.add_patch(Rectangle((bx[0], bx[1]), bx[2] - bx[0], bx[3] - bx[1], fill=False, ec=ORANGE, lw=1.3, ls="--", zorder=9))
         from plot_proglacial import SCENES, epsg, window as image_window
-        key = os.path.basename(config).replace(".yaml", "").replace("_general", "")
-        if key in SCENES:
+        key = os.path.basename(config).replace(".yaml", "").replace("_general", "").replace("_grus", "")
+        if key in SCENES and setup == a.setups[-1]:
             ib = gpd.GeoSeries([box(*image_window(key))], crs=epsg(key)).to_crs(crs)  # plot_proglacial.py's image
             ib.boundary.plot(ax=ax, color=YELLOW, linewidth=1.8, linestyle="--", zorder=16)
     ax.set_xlim(left, right)
@@ -320,10 +326,10 @@ def main():
     p.add_argument("--grids", action="store_true", help="the extent of each glacier's flow-model grid")
     p.add_argument("--stations", action="store_true", help="the USGS weather stations")
     p.add_argument("--network", action="store_true", help="the YAML's stream_network: its reaches (R) and tributary GRUs (G) at their positions")
-    p.add_argument("--reaches", action="store_true", help="the NHD reach from the terminus to the gauge (dark blue) and the model's (red), from its stream length, or each GRU's reach")
+    p.add_argument("--reaches", action="store_true", help="the NHD stream from the recent ice front to the gauge, or each GRU's reach")
     p.add_argument("--glaciers", action="store_true", help="each RGI glacier's outline apart and its id, instead of the ice's outline")
     p.add_argument("--streams", action="store_true", help="the NHD streams and lakes, and the terminus-to-gauge windows of the YAML")
-    p.add_argument("--split", action="store_true", help="the added-data setup in its GRUs (<basin>_grus.yaml) where there is one")
+    p.add_argument("--split", action="store_true", help="the setups in their GRUs (<basin>_grus.yaml, <basin>_general_grus.yaml) where there are")
     a = p.parse_args()
     fig, axes = plt.subplots(len(a.basins), len(a.setups), figsize=(max(4.6 * len(a.setups), 6.6), 5.6 * len(a.basins)), squeeze=False)
     from plot_proglacial import SCENES
@@ -332,13 +338,16 @@ def main():
         configs = {st: os.path.join(HERE, "domains", f"{basin}{'_general' if st == 'general' else ''}.yaml") for st in ("general", "added")}
         if a.split and os.path.exists(os.path.join(HERE, "domains", f"{basin}_grus.yaml")):
             configs["added"] = os.path.join(HERE, "domains", f"{basin}_grus.yaml")
+        if a.split and os.path.exists(os.path.join(HERE, "domains", f"{basin}_general_grus.yaml")):
+            configs["general"] = os.path.join(HERE, "domains", f"{basin}_general_grus.yaml")
         configs = {st: cfg for st, cfg in configs.items() if os.path.exists(cfg)}  # a basin without glaciers has one setup
         keep_out = [g for st, cfg in configs.items() for g in gpd.read_file(glob.glob(os.path.join(load_config(cfg)["project_dir"], "shapefiles", "river_basins", "*.shp"))[0]).to_crs(32606).geometry]
         for j, setup in enumerate(a.setups):
             config = configs[setup]
             used.append(config)
             keep_crs = load_config(config)["utm_crs"]
-            panel(axes[i, j], config, a, setup, [g for g in gpd.GeoSeries(keep_out, crs=32606).to_crs(keep_crs)], "abcdefgh"[i * len(a.setups) + j])
+            panel(axes[i, j], config, a, setup, [g for g in gpd.GeoSeries(keep_out, crs=32606).to_crs(keep_crs)], "abcdefgh"[i * len(a.setups) + j],
+                  load_config(configs["added"])["project_dir"] if "added" in configs else None)
             kind = "general setup" if setup == "general" else "added-data setup" if "general" in configs else "setup"
             axes[i, j].set_title(f"{basin.replace('_', ' ').title()}, {kind}", fontsize=10)
     confs = [load_config(cfg) for cfg in used]
@@ -371,12 +380,11 @@ def main():
             handles.append(Line2D([], [], marker="o", ls="none", mfc="#555555", mec="black", ms=4.5, label=f"stake below {STAKE_MIN_ELEV:,.0f} m"))
     if a.stations and any(on_ice_sites(c["project_dir"]) for c in confs):
         handles.append(Line2D([], [], marker="D", ls="none", mfc=SKY, mec="black", ms=6, label="on-ice weather station"))
+    if a.reaches:
+        handles.append(Line2D([], [], color=NAVY, lw=2.8, label="stream reach (R) of each GRU" if grus and not any(not c.get("grus") for c in confs) else "stream, ice front to gauge" + (", or reach (R) of each GRU" if grus else "")))
+        handles[-1].set_label(handles[-1].get_label() + " (dotted: not on NHD)")
     if a.reaches and glaciers:
-        handles += [Line2D([], [], color="#08306b", lw=2.8, label="NHD stream, ice front to gauge (dotted: unmapped)"),
-                    Line2D([], [], color=RED, lw=7, alpha=0.45, label="model reach, its stream length from the gauge"),
-                    Line2D([], [], marker="o", ls="none", mfc="none", mec="#f1c40f", mew=2.2, ms=9, label="ice front")]
-    if a.reaches and grus:
-        handles.append(Line2D([], [], color=RED, lw=6, alpha=0.45, label="model reach (R) of each GRU, on its NHD stream"))
+        handles.append(Line2D([], [], marker="o", ls="none", mfc="none", mec="#f1c40f", mew=2.2, ms=9, label="recent ice front"))
     if a.network:
         handles += [Line2D([], [], marker="o", ls="none", mfc="white", mec="#08306b", ms=9, label="network reach (R)"),
                     Line2D([], [], marker="*", ls="none", mfc="#b2df8a", mec="black", ms=11, label="tributary GRU (G)")]

@@ -37,6 +37,8 @@ grus:                                           # GRUs (split_grus.py), by the s
   - {name: northern glacier and lakes, glaciers: [RGI60-01.01506], to: 3, reach: {points: [[-134.37295, 58.41051]], to: [-134.38062, 58.40133], lakes: false}}
   - {name: Ptarmigan Glacier, glaciers: [RGI60-01.01105], above: [-134.3778, 58.3963], within: 100, to: 3, reach: {points: [[-134.37369, 58.38108]], to: [-134.38218, 58.3995]}}
   - {name: Lemon Creek Glacier and valley, glaciers: [RGI60-01.01104, RGI60-01.01102, RGI60-01.01103, RGI60-01.25476], reach: {points: [[-134.37308, 58.4022], [-134.37601, 58.40095], [-134.3784, 58.40132], [-134.38062, 58.40133]], to: [-134.4226873, 58.3915312]}}
+sliver_cells: 10                                # the 6 cells the USGS outline leaves of 01102 join Lemon Creek Glacier
+min_room: 1                                     # cells of advance room every glacier has at least
 snow_top: 1243                                  # m, the highest stake; glacier snowfall is flat above it
 stake_gru: 3                                    # the stakes are on Lemon Creek Glacier
 basin_within: huc12                             # clip the basin to the USGS HUC12 of the gauge (acquire_nhd.py)

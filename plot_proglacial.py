@@ -4,8 +4,7 @@ plot_proglacial.py <out.pdf> [domain ...] (default wolverine gulkana; also lemon
 
 Esri World Imagery (WorldView-2: Wolverine 29 Sep 2025, Gulkana 22 Jul 2024), fetched in Alaska Albers (EPSG:3338; Lemon Creek in UTM) so the axes are in
 metres; Wolverine in (a), Gulkana in (b). Drawn over them, in each panel, the ice front found from the ArcticDEM strips (nhd_reach.py), the NHD stream from it to the gauge (dark blue,
-dotted where NHD does not map it) and the reach the model's stream HRU has, its stream length (cases.yaml) from the gauge along that
-stream (red).
+dotted where NHD does not map it), with the model's stream length (cases.yaml) in the legend, or a split domain's reach of each GRU.
 Gauges from the USGS monitoring-location service.
 """
 import io
@@ -18,12 +17,15 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import patheffects
 from PIL import Image
 from pyproj import Transformer
 
 from domain_config import load_config
-from nhd_reach import cut_from_gauge, model_reach_length
+from nhd_reach import model_reach_length
 
+NAVY = "#08306b"  # as plot_basin_setup.py
+LIGHT = [patheffects.withStroke(linewidth=4.0, foreground="white", alpha=0.5)]  # the line stays visible on dark water
 HERE = os.path.dirname(os.path.abspath(__file__))
 EPSG = {"lemon_creek": 32608}  # a site drawn in its UTM zone, north up: Alaska Albers (3338), the default, is turned 15 degrees at Juneau
 URL = ("https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/export?"
@@ -108,19 +110,19 @@ def main():
         split = os.path.join(HERE, "domains", f"{domain}_grus.yaml")
         length = None if os.path.exists(split) else model_reach_length(c)
         if os.path.exists(split):  # a split domain's reaches, one per GRU, in place of the one from the ice front
-            from add_stream_grus import gru_line
+            from add_stream_grus import reach_parts
             g = load_config(split)
-            lines = [gru_line(g, k).simplify(0) for k in range(1, len(g["grus"]) + 1)]
-            for k, line in enumerate(lines):
-                for n, q in enumerate(getattr(line.__class__, "geoms", None) and line.geoms or [line]):
-                    q = gpd.GeoSeries([q], crs=g["utm_crs"]).to_crs(code).iloc[0]
-                    ax.plot(*local(q), color="#ff4d4d", lw=6, alpha=0.6, solid_capstyle="round", zorder=3,
-                            label=f"model reach of each GRU ({', '.join(f'{x.length:.0f}' for x in lines)} m)" if k == n == 0 else None)
-        if length:  # a domain with a stream case
-            ax.plot(*local(cut_from_gauge(full, length)), color="#ff4d4d", lw=9, alpha=0.5, solid_capstyle="round", zorder=3, label=f"model reach, {length:g} m")
+            parts = [reach_parts(g, k) for k in range(1, len(g["grus"]) + 1)]
+            named = "stream reach of each GRU ({} m; dotted: not on NHD)".format(", ".join(f"{x[0].length:.0f}" for x in parts))
+            for _, on, off in parts:
+                for geom, kw in ((on, dict(lw=3.0, label=named)), (off, dict(lw=1.8, ls=":"))):
+                    for q in getattr(geom, "geoms", [geom]):
+                        if q.length > 0:
+                            q = gpd.GeoSeries([q], crs=g["utm_crs"]).to_crs(code).iloc[0]
+                            ax.plot(*local(q), color=NAVY, zorder=4, path_effects=LIGHT, **kw)
         if not os.path.exists(split):
-            ax.plot(*local(full), color="#08306b", lw=1.8, ls=":", zorder=4)
-            ax.plot(*local(mapped), color="#08306b", lw=3.0, zorder=4, label=f"NHD stream, ice front to gauge ({full.length:.0f} m; dotted: unmapped)")
+            ax.plot(*local(full), color=NAVY, lw=1.8, ls=":", zorder=4)
+            ax.plot(*local(mapped), color=NAVY, lw=3.0, zorder=4, label=f"NHD stream, ice front to gauge, {full.length:.0f} m" + (f"\n(model reach {length:g} m; dotted: unmapped)" if length else " (dotted: unmapped)"))
         tx, ty = (front.x - cx) / 1000, (front.y - cy) / 1000
         ax.plot(gx, gy, marker="^", ms=12, mfc="red", mec="white", mew=1.5, ls="none", zorder=6)
         ax.annotate("gauge", (gx, gy), xytext=(8, -14), textcoords="offset points", color="white", fontsize=10, weight="bold")

@@ -68,6 +68,13 @@ def gru_line(c, k):
     return linemerge(line) if line.geom_type == "MultiLineString" else line
 
 
+def reach_parts(c, k, tol=10.0):
+    """The reach of GRU k, and its parts within tol m of the NHD flowlines and off them."""
+    line = gru_line(c, k)
+    near = gpd.read_file(os.path.join(c["project_dir"], "shapefiles", "nhd.gpkg"), layer="flowlines").to_crs(c["utm_crs"]).geometry.buffer(tol).union_all()
+    return line, line.intersection(near), line.difference(near)
+
+
 def reaches(c, wscale):
     """{gru: dict(length, slope, elevation, latitude, longitude, down, width, donor)} from the GRUs, NHD and the surface DEM."""
     project, name = c["project_dir"], c["domain"]
