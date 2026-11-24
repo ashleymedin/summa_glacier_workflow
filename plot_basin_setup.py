@@ -36,7 +36,7 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Patch, Rectangle
 from rasterio.features import geometry_mask
 from rasterio.warp import Resampling, reproject
-from shapely.geometry import LineString, Point, Polygon, box
+from shapely.geometry import LineString, Point, Point, Polygon, box
 
 from domain_config import load_config
 
@@ -210,7 +210,9 @@ def panel(ax, config, a, setup, keep_out, letter, front_project=None):
         grus.set_geometry(grus.geometry.map(chaikin)).boundary.plot(ax=ax, color="black", linewidth=1.0, ls="--", zorder=7)
         for g in grus.itertuples():
             pt = g.geometry.representative_point()
-            ax.annotate(f"G{g.GRU_ID}", (pt.x, pt.y), xytext=(-26, -4) if a.glaciers else (0, 0), textcoords="offset points", fontsize=9, weight="bold", ha="center", zorder=15,
+            west = Point(pt.x - 600, pt.y)  # off the glacier's name where the GRU has room
+            pt = west if a.glaciers and g.geometry.contains(west) else pt
+            ax.annotate(f"G{g.GRU_ID}", (pt.x, pt.y), fontsize=9, weight="bold", ha="center", zorder=15,
                         bbox=dict(boxstyle="round,pad=0.2", fc="white", alpha=0.8, lw=0))
     lat, lon = (float(v) for v in c["pour_point"].split("/"))
     gx, gy = gpd.GeoSeries([Point(lon, lat)], crs=4326).to_crs(crs).iloc[0].coords[0]
