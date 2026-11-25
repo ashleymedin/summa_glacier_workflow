@@ -29,6 +29,7 @@ import shutil
 import subprocess
 import tomllib
 from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
 
 import netCDF4 as nc4
 import numpy as np
@@ -105,6 +106,8 @@ UPLAND_SOIL = ["k_soil@upland", "theta_sat@upland", "vGn_n@upland", "frac_sand@u
 # (build_cases.glacier_snow_shape), so one number scales the snowfall of every glacier domain
 RAW_MULTIPLIERS = ["frozenPrecipMultip@glacier"]
 
+
+NETCDF = Lock()  # netCDF/HDF5 is not thread-safe; threads that run models in parallel take turns at the files
 
 def case_spec(case):
     """A run's entry in cases.yaml, with the keys a stream case inherits from its parent (build_cases.INHERITED)."""
@@ -558,11 +561,12 @@ def main():
     def rerun(i):
         work = os.path.join(evaluation, f"sample_{i + 1}")
         pinned = os.path.join(work + "_settings")
-        pin_settings(settings, pinned, values[i])
-        config = config_text(a.case, run_dir, pinned, work, cal0, ev1, ev0, ev1,
-                             "dds", 1, 1, temperature=True, search=search, pinned=values[i])
+        with NETCDF:
+            pin_settings(settings, pinned, values[i])
+            config = config_text(a.case, run_dir, pinned, work, cal0, ev1, ev0, ev1,
+                                 "dds", 1, 1, temperature=True, search=search, pinned=values[i])
         run_driver(work, config, pinned, a.ranks)
-        with nc4.Dataset(calibration_file(work)) as d:
+        with NETCDF, nc4.Dataset(calibration_file(work)) as d:
             ev = np.ma.filled(d["objective"][0].astype(float), np.nan)
             ev_names = [t.strip() for t in d["objective"].target.split(",")]
         row = {"sample": int(i) + 1}

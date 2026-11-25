@@ -16,6 +16,7 @@ import argparse
 import os
 import re
 import shutil
+import threading
 from concurrent.futures import ThreadPoolExecutor
 
 import netCDF4 as nc4
@@ -27,6 +28,9 @@ OUTPUTS = ["averageRoutedRunoff", "glacierRoutedRunoff", "basin__GlacierMassChan
            "scalarGlacierMelt", "scalarAquiferStorage", "DOMarea", "DOMelev",
            "glacMass4AreaChange"]  # each domain's mass change since the last area update, which the flow model fits
 GRIDS = ["surface_elev", "debris_thick"]  # glacier surface and debris maps at each year's end
+
+
+SETUP = threading.Lock()
 
 
 def set_defaults(settings, overrides):
@@ -83,28 +87,29 @@ def main():
             values[s][k] = float(v)
 
     def rerun(s):
-        work = os.path.join(run_dir, f"{a.name}_rerun", f"sample_{s}" + (f"_{a.label}" if a.label else ""))
-        pinned = work + "_settings"
-        pin_settings(os.path.abspath(a.inputs) if a.inputs else os.path.join(run_dir, "summa_inputs"), pinned, values[s])
-        set_defaults(pinned, dict(kv.split("=") for kv in a.set))
-        with open(os.path.join(pinned, "outputControl.txt"), "a") as f:
-            f.writelines(f"{v:<26}| day | mean\n" for v in OUTPUTS + a.extra)
-            f.writelines(f"{v:<26}| annual\n" for v in GRIDS)
-        cal0, cal1, ev0, ev1 = periods(a.case)
-        if a.calibration_years:
-            ev0, ev1 = cal0, cal1
-        config = config_text(a.case, run_dir, pinned, work, cal0, ev1, cal0 if a.aligned else ev0, ev1,
-                             "dds", 1, 1, temperature=True, search=search, pinned=values[s],
-                             targets=a.targets.split(",") if a.targets else None).replace("write_timeseries = false", "write_timeseries = true") \
-            .replace("write_Qreach = false", "write_Qreach = true")
-        if a.aligned:
-            config = config.replace("write_aligned = false", "write_aligned = true")
-        if a.massbal:
-            shutil.copy(a.massbal, os.path.join(pinned, "glacierMassBal.txt"))
-            config = re.sub(r'^(noahmp_table *= *".*")$', r'\1\nglacier_massbal  = "glacierMassBal.txt"', config, flags=re.M)
-        if a.forcing:
-            config = re.sub(r'^forcing_path *= *".*"$', f'forcing_path  = "{os.path.join(os.path.abspath(a.forcing), "")}"',
-                            config, flags=re.M)
+        with SETUP:  # netCDF/HDF5 is not thread-safe; only the model runs overlap
+            work = os.path.join(run_dir, f"{a.name}_rerun", f"sample_{s}" + (f"_{a.label}" if a.label else ""))
+            pinned = work + "_settings"
+            pin_settings(os.path.abspath(a.inputs) if a.inputs else os.path.join(run_dir, "summa_inputs"), pinned, values[s])
+            set_defaults(pinned, dict(kv.split("=") for kv in a.set))
+            with open(os.path.join(pinned, "outputControl.txt"), "a") as f:
+                f.writelines(f"{v:<26}| day | mean\n" for v in OUTPUTS + a.extra)
+                f.writelines(f"{v:<26}| annual\n" for v in GRIDS)
+            cal0, cal1, ev0, ev1 = periods(a.case)
+            if a.calibration_years:
+                ev0, ev1 = cal0, cal1
+            config = config_text(a.case, run_dir, pinned, work, cal0, ev1, cal0 if a.aligned else ev0, ev1,
+                                 "dds", 1, 1, temperature=True, search=search, pinned=values[s],
+                                 targets=a.targets.split(",") if a.targets else None).replace("write_timeseries = false", "write_timeseries = true") \
+                .replace("write_Qreach = false", "write_Qreach = true")
+            if a.aligned:
+                config = config.replace("write_aligned = false", "write_aligned = true")
+            if a.massbal:
+                shutil.copy(a.massbal, os.path.join(pinned, "glacierMassBal.txt"))
+                config = re.sub(r'^(noahmp_table *= *".*")$', r'\1\nglacier_massbal  = "glacierMassBal.txt"', config, flags=re.M)
+            if a.forcing:
+                config = re.sub(r'^forcing_path *= *".*"$', f'forcing_path  = "{os.path.join(os.path.abspath(a.forcing), "")}"',
+                                config, flags=re.M)
         run_driver(work, config, pinned, a.ranks)
         print(f"sample {s}: {work}/output", flush=True)
 
