@@ -1,0 +1,12 @@
+diff --git a/build/source/engine/heat_Cp_Cm.f90 b/build/source/engine/heat_Cp_Cm.f90
+index 8de13e1a..bdf9cbef 100644
+--- a/build/source/engine/heat_Cp_Cm.f90
++++ b/build/source/engine/heat_Cp_Cm.f90
+@@ -595,6 +595,7 @@ subroutine heatAdvectWat(&
+               dCm_dTk(iLayer) = -iden_air * Cp_air + iden_ice * Cp_ice
+               dCm_dPsi0(ixControlIndex) = (-iden_ice * Cp_ice + iden_water * Cp_water) * dTcrit_dPsi0
+             endif
++            mLayerCm(iLayer)=0._rkind; dCm_dTk(iLayer)=0._rkind; dCm_dPsi0(ixControlIndex)=0._rkind
+ 
+         end select
+ 
