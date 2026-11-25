@@ -1,0 +1,66 @@
+# Gulkana Glacier, Alaska: USGS 15478040 Phelan Creek near Paxson, 1 GRU of 3 elevation-band HRUs
+project_dir: data/domain_Gulkana_10b
+domain: Gulkana
+bounding_box: 63.31/-145.54/63.23/-145.32       # lat_max/lon_min/lat_min/lon_max
+pour_point: 63.24027778/-145.4680556            # lat/lon of the gauge
+utm_crs: EPSG:32606                             # UTM 6N, for metric glacier grids
+utm_epsg: 32606
+rgi6_region: 01Alaska
+main_glacier: RGI60-01.00570                    # the glacier its glacier-wide factors (Shaw et al. 2025 k) are taken for
+min_glacier_size_km2: 1                         # Herreid and Pellicciotti debris map version
+min_debris_thickness: 0.04                      # m, thinner mapped debris is raised to this
+
+# global glacier products, downloaded by hand (README.md)
+landclass: {source: worldcover, igbp: {30: 19}}   # ESA WorldCover 2021, majority of each HRU's ice-free cells (upland_domain.py vegetation), as Lemon Creek
+
+data:
+  rgi: data/external/RGI_data
+  debris_extent: data/external/Debris_data
+  debris_thickness: data/external/Debris_thick
+  ice_thickness: data/external/Thickness_data
+  usgs_outlines: data/external/GlacierDEM/USGS_Glacier_Boundaries_shp/USGS_Glacier_Boundaries.shp
+usgs_outline: {glacier: Gulkana Glacier, date: 2004/10/01, outlines: [1993/07/11, 2005/08/19], dems: [data/external/GlacierDEM/Deltas_19930711_DEM/Deltas_19930711_DEM.tif, data/external/GlacierDEM/Deltas_20050808_DEM/Deltas_20050808_DEM.tif]}  # interpolated in time to the 2004-10 start, in place of RGI's 2009 outline
+millan_reference: {date: 2016/08/30, dem: data/external/GlacierDEM/Deltas_20160830_DEM/Deltas_20160830_DEM.tif}  # the survey inside Millan's 2010-2020 decade; the bed is it less his thickness
+later_outline: {date: 2021/09/19, dems: data/external/GlacierDEM/ArcticDEM_Gulkana}  # the last survey; ArcticDEM strips after it give the bed where ice melted out
+usgs_datum: -16.1                               # m added to USGS heights (WGS84 ellipsoid) to give the model DEM's
+small_meltout: {dems: data/external/GlacierDEM/ArcticDEM_Gulkana_series, glaciers: [RGI60-01.00332, RGI60-01.00333, RGI60-01.00334, RGI60-01.22903]}   # multi-year strips (acquire_arcticdem.py --series): bed of the glaciers without a survey where their ice has gone
+glacier_dem: {dems: data/external/Copernicus_GLO30/*.tif, date: 2012/07/01, dhdt: data/external/Hugonnet/01_02_rgi60_2000-01-01_2020-01-01/dhdt/*.tif}  # TanDEM-X 2011-14; glacier cells off the surveys, carried to cold_start at the 2000-19 rates
+
+hru_bands: [1480, 1880]                          # elevation band edges, m, of the HRUs (make_hrus.py)
+basin_within: huc12                             # clip the basin to the USGS HUC12 of the gauge (acquire_nhd.py), US only
+
+forcing_period: {first: 2004-10, last: 2026-09}    # months of ERA5 the era5 step fetches; Jul-Sep 2026 are ERA5T
+
+# cold state of the domain itself (cases write their own, from their own first month)
+# observations over forcing_period (acquire_observations.py); each key optional, the mass balance is the USGS benchmark glaciers' only
+observations:
+  streamflow: {source: usgs, gauge: "15478040"}
+  stream_temperature: {site: "15478040", aquarius: "stream_temperature/raw_data/Temperature,_water.degC.Work@15478040.20060223.xlsx"}
+  grace: true
+  wgms_amce: {release: data/external/wgms-amce-2026-02-10, region: ALA, outlines: [RGI60-01.00570, RGI60-01.00332, RGI60-01.00333, RGI60-01.00334, RGI60-01.22903]}
+  mass_balance: {release: storage/mass_balance/Output_Gulkana_Glacier_Wide_solutions_calibrated.csv, balance: seasonal}
+  velocity: true
+  lake_area:
+    - {name: gulkana_reach, box: [-145.4731, 63.2381, -145.4210, 63.2609], usgs_site: "15478040"}   # terminus to gauge, 250 m beyond
+
+# late-summer scenes check_glacier_imagery.py compares with the starting and final glacier
+imagery: {landsat: [2004, 2005, 2009], sentinel: [2019, 2020, 2021, 2025, 2026]}
+
+start_debris_scenes: [observations/imagery/imagery_landsat_2004-08-14.tif, observations/imagery/imagery_landsat_2005-08-10.tif]  # imagery classes near the start; debris mapped ~2010 that they show as ice starts clean
+cold_start: 2004-10                             # first forcing month; its 12 months of raw ERA5 set the start
+soil_offset: 1.5                                # deg C, soil and debris above the mean annual air temperature
+ice_temp: -1.0                                  # deg C
+
+# station correction of the forcing (correct_forcing_to_station.py)
+stations: observations/stations                       # in project_dir
+stakes: observations/storage/mass_balance/Input_Gulkana_Glaciological_Data.csv
+gauge_shield: SA                                # weighing gauges at 1480 and 1725 m, shield assumed as Wolverine's
+gauge_rain: true                                # precipitation the stakes leave scaled by the gauges, by month
+precip_grad: true                               # SUMMA precipElevGrad fitted with the stake ratios
+glacier_snow_factor: true                       # stake ratios as SUMMA's frozenPrecipMultip, glacier domains only
+spechum_campaign:                               # Wilson et al. 2024 Site B, for the April-August humidity
+  station: observations/campaigns/wilson_2024/1_meteo/gulkanaB_AWS_2024.csv
+  latitude: 63.285514
+  longitude: -145.410336
+  elevation: 1682                               # m
+  ratios: forcing/spechum_ratios_wilson2024.csv

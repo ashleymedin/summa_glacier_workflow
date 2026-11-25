@@ -291,3 +291,31 @@ gulkana_stream:
   calibrate: [2005-10-01, 2019-09-30]
   evaluate: [2019-10-01, 2026-09-30]
   targets: [discharge, mass_balance, stream_temperature]
+
+# Round 10b: wolverine_added and gulkana_added without the rain rise above the gauges (domains/*_10b.yaml) and without upland_snow_grad, on round 10's code (scratch/2026-11-26/r10b)
+wolverine_added_10b:
+  domain: wolverine_10b
+  dest: runs/wolverine_added_10b
+  template: tests/wolverine/summa_inputs
+  first_month: 2004-10
+  last_month: 2026-09
+  forcing: station_corrected
+  copy_forcing: false
+  calibrate: [2005-10-01, 2015-09-30]
+  evaluate: [2015-10-01, 2026-09-30]
+  targets: [discharge, mass_balance]
+  upland_soil: {class: sandy loam, sand: 0.54}
+
+gulkana_added_10b:
+  domain: gulkana_10b
+  dest: runs/gulkana_added_10b
+  template: tests/gulkana/summa_inputs
+  first_month: 2004-10
+  last_month: 2026-09
+  forcing: station_corrected
+  copy_forcing: false
+  calibrate: [2005-10-01, 2015-09-30]
+  evaluate: [2015-10-01, 2026-09-30]
+  targets: [discharge, mass_balance]
+  upland_soil: {class: loam, sand: 0.49}
+  air_cooling: site_b
