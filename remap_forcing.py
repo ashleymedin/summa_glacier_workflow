@@ -151,7 +151,10 @@ def read_levels(path, after, hours):
     if after:
         with Dataset(after) as f:
             at = np.append(at, f["time"][0])
-            t, q, h = (np.concatenate([x, np.asarray(f[v][:1], dtype="f8")]) for x, v in zip((t, q, h), names))
+            pn = np.asarray(f["level"][:], dtype="f8") * 100.0
+            keep, kn = np.isin(p, pn), np.isin(pn, p)  # the levels both months hold
+            t, q, h = (np.concatenate([x[:, keep], np.asarray(f[v][:1], dtype="f8")[:, kn]]) for x, v in zip((t, q, h), names))
+            p = p[keep]
     if hours[0] < at[0] or hours[-1] >= at[-1] + (at[1] - at[0]):
         raise SystemExit(f"{path} does not hold the hours of raw_data")
     k = np.clip(np.searchsorted(at, hours, side="right") - 1, 0, len(at) - 2)

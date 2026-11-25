@@ -171,12 +171,12 @@ slate_stream:
   dest: runs/slate_stream
   template: tests/wolverine/summa_inputs
   first_month: 2004-10
-  last_month: 2007-02
+  last_month: 2007-12
   forcing: raw
   stream: grus
   decisions: {deepTherml: bedrockLyrs, hyporhTdyn: proxy}
   calibrate: [2005-10-01, 2006-09-30]
-  evaluate: [2006-10-01, 2007-02-28]
+  evaluate: [2006-10-01, 2007-12-31]
   targets: [discharge, stream_temperature]
   upland_soil: {class: loam, sand: 0.44}  # SoilGrids 2.0 (scratch/2026-11-24/soilgrids_slate.py)
 
