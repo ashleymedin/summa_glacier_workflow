@@ -33,7 +33,6 @@ OBS = {"gulkana": ("data/domain_Gulkana/observations/calibration", "USGS_1547804
        "wolverine": ("data/domain_Wolverine/observations/calibration", "USGS_15236900_daily_flow.nc")}
 TEMP = {"gulkana": "USGS_15478040_daily_temperature.nc", "wolverine": "USGS_15236900_daily_temperature.nc"}
 TEMP_COLORS = ["#7f7f7f", "#c0392b", "#9b59b6", "#16a085"]  # the second spec, red, is the preferred setup
-TEMP_HELD = "2019-10-01"  # the stream cases calibrate WY2006-2019 and hold out WY2020-2026
 COLORS = ["#1b6ca8", "#e07b39", "#3a923a", "#9b59b6"]
 START, HELD, END = "2005-10-01", "2015-10-01", "2026-09-30"  # run, held-out and end dates
 WY_FIRST, WY_LAST = int(START[:4]) + 1, int(END[:4])  # the run's water years
@@ -139,6 +138,11 @@ def targets(case):
     return spec.get("targets", ["discharge", "mass_balance", "stream_temperature"])
 
 
+def temp_held(case):
+    """The first date a stream case holds out (cases.yaml evaluate)."""
+    return str(yaml.safe_load(open(os.path.join(WORKFLOW, "cases.yaml")))[case]["evaluate"][0])
+
+
 def bars(ax, sims, target, obs_label, title, seasonal=False, cases=None):
     """Grouped bars by water year, observed black and each trial beside it. Every observation is drawn, a trial's bar
     only where the driver scored it. Seasonal: winter solid, summer hatched over it (a summer gain stays visible), and
@@ -225,11 +229,13 @@ def main():
         span = (to.index.min() - pd.Timedelta(days=10), to.index.max() + pd.Timedelta(days=10))
         tl = to.resample("D").mean()  # a missing day breaks the line
         ax[4].plot(tl.index, tl.values, color="k", lw=1.1, label="USGS gauge", zorder=5)
+        held_t = temp_held(temps[0][0])
+        wy_t = int(held_t[:4]) + 1  # its first held-out water year
         for (case, rerun, suffix, label), c in zip(temps, TEMP_COLORS):
             t = reach_temperature(case, rerun, suffix)
             e = (t.reindex(to.index) - to).dropna()
-            cal, hold = np.sqrt((e[e.index < TEMP_HELD] ** 2).mean()), np.sqrt((e[e.index >= TEMP_HELD] ** 2).mean())
-            score = f"RMSE {cal:.2f} / {hold:.2f} K" if len(e[e.index >= TEMP_HELD]) else f"RMSE {cal:.2f} K"
+            cal, hold = np.sqrt((e[e.index < held_t] ** 2).mean()), np.sqrt((e[e.index >= held_t] ** 2).mean())
+            score = f"RMSE {cal:.2f} / {hold:.2f} K" if len(e[e.index >= held_t]) else f"RMSE {cal:.2f} K"
             t = t[span[0]:span[1]]
             t = t.where(t.index.month.isin(to.index.month.unique()))  # only the months the gauge records
             ax[4].plot(t.index, t.values, color=c, lw=0.9, label=f"{label}: {score}", zorder=4 if c == TEMP_COLORS[1] else 3)
@@ -237,7 +243,7 @@ def main():
         ax[4].set_ylabel("Water temperature (°C)")
         ax[4].legend(fontsize=8, loc="upper left", ncol=2)
         ax[4].set_title("(e) Daily water temperature at the gauge, stream-case reruns of the added-data trial "
-                        + ("(RMSE WY2016–19 / WY2020–26)" if to.index.max() >= pd.Timestamp(TEMP_HELD) else
+                        + (f"(RMSE WY2016–{wy_t - 2001} / WY{wy_t}–26)" if to.index.max() >= pd.Timestamp(held_t) else
                            f"(RMSE over {to.index.min():%b}–{to.index.max():%b %Y})"), loc="left", fontsize=10)
     fig.tight_layout()
     fig.savefig(pdf)
