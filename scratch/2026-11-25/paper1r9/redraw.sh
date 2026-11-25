@@ -1,10 +1,11 @@
 #!/bin/bash
 # Paper-1 Figs 3-5 (glacier.tex) and the coldstream imagery/area figures from round 9's balanced trials (merged seed fronts):
 # Wolverine general 479, Gulkana general 474, Gulkana added 413 (seed 43), Wolverine added 465 (seed 42); round-6 figures kept as *.r6.pdf.
+# Round 9 folders carry the _1125r9 suffix once round 10 starts on a case.
 WF=$(cd "$(dirname "$0")/../../.." && pwd)
 PY=~/miniconda3/envs/glacier/bin/python
-S43=calibration_s43_rerun
-S42=calibration_rerun
+S43=calibration_s43_rerun_1125r9
+S42=calibration_rerun_1125r9
 F=~/Research/USask/Writeups/summa_sundials_svn/glacier/figs
 S=~/Research/USask/Writeups/summa_sundials_svn/coldstream/streamtemp/figs
 for f in $F/wolverine_best $F/gulkana_best $F/glacier_end $S/wolverine_imagery $S/gulkana_imagery $S/glacier_area; do
