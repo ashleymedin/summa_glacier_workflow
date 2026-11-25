@@ -152,7 +152,9 @@ lemon_grus:  # replaces lemon_added, in 3 GRUs (Thomas Glacier and lakes, Ptarmi
   forcing: station_corrected
   copy_forcing: false
   calibrate: [2005-10-01, 2022-09-30]
-  evaluate: [2022-10-01, 2026-07-31]
+  evaluate: [2015-10-01, 2026-07-31]            # each target scored on its own years, by the masked files below (scratch/2026-11-25/lemon_obs_windows.py)
+  cal_obs: {flow: USGS_15052000_daily_flow_cal.nc}   # discharge WY2006-15
+  eval_obs: {flow: USGS_15052000_daily_flow_eval.nc, mb: lemoncreek_mass_balance_seasonal_2006_eval.nc, temp: USGS_15052000_daily_temperature_eval.nc}   # discharge WY2016-20, the rest WY2023-26; 15052000 departs from Mendenhall from WY2021
   targets: [discharge, mass_balance]
   glacier_k: length
   balance_gru: 3                                # the stakes' glacier
@@ -250,7 +252,7 @@ lemon_stream_grus:
   wetland: {area: 150000, hru: 1, elevation: 761, depth: 11, outlet_depth: [11, 7, 17], fetch: 250}
   decisions: {deepTherml: bedrockLyrs, hyporhTdyn: proxy}
   calibrate: [2005-10-01, 2022-09-30]
-  evaluate: [2022-10-01, 2026-07-31]
+  evaluate: [2015-10-01, 2026-07-31]
   targets: [discharge, mass_balance, stream_temperature]
 
 gulkana_stream:

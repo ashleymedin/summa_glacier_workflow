@@ -111,7 +111,7 @@ def case_spec(case):
     with open(os.path.join(GLACIER, "cases.yaml")) as f:
         cases = yaml.safe_load(f)
     spec = cases[case]
-    for key in ("upland_soil", "air_cooling", "firn_viscosity"):
+    for key in ("upland_soil", "air_cooling", "firn_viscosity", "cal_obs", "eval_obs"):
         if "parent" in spec and key in cases[spec["parent"]]:
             spec.setdefault(key, cases[spec["parent"]][key])
     return spec
@@ -213,6 +213,7 @@ def config_text(case, run_dir, settings, work, start, end, score_start, score_en
     bounds = dict(search["bounds"])
     bounds.update({k: (v, v) for k, v in (pinned or {}).items()})
     c = CASES[case.split("_")[0]]
+    c = {**c, **(case_spec(case).get("eval_obs" if algorithm == "dds" else "cal_obs") or {})}  # observation files masked to the years each is scored on
     targets = targets or case_spec(case).get("targets", ["discharge", "mass_balance", "stream_temperature"])
     reach, balance_gru = case_spec(case).get("gauge_reach", 1), case_spec(case).get("balance_gru", 1)
     routed = os.path.exists(os.path.join(run_dir, "topology.nc"))
@@ -402,13 +403,15 @@ variable   = "basin__GlacierMassChange"
 spatial_unit = "gru"
 spatial_id   = {balance_gru}
 obs_path   = "{obs}"
-obs_file   = "{case_spec(case).get("mb_file", c["mb"])}"
+obs_file   = "{(case_spec(case).get("eval_obs") or {}).get("mb") if algorithm == "dds" and "mb" in (case_spec(case).get("eval_obs") or {}) else case_spec(case).get("mb_file", c["mb"])}"
 vname_obs  = "mb_obs"
 accumulate = true
 balance    = "seasonal"
 metric     = "rmse"
 ''')
     for g, (gru, weight) in (case_spec(case).get("geodetic") or {}).items():  # cumulative mass change of another GRU's glacier; weight 0 reports it only
+        if algorithm == "dds" and case_spec(case).get("eval_obs"):  # Hugonnet's years are all calibrated on
+            continue
         if weight == 0 and algorithm == "nsga2":  # NSGA-II takes no diagnostic target; an evaluation's rerun scores it
             continue
         base = datetime.date.fromisoformat(score_start)
