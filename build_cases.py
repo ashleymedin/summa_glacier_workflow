@@ -167,10 +167,11 @@ def part_cooling(inputs, parts):
     print(f"{inputs}/trialParams.nc: glacierTempReduction by HRU", " ".join(f"{x:.3f}" for x in k))
 
 
-def set_glacier_snowfall(inputs, source, snow_top=None):
+def set_glacier_snowfall(inputs, source, snow_top=None, upland_snow_grad=False):
     """frozenPrecipMultip (dom, hru) in trialParams.nc: the stake ratio of each HRU on its glacier domains and 1 elsewhere,
     from the station correction's corrections.csv; without one (raw ERA5), the snowfall shape of glacier_snow_shape. With snow_top
-    (m, the highest stake) a glacier domain above it gets the snowfall at that elevation, flat above."""
+    (m, the highest stake) a glacier domain above it gets the snowfall at that elevation, flat above; with upland_snow_grad the
+    upland domains take the rise of rain above the gauges (rain_multiplier_above_gauges), the stakes' gradient."""
     factor = csv_row(os.path.join(source, "corrections.csv"), "frozenPrecipMultip_glacier")
     if factor is None:
         glacier_snow_shape(inputs, [csv_row(os.path.join(source, "remap.csv"), "precip_ratio")])
@@ -196,6 +197,9 @@ def set_glacier_snowfall(inputs, source, snow_top=None):
                 z0 = np.asarray(at["elevation"][:], float)[None, :]
             high = np.isin(types, GLACIER_DOMAIN_TYPES) & (z > snow_top)
             value = np.where(high, value * (1.0 + grad * (snow_top - z0)) / np.maximum(1.0 + grad * (z - z0), 0.1), value)
+        if upland_snow_grad:
+            rise = csv_row(os.path.join(source, "corrections.csv"), "rain_multiplier_above_gauges")
+            value[types == 1] = np.broadcast_to(np.array(list(rise) + [1.0] * (n_hru - len(rise))), value.shape)[types == 1]
         var[:] = value
     print(f"{inputs}/trialParams.nc: glacier frozenPrecipMultip", " ".join(f"{x:.3f}" for x in factor))
 
@@ -657,7 +661,7 @@ def build_inputs(name, spec, cases_dir):
             if "delta" in spec:  # after the lake, so it takes the next domain slot of the same HRU
                 wet += f", delta in HRU {delta_domain(inputs, spec['delta'], spec['wetland'])}"
             fit_trial_params(inputs)
-            set_glacier_snowfall(inputs, source, c.get("snow_top"))
+            set_glacier_snowfall(inputs, source, c.get("snow_top"), spec.get("upland_snow_grad"))
             print(f"{name}: stream HRU added{wet}, {len(files)} forcing files in {dest}/forcing")
             return
         if "wetland" in spec:
@@ -667,7 +671,7 @@ def build_inputs(name, spec, cases_dir):
         shutil.copy(os.path.join(tmp, "attributes_glac.nc"), os.path.join(inputs, "attributes.nc"))
         shutil.copy(os.path.join(tmp, "coldstate_glac.nc"), os.path.join(inputs, "coldState.nc"))
         fit_trial_params(inputs)  # the template may be a case with another number of HRUs, as with a stream HRU
-        set_glacier_snowfall(inputs, source, c.get("snow_top"))
+        set_glacier_snowfall(inputs, source, c.get("snow_top"), spec.get("upland_snow_grad"))
         write_file_list(os.path.join(inputs, "forcingFileList.txt"), [os.path.basename(f) for f in files])
         if copy_forcing:
             forcing = os.path.join(dest, "forcing")

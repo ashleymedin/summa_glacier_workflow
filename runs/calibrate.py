@@ -143,6 +143,9 @@ def search_for(case, name):
         ks = ["glacStor_kIce", "glacStor_kSnow", "glacStor_kFirn"]
         search["multipliers"] = search.get("multipliers", []) + ks
         search["bounds"] = dict(search["bounds"], **{k: (0.334, 2.0) for k in ks[:1]}, glacStor_kSnow=(0.334, 1.66), glacStor_kFirn=(0.334, 1.73))
+    if case_spec(case).get("upland_snow_grad"):  # trialParams.nc's upland snowfall rise with elevation, under one multiplier
+        search["multipliers"] = search.get("multipliers", []) + ["frozenPrecipMultip@upland"]
+        search["bounds"] = dict(search["bounds"], **{"frozenPrecipMultip@upland": (0.4, 2.0)})
     snow = [f"frozenPrecipMultip@glacier_gru{g}" for g in case_spec(case).get("gru_snow", [])]  # a multiplier of the glacier snowfall of these GRUs
     if snow:  # (the SUMMA of branch gru-select)
         search["multipliers"] = search.get("multipliers", []) + snow

@@ -164,6 +164,28 @@ lemon_grus:  # replaces lemon_added, in 3 GRUs (Thomas Glacier and lakes, Ptarmi
   albedo_gru: [1, 2, 3]                         # with --search domain_gru
   upland_soil: {class: sandy loam, sand: 0.55}
 
+lemon_grus_snow:  # as lemon_grus; replaces lemon_added, in 3 GRUs (Thomas Glacier and lakes, Ptarmigan, Lemon Creek Glacier and valley), each with its own reservoirs and grids
+  domain: lemon_creek_grus
+  dest: runs/lemon_grus_snow
+  template: tests/wolverine/summa_inputs
+  first_month: 2004-10
+  last_month: 2026-07
+  forcing: station_corrected
+  copy_forcing: false
+  calibrate: [2005-10-01, 2022-09-30]
+  evaluate: [2015-10-01, 2026-07-31]            # each target scored on its own years, by the masked files below (scratch/2026-11-25/lemon_obs_windows.py)
+  cal_obs: {flow: USGS_15052000_daily_flow_cal.nc}   # discharge WY2006-15
+  eval_obs: {flow: USGS_15052000_daily_flow_eval.nc, mb: lemoncreek_mass_balance_seasonal_2006_eval.nc, temp: USGS_15052000_daily_temperature_eval.nc}   # discharge WY2016-20, the rest WY2023-26; 15052000 departs from Mendenhall from WY2021
+  targets: [discharge, mass_balance]
+  glacier_k: length
+  balance_gru: 3                                # the stakes' glacier
+  mb_file: lemoncreek_mass_balance_seasonal_2006.nc   # the balances that start inside the run
+  geodetic: {"01506": [1, 1], "01105": [2, 1]}  # Hugonnet et al.: Thomas Glacier (G1) and Ptarmigan (G2); the stakes score Lemon Creek Glacier (G3)
+  gru_snow: [1, 2]                              # glacier snowfall multipliers searched; G3's is the stakes'
+  albedo_gru: [1, 2, 3]                         # with --search domain_gru
+  upland_soil: {class: sandy loam, sand: 0.55}
+  upland_snow_grad: true                        # upland snowfall rises with elevation as the rain, the multiplier searched around it
+
 # Slate Creek, no glacier: 3 GRUs, each with a stream HRU and a reach on its NHD stream (add_stream_grus.py), routed to the gauge.
 # The span is the 29 months with ERA5 pressure levels so far, to test the build; extend once the NCAR downloads finish.
 slate_stream:
