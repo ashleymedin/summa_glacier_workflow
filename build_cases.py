@@ -98,7 +98,7 @@ def csv_row(path, key):
 
 
 # keys of cases.yaml a stream case takes from its parent when it lacks them
-INHERITED = ("upland_soil", "air_cooling", "firn_viscosity")
+INHERITED = ("upland_soil", "air_cooling", "firn_viscosity", "upland_snow_grad")
 
 
 def inherit_params(inputs, parent):

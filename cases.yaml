@@ -184,7 +184,7 @@ lemon_grus_snow:  # as lemon_grus; replaces lemon_added, in 3 GRUs (Thomas Glaci
   gru_snow: [1, 2]                              # glacier snowfall multipliers searched; G3's is the stakes'
   albedo_gru: [1, 2, 3]                         # with --search domain_gru
   upland_soil: {class: sandy loam, sand: 0.55}
-  upland_snow_grad: true                        # upland snowfall rises with elevation as the rain, the multiplier searched around it
+  upland_snow_grad: [0.4, 2.0]                  # upland snowfall rises with elevation as the rain; the bounds of the multiplier searched on it
 
 # Slate Creek, no glacier: 3 GRUs, each with a stream HRU and a reach on its NHD stream (add_stream_grus.py), routed to the gauge.
 # The span is the 29 months with ERA5 pressure levels so far, to test the build; extend once the NCAR downloads finish.

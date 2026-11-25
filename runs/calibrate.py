@@ -114,7 +114,7 @@ def case_spec(case):
     with open(os.path.join(GLACIER, "cases.yaml")) as f:
         cases = yaml.safe_load(f)
     spec = cases[case]
-    for key in ("upland_soil", "air_cooling", "firn_viscosity", "cal_obs", "eval_obs"):
+    for key in ("upland_soil", "air_cooling", "firn_viscosity", "cal_obs", "eval_obs", "upland_snow_grad"):
         if "parent" in spec and key in cases[spec["parent"]]:
             spec.setdefault(key, cases[spec["parent"]][key])
     return spec
@@ -145,7 +145,7 @@ def search_for(case, name):
         search["bounds"] = dict(search["bounds"], **{k: (0.334, 2.0) for k in ks[:1]}, glacStor_kSnow=(0.334, 1.66), glacStor_kFirn=(0.334, 1.73))
     if case_spec(case).get("upland_snow_grad"):  # trialParams.nc's upland snowfall rise with elevation, under one multiplier
         search["multipliers"] = search.get("multipliers", []) + ["frozenPrecipMultip@upland"]
-        search["bounds"] = dict(search["bounds"], **{"frozenPrecipMultip@upland": (0.4, 2.0)})
+        search["bounds"] = dict(search["bounds"], **{"frozenPrecipMultip@upland": tuple(case_spec(case)["upland_snow_grad"])})
     snow = [f"frozenPrecipMultip@glacier_gru{g}" for g in case_spec(case).get("gru_snow", [])]  # a multiplier of the glacier snowfall of these GRUs
     if snow:  # (the SUMMA of branch gru-select)
         search["multipliers"] = search.get("multipliers", []) + snow
