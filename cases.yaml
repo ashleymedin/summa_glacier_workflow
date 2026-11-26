@@ -132,6 +132,24 @@ lemon_general:  # ends 2026-07 until NCAR or the CDS has Aug-Sep 2026
   targets: [discharge, wgms_amce]
   upland_soil: {class: sandy loam, sand: 0.55}  # SoilGrids 2.0 (scratch/2026-11-24/soilgrids_lemon.py)
 
+lemon_general_grus:  # lemon_general in the 3 GRUs of lemon_grus (domains/lemon_creek_general_grus.yaml): global data only, raw ERA5 with CHELSA
+  domain: lemon_creek_general_grus
+  dest: runs/lemon_general_grus
+  template: tests/wolverine/summa_inputs
+  first_month: 2004-10
+  last_month: 2026-07
+  forcing: raw
+  copy_forcing: false
+  calibrate: [2005-10-01, 2015-09-30]
+  evaluate: [2015-10-01, 2026-07-31]
+  cal_obs: {flow: USGS_15052000_daily_flow_cal.nc}   # discharge WY2006-15, as lemon_grus
+  eval_obs: {flow: USGS_15052000_daily_flow_eval.nc}   # discharge WY2016-20, as lemon_grus; 15052000 departs from Mendenhall from WY2021
+  targets: [discharge, wgms_amce]
+  glacier_k: length
+  balance_gru: 3                                # Lemon Creek Glacier, whose WGMS series is scored
+  geodetic: {"01506": [1, 1], "01105": [2, 1]}  # Hugonnet et al. (global): Thomas Glacier (G1) and Ptarmigan (G2)
+  upland_soil: {class: sandy loam, sand: 0.55}
+
 lemon_added:  # ends 2026-07 until NCAR or the CDS has Aug-Sep 2026
   domain: lemon_creek
   dest: runs/lemon_added
