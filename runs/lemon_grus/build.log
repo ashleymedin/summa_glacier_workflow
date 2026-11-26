@@ -1,0 +1,13 @@
+HRU 1: first-year mean air temperature from 2004-10 1.94 degC, debris 0.020 m (mapped 0.000 m, thickest cell 0.00 m) in 2 layers [0.01, 0.01] m
+HRU 2: first-year mean air temperature from 2004-10 -0.53 degC, debris 0.020 m (mapped 0.000 m, thickest cell 0.00 m) in 2 layers [0.01, 0.01] m
+HRU 3: first-year mean air temperature from 2004-10 1.77 degC, debris 0.020 m (mapped 0.000 m, thickest cell 0.00 m) in 2 layers [0.01, 0.01] m
+HRU 4: first-year mean air temperature from 2004-10 0.54 degC, debris 0.020 m (mapped 0.000 m, thickest cell 0.00 m) in 2 layers [0.01, 0.01] m
+HRU 5: first-year mean air temperature from 2004-10 4.48 degC, debris 0.020 m (mapped 0.000 m, thickest cell 0.00 m) in 2 layers [0.01, 0.01] m
+HRU 6: first-year mean air temperature from 2004-10 1.98 degC, debris 0.020 m (mapped 0.000 m, thickest cell 0.00 m) in 2 layers [0.01, 0.01] m
+HRU 7: first-year mean air temperature from 2004-10 0.19 degC, debris 0.020 m (mapped 0.000 m, thickest cell 0.00 m) in 2 layers [0.01, 0.01] m
+wrote /var/folders/vg/2cv5b92d4216qkxz87hgmv7r0000kp/T/tmplywnivr6/attributes_glac.nc
+wrote /var/folders/vg/2cv5b92d4216qkxz87hgmv7r0000kp/T/tmplywnivr6/coldstate_glac.nc
+/Users/amedin/Research/SummaSundials/summa_glacier_workflow/runs/lemon_grus/summa_inputs/trialParams.nc: 11 debris parameters, frac_clay 0.1 and frac_silt 0.74 everywhere, 0 debris domains, upland sandy loam sand 0.55
+/Users/amedin/Research/SummaSundials/summa_glacier_workflow/runs/lemon_grus/summa_inputs/trialParams.nc: glacier frozenPrecipMultip 1.958 2.990 2.003 2.979 1.000 1.981 2.812
+lemon_grus: forcing read in place from /Users/amedin/Research/SummaSundials/summa_glacier_workflow/data/domain_LemonCreek_grus/forcing/SUMMA_input/station_corrected
+/Users/amedin/Research/SummaSundials/summa_glacier_workflow/runs/lemon_grus/summa_inputs/trialParams.nc: glacStor_k of each GRU x 0.404 0.357 1.000

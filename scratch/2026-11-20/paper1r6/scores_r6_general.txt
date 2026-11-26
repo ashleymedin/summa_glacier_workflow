@@ -1,0 +1,6 @@
+wolverine_general 473 discharge: 0.891 / 0.832
+wolverine_general 473 wgms_amce: 420.448 / 343.077
+wolverine_general 473 mass_balance: 515.866 / 706.816
+gulkana_general 472 discharge: 0.920 / 0.719
+gulkana_general 472 wgms_amce: 754.276 / 400.111
+gulkana_general 472 mass_balance: 424.629 / 361.771

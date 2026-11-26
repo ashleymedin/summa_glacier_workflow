@@ -1,0 +1,33 @@
+! -------------------
+!  model variables
+! -------------------
+averageRoutedRunoff   | 1
+basin__StorageChange  | 1
+!surface_elev | annual
+!debris_thick | annual
+! DON'T NEED THE FOLLOWING, JUST FOR DEBUGGING
+!basin__GlacierStorage | 24
+!basin__GlacierArea    | 24
+!scalarCanopyWat       | 24
+!scalarSWE             | 24
+!scalarTotalSoilWat    | 24
+!scalarGlceWE          | 24
+!scalarAquiferStorage  | 24averageRoutedRunoff       | day | mean
+glacierRoutedRunoff       | day | mean
+basin__GlacierMassChange  | day | mean
+basin__GlacierArea        | day | mean
+basin__SurfaceRunoff      | day | mean
+basin__AquiferBaseflow    | day | mean
+scalarSWE                 | day | mean
+scalarRainfall            | day | mean
+scalarSnowfall            | day | mean
+scalarGlacierMelt         | day | mean
+scalarAquiferStorage      | day | mean
+DOMarea                   | day | mean
+DOMelev                   | day | mean
+glacMass4AreaChange       | day | mean
+scalarStreamTemp          | day | mean
+scalarStreamOutflow       | day | mean
+scalarStreamLatInflow     | day | mean
+surface_elev              | annual
+debris_thick              | annual

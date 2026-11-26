@@ -69,3 +69,9 @@ scratch/**/forcing_*/
 scratch/**/inputs_*/
 scratch/**/ab_done
 data/*/forcing/SUMMA_input_*/
+
+# every run folder but the inputs: calibrations, reruns, evaluations, stream searches and default runs are output
+runs/*/*/
+!runs/*/summa_inputs/
+/GRCTellus.*.nc
+scratch/**/*_backup/

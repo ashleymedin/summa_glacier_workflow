@@ -1,0 +1,43 @@
+# Slate Creek, Brooks Range, Alaska: USGS 15564879 Slate C at Coldfoot, no glacier, discontinuous permafrost; built without SYMFLUENCE (upland:)
+# No weather station: the general setup's forcing (pressure-level free air, CHELSA precipitation and wind), as an ungauged basin.
+project_dir: data/domain_SlateCreek
+bounding_box: 67.36/-150.26/67.15/-149.62       # lat_max/lon_min/lat_min/lon_max
+pour_point: 67.2544444/-150.1772222             # lat/lon of the gauge
+utm_crs: EPSG:32606                             # UTM 6N
+utm_epsg: 32606
+rgi6_region: 01Alaska
+min_glacier_size_km2: 1
+min_debris_thickness: 0.04
+
+upland:
+  dem: "data/external/Copernicus_GLO30/Copernicus_DSM_COG_10_N67_00_W15[01]_00_DEM.tif"   # cell means on a 3 arc-second grid
+  settings_from: data/domain_Wolverine/settings/SUMMA
+
+landclass: {source: worldcover, igbp: {30: 19}}   # ESA WorldCover 2021, majority of each HRU's ice-free cells; grassland as mixed tundra
+
+data:
+  rgi: data/external/RGI_data
+  debris_extent: data/external/Debris_data
+  debris_thickness: data/external/Debris_thick
+  ice_thickness: data/external/Thickness_data
+
+hru_bands: [600, 800]                           # elevation band edges, m, of the HRUs (make_hrus.py)
+basin_within: huc12                             # clip the basin to the USGS HUC12s draining to the gauge (acquire_nhd.py)
+grus:                                           # GRUs (split_grus.py), each its own elevation bands (make_hrus.py) and reach on its NHD stream (add_stream_grus.py)
+  - {name: Myrtle Creek, huc12: "190901010603", stream: Myrtle Creek, to: 3}
+  - {name: upper Slate Creek, huc12: "190901010604", above: [-150.0471, 67.2196], stream: Slate Creek, to: 3}   # above the Myrtle Creek confluence (NHD)
+  - {name: lower Slate Creek, huc12: "190901010604", stream: Slate Creek}                             # the rest, to the gauge
+
+forcing_period: {first: 2004-10, last: 2026-09}
+raw_data: raw_data_test                         # TEST: the 29 months with pressure levels so far
+precip_climatology: data/external/CHELSA/CHELSA_bio12_1981-2010_V.2.1_SlateCreek.tif   # each HRU's raw precipitation scaled by its CHELSA ratio to the ERA5 cells' (acquire_climatology.py)
+wind_climatology: data/external/CHELSA/CHELSA_sfcWind_1981-2010_V.2.1_SlateCreek.tif   # by month, each HRU's raw wind scaled to CHELSA's mean over it (acquire_climatology.py)
+wind_climatology_basin: true                     # one basin-wide ratio on every HRU, as the general glacier setups
+observations:
+  streamflow: {source: usgs, gauge: "15564879"}
+  stream_temperature: {site: "15564879"}         # daily, open-water season, from May 1998
+  grace: true
+
+cold_start: 2004-10
+soil_offset: 1.5
+ice_temp: -1.0
