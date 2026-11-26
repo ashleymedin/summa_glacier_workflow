@@ -86,3 +86,9 @@ Each option runs on its own spun-up inputs.
   - or a deeper or unfrozen pathway (a sub-permafrost or talik aquifer).
   - The user should decide between them.
 - Then the full record once the levels finish.
+
+## Which fix: the gauge's evidence (`evidence.py`, `evidence.log`)
+- Winter flow is near zero (Jan–Apr medians 0–0.014 m³/s, 40–55% of days exactly 0), so no deep or talik aquifer feeds the creek all year. Caveat: an upstream spring could freeze into aufeis and release in June–July.
+- After the melt the gauge recedes with an e-folding time of 15 days in July, rising to 21 days in September; the model's is 3–5 days. A shallow store is draining slower as the frost table deepens (Quinton & Pomeroy 2006; Carey & Woo 2001), and it is empty by late winter.
+- The gauge rises strongly on summer rain (6 Jul 2010: 3.7 to 19.7 m³/s on 15 mm), and the model barely responds. Jun–Sep model ET (216–298 mm) about equals Jun–Sep rain (243–320 mm).
+- This points to the shallow fix: an organic, finer upper soil with a shallower frost table, where the water flows laterally above the frozen ground. A deep pathway would give winter flow the gauge doesn't show.
