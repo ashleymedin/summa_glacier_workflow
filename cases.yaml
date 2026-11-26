@@ -236,6 +236,22 @@ slate_stream_airgw:
   targets: [discharge, stream_temperature]
   upland_soil: {class: loam, sand: 0.44}
 
+# slate_stream with lateral flow in the soil above the bucket, so water perched on the frozen ground drains to the stream
+slate_stream_lat:
+  domain: slate_creek
+  dest: runs/slate_stream_lat
+  template: tests/wolverine/summa_inputs
+  first_month: 2004-10
+  last_month: 2011-12
+  forcing: raw
+  stream: grus
+  gauge_reach: 3                                # the lower reach, at the gauge
+  decisions: {deepTherml: bedrockLyrs, hyporhTdyn: proxy, groundwatr: bbLatflow}
+  calibrate: [2005-10-01, 2009-09-30]
+  evaluate: [2009-10-01, 2011-12-31]
+  targets: [discharge, stream_temperature]
+  upland_soil: {class: loam, sand: 0.44}
+
 # the stream-temperature runs: the added setup (all of its parameters, from parent) with a stream HRU, a reach and a wetland domain in the terminus HRU, which takes the
 # glacier's runoff and releases it to the reach; hyporheic exchange and the bedrock layers on. Spun up over WY2005 like paper 1,
 # calibrated WY2006-2019 so it holds four of Wolverine's water-temperature summers (2016-2019, six left for WY2020-2026);
