@@ -63,10 +63,10 @@ DOMAIN = [p for p in PAPER1 if p not in ("k_soil", "theta_sat", "vGn_n", "k_macr
 DOMAIN_CHAIN = ["theta_res@upland", "critSoilWilting@upland", "critSoilTranspire@upland", "fieldCapacity@upland",
                 "theta_sat@upland"]
 
-# stream: the domain search with the wetland's outflow time constant, its mean depth filled to the outlet, its sheltering from the
-# wind and its air; its area is the imagery's, its snowfall and lapse the HRU's, the reach width mizuRoute's. --pin-trial holds the
+# stream: the domain search with the wetland's outflow time constant, its mean depth filled to the outlet and its cold-air
+# pooling; its wind and air are the HRU's, its area is the imagery's, its snowfall and lapse the HRU's, the reach width mizuRoute's. --pin-trial holds the
 # rest at a glacier calibration's trial
-STREAM_ONLY = ["wetlandStorageK", "wetlandMinDepth", "wetlandWindFactor", "wetlandAirCooling", "wetlandPoolCooling",
+STREAM_ONLY = ["wetlandStorageK", "wetlandMinDepth", "wetlandPoolCooling",
                "albedoFrznWatVisible@wetland", "albedoFrznWatNearIR@wetland"]
 STREAM = DOMAIN + STREAM_ONLY
 
@@ -88,8 +88,6 @@ SEARCHES["domain_gru"] = dict(SEARCHES["domain"])  # with the glacier albedo by 
 SEARCHES["stream"] = dict(SEARCHES["domain"], params=STREAM, logs=SEARCHES["domain"]["logs"] + ["wetlandStorageK"],
                           bounds=dict(SEARCHES["domain"]["bounds"],
                                       wetlandStorageK=(600.0, 86400.0),  # s; ten minutes to a day
-                                      wetlandWindFactor=(0.5, 1.0),      # sheltering by moraine and valley walls only takes wind away
-                                      wetlandAirCooling=(0.0, 1.0),      # share of the glacier's air cooling over the wetland
                                       wetlandPoolCooling=(0.0, 8.0),     # K of cold-air pooling while the upland holds snow
                                       **{"albedoFrznWatVisible@wetland": (0.7, 0.7),   # lake ice in spring, held (Sentinel-2 openings, 23 Nov)
                                          "albedoFrznWatNearIR@wetland": (0.5, 0.5)}))
