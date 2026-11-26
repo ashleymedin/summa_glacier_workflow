@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Held-out scores over the balanced region of each round's front: the N members nearest the span-scaled balance point of the
-(merged) front, from the evaluation reruns. Rounds 5b and 6 are one search; rounds 8 and 9 merge seeds 42 and 43.
+(merged) front, from the evaluation reruns. Rounds 5b and 6 are one search; rounds 8 to 10 merge seeds 42 and 43.
 
     region.py [N]
 """
@@ -14,7 +14,8 @@ RUNS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."
 CASES = ["wolverine_general", "gulkana_general", "wolverine_added", "gulkana_added"]
 ROUNDS = {"5b": ["calibration_evaluation_1120r5b"], "r6": ["calibration_evaluation_1120r6"],
           "r8": ["calibration_evaluation_1123r8", "calibration_s43_evaluation_1123r8"],
-          "r9": ["calibration_evaluation", "calibration_s43_evaluation"]}
+          "r9": ["calibration_evaluation_1125r9", "calibration_s43_evaluation_1125r9"],
+          "r10": ["calibration_evaluation", "calibration_s43_evaluation"]}
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 5
 
 for case in CASES:
