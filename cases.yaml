@@ -196,6 +196,7 @@ slate_stream:
   last_month: 2011-12
   forcing: raw
   stream: grus
+  gauge_reach: 3                                # the lower reach, at the gauge
   decisions: {deepTherml: bedrockLyrs, hyporhTdyn: proxy}
   calibrate: [2005-10-01, 2009-09-30]
   evaluate: [2009-10-01, 2011-12-31]
@@ -211,6 +212,7 @@ slate_stream_none:
   last_month: 2011-12
   forcing: raw
   stream: grus
+  gauge_reach: 3                                # the lower reach, at the gauge
   decisions: {deepTherml: none, hyporhTdyn: proxy}
   calibrate: [2005-10-01, 2009-09-30]
   evaluate: [2009-10-01, 2011-12-31]
@@ -225,6 +227,7 @@ slate_stream_airgw:
   last_month: 2011-12
   forcing: raw
   stream: grus
+  gauge_reach: 3                                # the lower reach, at the gauge
   decisions: {deepTherml: airTempGW, hyporhTdyn: proxy}
   calibrate: [2005-10-01, 2009-09-30]
   evaluate: [2009-10-01, 2011-12-31]
