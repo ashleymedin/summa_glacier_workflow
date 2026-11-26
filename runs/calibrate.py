@@ -150,6 +150,10 @@ def search_for(case, name):
     if case_spec(case).get("upland_snow_grad"):  # trialParams.nc's upland snowfall rise with elevation, under one multiplier
         search["multipliers"] = search.get("multipliers", []) + ["frozenPrecipMultip@upland"]
         search["bounds"] = dict(search["bounds"], **{"frozenPrecipMultip@upland": tuple(case_spec(case)["upland_snow_grad"])})
+    for q, b in case_spec(case).get("search_add", {}).items():  # the case's own extra parameters, [lower, upper] or [lower, upper, log]
+        search["params"] = search["params"] + [q]
+        search["bounds"] = dict(search["bounds"], **{q: (b[0], b[1])})
+        search["logs"] = search["logs"] + ([q] if "log" in b[2:] else [])
     snow = [f"frozenPrecipMultip@glacier_gru{g}" for g in case_spec(case).get("gru_snow", [])]  # a multiplier of the glacier snowfall of these GRUs
     if snow:  # (the SUMMA of branch gru-select)
         search["multipliers"] = search.get("multipliers", []) + snow

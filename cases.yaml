@@ -251,6 +251,7 @@ slate_stream_lat:
   evaluate: [2009-10-01, 2011-12-31]
   targets: [discharge, stream_temperature]
   upland_soil: {class: loam, sand: 0.44}
+  search_add: {kAnisotropic: [1, 1000, log]}    # the lateral conductivity, up to an organic layer's
 
 # the stream-temperature runs: the added setup (all of its parameters, from parent) with a stream HRU, a reach and a wetland domain in the terminus HRU, which takes the
 # glacier's runoff and releases it to the reach; hyporheic exchange and the bedrock layers on. Spun up over WY2005 like paper 1,
