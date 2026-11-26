@@ -63,7 +63,7 @@ DOMAIN = [p for p in PAPER1 if p not in ("k_soil", "theta_sat", "vGn_n", "k_macr
 DOMAIN_CHAIN = ["theta_res@upland", "critSoilWilting@upland", "critSoilTranspire@upland", "fieldCapacity@upland",
                 "theta_sat@upland"]
 
-# stream: the domain search with the wetland's outflow time constant, its mean depth filled to the outlet and its cold-air
+# stream: the domain search with the wetland's outflow time constant held, its mean depth filled to the outlet and its cold-air
 # pooling; its wind and air are the HRU's, its area is the imagery's, its snowfall and lapse the HRU's, the reach width mizuRoute's. --pin-trial holds the
 # rest at a glacier calibration's trial
 STREAM_ONLY = ["wetlandStorageK", "wetlandMinDepth", "wetlandPoolCooling",
@@ -85,9 +85,9 @@ SEARCHES = {
 }
 SEARCHES["domain_soil"] = dict(SEARCHES["domain"], soil=True)  # the upland soil searched even on a case with a SoilGrids class
 SEARCHES["domain_gru"] = dict(SEARCHES["domain"])  # with the glacier albedo by GRU (cases.yaml albedo_gru)
-SEARCHES["stream"] = dict(SEARCHES["domain"], params=STREAM, logs=SEARCHES["domain"]["logs"] + ["wetlandStorageK"],
+SEARCHES["stream"] = dict(SEARCHES["domain"], params=STREAM,
                           bounds=dict(SEARCHES["domain"]["bounds"],
-                                      wetlandStorageK=(600.0, 86400.0),  # s; ten minutes to a day
+                                      wetlandStorageK=(600.0, 600.0),    # s; held at SUMMA's floor, the fit flat below about 1000 s (stream_cheap_r9)
                                       wetlandPoolCooling=(0.0, 8.0),     # K of cold-air pooling while the upland holds snow
                                       **{"albedoFrznWatVisible@wetland": (0.7, 0.7),   # lake ice in spring, held (Sentinel-2 openings, 23 Nov)
                                          "albedoFrznWatNearIR@wetland": (0.5, 0.5)}))
