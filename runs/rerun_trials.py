@@ -8,6 +8,7 @@ before the calibration start, to the end of the evaluation years), but with writ
     ./rerun_trials.py gulkana_added calibration 451 455 411 --jobs 3
     ./rerun_trials.py gulkana_added calibration 384 --set wallErosionRate=0 --label wall0
     ./rerun_trials.py gulkana_added calibration 384 --pin glacierWindFactor=0.59 --forcing <dir> --label f1
+    ./rerun_trials.py wolverine_stream_delta stream_cheap_r9 79 --drop wetlandWindFactor --label simpler
     ./rerun_trials.py gulkana_added calibration 384 --massbal gulkana_balance_profile.txt --label usgsmb
     ./rerun_trials.py gulkana_general calibration 370 --targets discharge,mass_balance,wgms_amce --aligned --label aligned
 """
@@ -62,6 +63,8 @@ def main():
                    help="override an unsearched parameter's default, e.g. wallErosionRate=0")
     p.add_argument("--pin", action="append", default=[], metavar="NAME=VALUE",
                    help="replace a searched parameter's calibrated value, e.g. windExposure=0.77, or add a name@domain one")
+    p.add_argument("--drop", action="append", default=[], metavar="NAME",
+                   help="a searched parameter left at its default and out of the run, e.g. one the build no longer has")
     p.add_argument("--forcing", help="forcing folder to rerun on, default the case's forcing_path.txt")
     p.add_argument("--extra", action="append", default=[], metavar="VAR", help="another daily-mean output variable")
     p.add_argument("--label", help="appended to each folder, sample_<n>_<label>")
@@ -76,6 +79,10 @@ def main():
     a = p.parse_args()
     run_dir = os.path.join(HERE, a.case)
     search = search_of(os.path.join(run_dir, a.name))
+    for n in a.drop:
+        if n not in search["params"]:
+            raise SystemExit(f"--drop {n}: not searched in {a.name}")
+        search["params"].remove(n)
     with nc4.Dataset(calibration_file(os.path.join(run_dir, a.name))) as d:
         names = [n for n in searched_names(search) if n in d.variables]
         values = {s: {n: float(d[n][s - 1]) for n in names} for s in a.samples}
