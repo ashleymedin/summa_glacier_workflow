@@ -124,6 +124,12 @@ def periods(case):
     return tuple(str(d) for d in c["calibrate"] + c["evaluate"])
 
 
+def no_ice_temp(case):
+    """A case with the water temperature and no glacier target: every search scores the temperature on it."""
+    targets = case_spec(case).get("targets", [])
+    return "stream_temperature" in targets and not {"mass_balance", "wgms_amce", "grace"} & set(targets)
+
+
 def search_for(case, name):
     """The named search, without the STATION_FIXED parameters on a station-corrected case, and without the debris
     ones on a case with no debris-covered domain (domType 4), the glacier ones on a case with no glacier, where they select nothing,
@@ -160,7 +166,7 @@ def search_for(case, name):
     if not np.any(types == 4):
         search["params"] = [q for q in search["params"] if not q.endswith("@glacDbr")]
     if not np.any(np.isin(types, (2, 3, 4))):  # a basin without glaciers
-        search["params"] = [q for q in search["params"] if not q.endswith("@glacier")]
+        search["params"] = [q for q in search["params"] if not q.endswith("@glacier") and not q.startswith("glacStor_")]
         search["multipliers"] = [q for q in search.get("multipliers", []) if not q.endswith("@glacier")]
     if not np.any(types == 5):
         search["params"] = [q for q in search["params"] if not q.startswith("wetland")]
@@ -544,7 +550,7 @@ def main():
                 raise SystemExit(f"not in {name}, so not pinned: {', '.join(sorted(set(free) - set(STREAM_ONLY)))}")
             print(f"pinned {len(pinned)} parameters at {a.pin_trial}; searching {', '.join(free)}", flush=True)
         config = config_text(a.case, run_dir, settings, work, cal0, cal1, a.score_start or cal0, cal1,
-                             "nsga2", a.population * a.generations, a.population, temperature=a.search == "stream",
+                             "nsga2", a.population * a.generations, a.population, temperature=a.search == "stream" or no_ice_temp(a.case),
                              search=search, pinned=pinned, seed=a.seed, geodetic_base=cal0)
         run_driver(work, config, settings, a.ranks)
         print(f"calibration written to {calibration_file(work)}")
